@@ -15,6 +15,26 @@ import * as WebBrowser from 'expo-web-browser';
 
 import type { OAuthAdapter, OAuthTokens } from '@/providers/types';
 
+const USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
+
+/**
+ * Resolve the authenticated address from Google's userinfo endpoint. Uses the
+ * `userinfo.email` scope; the access token must still be valid.
+ */
+export async function fetchGmailAddress(accessToken: string): Promise<string> {
+  const response = await fetch(USERINFO_ENDPOINT, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Impossible de lire l’adresse Gmail (HTTP ${response.status})`);
+  }
+  const data = (await response.json()) as { email?: string };
+  if (!data.email) {
+    throw new Error('Réponse Gmail sans adresse email');
+  }
+  return data.email;
+}
+
 export interface GmailOAuthConfig {
   clientId: string;
   redirectUri: string;

@@ -26,7 +26,11 @@ export { ProviderRegistry, providerRegistry } from '@/providers/registry';
 
 export { SecureTokenStore } from '@/providers/oauth/secure-token-store';
 
-export { createGmailOAuthAdapter, type GmailOAuthConfig } from '@/providers/oauth/gmail-oauth';
+export {
+  createGmailOAuthAdapter,
+  fetchGmailAddress,
+  type GmailOAuthConfig,
+} from '@/providers/oauth/gmail-oauth';
 
 export {
   createDemoAccount,

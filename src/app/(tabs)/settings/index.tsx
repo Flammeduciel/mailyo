@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { Account, NotificationRule } from '@/domain/models';
 import type { AppSettings } from '@/domain/settings';
@@ -77,6 +77,29 @@ export default function SettingsScreen() {
     [service, reload],
   );
 
+  const confirmRemoveAccount = useCallback(
+    (account: Account) => {
+      Alert.alert(
+        'Retirer le compte',
+        `Supprimer ${account.emailAddress} et toutes ses données locales ?`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Retirer',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                await service.deleteAccountData(account.id);
+                await reload();
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [service, reload],
+  );
+
   return (
     <Screen>
       <Header title="Paramètres" />
@@ -87,8 +110,9 @@ export default function SettingsScreen() {
             <SettingRow
               key={account.id}
               label={account.emailAddress}
-              description={account.provider}
+              description={`${account.provider} · appuyer pour retirer`}
               icon="envelope"
+              onPress={() => confirmRemoveAccount(account)}
             />
           ))}
           <View style={styles.cardAction}>

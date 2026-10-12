@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { createGmailOAuthAdapter, SecureTokenStore, DEMO_ACCOUNT_ID } from '@/providers';
+import { createGmailOAuthAdapter, fetchGmailAddress, DEMO_ACCOUNT_ID } from '@/providers';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import { AppText, Button, Card, Header, Screen, SectionTitle, Spacing } from '@/ui';
@@ -45,19 +45,18 @@ export default function LoginScreen() {
         scopes: GMAIL_SCOPES,
       });
       const tokens = await adapter.authorize();
-      // Persisting tokens proves the OAuth grant; the IMAP sync that consumes
-      // them is the remaining native piece (see README, “Temps réel”).
-      const store = new SecureTokenStore();
-      await store.save('gmail-pending', tokens);
+      const email = await fetchGmailAddress(tokens.accessToken);
+      await service.connectOAuthAccount({ emailAddress: email, tokens });
+      invalidate();
       setMessage(
-        'Autorisation Gmail accordée. La synchronisation IMAP native sera activée dans un prochain build.',
+        `Compte ${email} autorisé. La synchronisation IMAP native sera activée dans un prochain build.`,
       );
     } catch (cause: unknown) {
       setMessage(cause instanceof Error ? cause.message : 'Autorisation refusée');
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [service, invalidate]);
 
   return (
     <Screen>

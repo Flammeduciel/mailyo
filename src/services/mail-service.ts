@@ -41,7 +41,13 @@ import {
   upsertThread,
 } from '@/data/repositories/threads';
 import { getAllSettings, setSettings } from '@/data/repositories/settings';
-import type { Account, Message, NotificationRule, ThreadSummary } from '@/domain/models';
+import type {
+  Account,
+  Message,
+  NotificationRule,
+  ProviderId,
+  ThreadSummary,
+} from '@/domain/models';
 import { createId, deterministicId } from '@/domain/ids';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
@@ -61,7 +67,7 @@ import {
   type AppSettings,
 } from '@/domain/settings';
 import { createDemoProvider, createDemoRules, DEMO_ACCOUNT_ID } from '@/providers/demo/demo-data';
-import { MockMailProvider } from '@/providers/mock/mock-mail-provider';
+import type { MailProvider, OAuthTokens, TokenStore } from '@/providers/types';
 import { ProviderRegistry } from '@/providers/registry';
 import type { OutgoingMessage, SendResult } from '@/providers/types';
 import { SyncEngine } from '@/sync/sync-engine';
@@ -78,10 +84,19 @@ export interface SendMessageInput {
   mode?: ReplyMode;
 }
 
+export interface ConnectOAuthAccountInput {
+  emailAddress: string;
+  displayName?: string;
+  provider?: ProviderId;
+  tokens: OAuthTokens;
+}
+
 export interface MailServiceOptions {
   db: Database;
   registry?: ProviderRegistry;
   notifier?: Notifier;
+  /** Secure storage for OAuth tokens; omit in tests that do not connect accounts. */
+  tokenStore?: TokenStore;
   now?: () => number;
   fetchLimit?: number;
 }
@@ -90,6 +105,7 @@ export class MailService {
   private readonly db: Database;
   private readonly registry: ProviderRegistry;
   private readonly notifier: Notifier | null;
+  private readonly tokenStore: TokenStore | null;
   private readonly now: () => number;
   private readonly fetchLimit: number;
   private settings: AppSettings = DEFAULT_SETTINGS;
@@ -98,6 +114,7 @@ export class MailService {
     this.db = options.db;
     this.registry = options.registry ?? new ProviderRegistry();
     this.notifier = options.notifier ?? null;
+    this.tokenStore = options.tokenStore ?? null;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
   }
@@ -112,8 +129,12 @@ export class MailService {
 
     const accounts = await listAccounts(this.db);
     for (const account of accounts) {
-      if (!this.registry.get(account.id)) {
-        this.registry.register(account.id, this.createProviderFor(account));
+      if (this.registry.get(account.id)) {
+        continue;
+      }
+      const provider = this.createProviderFor(account);
+      if (provider) {
+        this.registry.register(account.id, provider);
       }
     }
 
@@ -152,18 +173,44 @@ export class MailService {
   }
 
   /**
-   * Rebuild the in-memory provider for a known account. The demo account gets
-   * the deterministic demo mailbox again (idempotent upserts make this safe);
-   * real accounts will build an IMAP/SMTP adapter here once Phase 0 lands.
+   * Create an account from a successful OAuth authorisation, persist its tokens
+   * in the secure store and return it. Real IMAP/SMTP adapters are still Phase 0
+   * work, so the account exists and is manageable, but no provider is registered
+   * yet and synchronisation simply skips it.
    */
-  private createProviderFor(account: Account): MockMailProvider {
+  async connectOAuthAccount(input: ConnectOAuthAccountInput): Promise<Account> {
+    const account: Account = {
+      id: createId('account'),
+      provider: input.provider ?? 'gmail',
+      emailAddress: input.emailAddress,
+      displayName: input.displayName ?? input.emailAddress,
+      authType: 'oauth',
+      syncEnabled: true,
+      lastSyncAt: null,
+      syncStatus: 'idle',
+      createdAt: this.now(),
+    };
+    await insertAccount(this.db, account);
+    if (this.tokenStore) {
+      await this.tokenStore.save(account.id, input.tokens);
+    }
+    const provider = this.createProviderFor(account);
+    if (provider) {
+      this.registry.register(account.id, provider);
+    }
+    return account;
+  }
+
+  /**
+   * Rebuild the in-memory provider for a known account. Only the demo account
+   * has one until the native IMAP/SMTP adapter lands; other accounts return
+   * `null` so synchronisation skips them rather than pretending to work.
+   */
+  private createProviderFor(account: Account): MailProvider | null {
     if (account.id === DEMO_ACCOUNT_ID) {
       return createDemoProvider(this.now()).provider;
     }
-    return new MockMailProvider({
-      emailAddress: account.emailAddress,
-      provider: account.provider,
-    });
+    return null;
   }
 
   async listConversations(options?: { includeArchived?: boolean }): Promise<ThreadSummary[]> {
@@ -460,9 +507,10 @@ export class MailService {
     return this.notifier.requestPermission();
   }
 
-  /** Wipe all local data for an account (settings screen). */
+  /** Wipe all local data for an account (settings screen), including its tokens. */
   async deleteAccountData(accountId: string): Promise<void> {
     this.registry.remove(accountId);
+    await this.tokenStore?.remove(accountId);
     await deleteAccount(this.db, accountId);
   }
 }

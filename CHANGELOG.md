@@ -21,6 +21,9 @@ Toutes les évolutions notables de MailYo. Format inspiré de
   paramètres.
 - **Paramètres applicatifs** persistés (`app_settings`) : contenu des
   notifications, thème, verrou biométrique, heures calmes (domaine).
+- **Gestion des comptes** : connexion Gmail OAuth2 (jetons dans le stockage
+  sécurisé, adresse résolue via l'endpoint userinfo) et retrait d'un compte avec
+  confirmation. La synchro IMAP native reste à brancher.
 
 ### Modifié
 

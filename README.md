@@ -79,9 +79,11 @@ npm run sounds:generate   # régénère les sons de notification (assets/sounds/
 - Schéma SQLite appliqué idempotemment au démarrage (`PRAGMA user_version`) +
   index plein texte **FTS5** (`messages_fts`) pour la recherche.
 - Les implémentations natives Gmail / IMAP IDLE / SMTP restent à écrire dans
-  `src/providers/` (elles implémentent l'interface `MailProvider`). La réception
-  **instantanée** (IMAP `IDLE`) exige un service de premier plan natif ; en
-  attendant, `expo-background-task` assure une relève périodique.
+  `src/providers/` (elles implémentent l'interface `MailProvider`). La connexion
+  Gmail OAuth2 crée déjà un compte et stocke ses jetons dans le stockage
+  sécurisé ; en attendant le transport natif, ces comptes ne synchronisent rien.
+  La réception **instantanée** (IMAP `IDLE`) exige un service de premier plan
+  natif ; en attendant, `expo-background-task` assure une relève périodique.
 - Un `MockMailProvider` déterministe, connecté via l'écran de connexion
   (« compte de démonstration »), fait tourner toute la chaîne
   (sync → threading → règles → UI → notifications) sans appareil ni identifiants.

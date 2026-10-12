@@ -20,6 +20,7 @@ import {
 
 import { getDatabase } from '@/data/db/instance';
 import { createExpoNotificationApi, Notifier } from '@/notifications/notifier';
+import { SecureTokenStore } from '@/providers';
 import { createExpoBiometricAuthenticator } from '@/security';
 import { MailService } from '@/services/mail-service';
 import { registerBackgroundSync } from '@/sync/background-sync';
@@ -61,6 +62,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const created = new MailService({
         db,
         notifier: new Notifier(createExpoNotificationApi()),
+        tokenStore: new SecureTokenStore(),
       });
       if (cancelled) {
         return;

@@ -238,6 +238,21 @@ src/notifications/ résolution des règles + publication système
   fichier est embarqué dans le build natif. Assets générés par script, sans
   dépendance de licence.
 
+### D-035 — Comptes OAuth créés et gérés, sans transport natif factice
+
+- **Contexte :** l'écran de connexion sauvait les jetons Gmail sous l'identifiant
+  factice `gmail-pending`, qu'aucun code ne relisait, et ne créait pas de compte.
+- **Décision :** `MailService.connectOAuthAccount()` crée un vrai compte
+  (`authType: 'oauth'`) et confie les jetons à un `TokenStore`
+  (`expo-secure-store`) fourni au service. L'adresse est résolue via l'endpoint
+  userinfo. Les comptes non-démo n'obtiennent **pas** de provider tant que
+  l'adaptateur IMAP/SMTP natif n'existe pas : `createProviderFor` renvoie `null`
+  et la synchro les ignore, au lieu de faire tourner un faux provider vide.
+  `deleteAccountData` supprime aussi les jetons.
+- **Justification :** un compte connecté doit être visible et révocable, sans
+  prétendre qu'une boîte Gmail vide est synchronisée. Le jour où l'adaptateur
+  natif arrive, les jetons sont déjà au bon endroit.
+
 ---
 
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)
