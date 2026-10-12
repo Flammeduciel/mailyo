@@ -121,6 +121,62 @@ src/notifications/ résolution des règles + publication système
 
 ---
 
+### D-013 — Identité locale d'un message
+
+- **Contexte :** il faut une clé stable pour rendre la synchronisation
+  idempotente et détecter les doublons.
+- **Décision :** l'id local d'un message est dérivé du `Message-ID` serveur quand
+  il existe (`msg_<hash(accountId, messageId)>`), sinon de
+  `(accountId, folderId, UID)`. Deux UID identiques après un changement de
+  `UIDVALIDITY` ne créent donc pas de collision lorsqu'un `Message-ID` existe, et
+  un même email vu dans deux dossiers met à jour une seule ligne.
+- **Justification :** satisfait « détection des doublons et mise à jour
+  idempotente » (§5) sans dépendre d'un identifiant local volatil.
+
+### D-014 — Réinitialisation sur changement d'UIDVALIDITY
+
+- **Décision :** si `UIDVALIDITY` diffère de la valeur mémorisée, les messages du
+  dossier sont supprimés localement puis re-téléchargés intégralement
+  (`deleteMessagesInFolder`).
+- **Justification :** les UID d'un dossier ne sont plus comparables après un
+  changement d'`UIDVALIDITY` ; conserver les anciens provoquerait des
+  doublons/erreurs de correspondance.
+
+### D-015 — Test de la couche données avec `node:sqlite`
+
+- **Décision :** les repositories dépendent de l'interface `Database`
+  (`src/data/db/database.ts`). En production un adaptateur `expo-sqlite`, en test
+  un adaptateur en mémoire bâti sur `node:sqlite` (Node 24).
+- **Justification :** les tests exécutent le **vrai SQL** et le **vrai schéma**
+  sans module natif ni appareil. Ce qui est testé est exactement ce que
+  l'appareil exécutera.
+
+### D-016 — Store d'état maison
+
+- **Décision :** `src/state/store.ts` expose `createStore` + `useSelector`
+  (`useSyncExternalStore`), sans dépendance externe.
+- **Justification :** suffisant pour le MVP, testable en isolation, cohérent avec
+  « gestion d'état explicite » sans ajouter de bibliothèque.
+
+### D-017 — Adaptateurs fournisseurs mockés pour le MVP
+
+- **Décision :** l'application utilise `MockMailProvider` (déterministe, en
+  mémoire) derrière l'interface `MailProvider`. Les adaptateurs Gmail/IMAP/SMTP
+  réels sont des points d'intégration Phase 0 qui implémentent le même contrat.
+- **Justification :** permet de développer et tester toute la chaîne
+  réception → threading → règles → notification → UI sans dépendre d'un appareil
+  ni d'identifiants Google, sans mentir sur les capacités réelles.
+
+### D-018 — Aucune synchro d'arrière-plan dans le MVP
+
+- **Décision :** ne pas embarquer `expo-background-task`/`expo-task-manager` pour
+  l'instant. La synchro d'arrière-plan est explicitement V1 (§5, §8) et dépend
+  d'une preuve native (Phase 0).
+- **Justification :** éviter une dépendance native inutilisée et une promesse non
+  tenue.
+
+---
+
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)
 
 Ces points du §22 ne peuvent être validés que par prototype sur appareil :
