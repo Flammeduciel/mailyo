@@ -66,7 +66,9 @@ export class MockMailProvider implements MailProvider {
   constructor(options: MockProviderOptions) {
     this.id = options.provider ?? 'mock';
     this.emailAddress = options.emailAddress;
-    this.folders = options.folders ? options.folders.map((folder) => ({ ...folder })) : [DEFAULT_INBOX];
+    this.folders = options.folders
+      ? options.folders.map((folder) => ({ ...folder }))
+      : [DEFAULT_INBOX];
     this.messages = options.messages ? options.messages.map(cloneMessage) : [];
     this.uidValidity = options.uidValidity ?? 1;
   }
@@ -86,7 +88,8 @@ export class MockMailProvider implements MailProvider {
 
     const messages = this.messages
       .filter(
-        (message) => message.folderRemoteId === input.folderRemoteId && message.remoteUid > lastSyncedUid,
+        (message) =>
+          message.folderRemoteId === input.folderRemoteId && message.remoteUid > lastSyncedUid,
       )
       .sort((a, b) => a.remoteUid - b.remoteUid)
       .slice(0, limit)

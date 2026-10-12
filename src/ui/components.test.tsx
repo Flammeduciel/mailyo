@@ -5,6 +5,7 @@ import type { Message, ThreadSummary } from '@/domain/models';
 
 import { Avatar } from './Avatar';
 import { Button } from './Button';
+import { Chips } from './Chips';
 import { ConversationRow } from './ConversationRow';
 import { EmptyState } from './EmptyState';
 import { MessageBubble } from './MessageBubble';
@@ -88,6 +89,25 @@ describe('Button', () => {
 
     fireEvent.press(getByTestId('send'));
     expect(onPress).not.toHaveBeenCalled();
+  });
+});
+
+describe('Chips', () => {
+  it('reports the value of the pressed option', () => {
+    const onChange = jest.fn();
+    const { getByText } = render(
+      <Chips
+        options={[
+          { value: 'a', label: 'Alpha' },
+          { value: 'b', label: 'Bravo' },
+        ]}
+        value="a"
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.press(getByText('Bravo'));
+    expect(onChange).toHaveBeenCalledWith('b');
   });
 });
 

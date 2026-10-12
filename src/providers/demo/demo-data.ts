@@ -14,7 +14,8 @@ import { deterministicId } from '@/domain/ids';
 import { MockMailProvider } from '@/providers/mock/mock-mail-provider';
 import type { RemoteFolder, RemoteMessage } from '@/providers/types';
 
-const DEMO_ACCOUNT_ID = 'acc_demo';
+/** Identifier of the built-in demo account, stable across runs. */
+export const DEMO_ACCOUNT_ID = 'acc_demo';
 const DEMO_EMAIL = 'demo@mailyo.app';
 
 /** Fixed clock so the demo data never depends on the current time. */
@@ -206,10 +207,7 @@ export function createDemoProvider(now: number = Date.now()): {
   const provider = new MockMailProvider({
     emailAddress: account.emailAddress,
     provider: account.provider,
-    folders: [
-      { ...INBOX_FOLDER },
-      { ...SENT_FOLDER },
-    ],
+    folders: [{ ...INBOX_FOLDER }, { ...SENT_FOLDER }],
     messages,
   });
 

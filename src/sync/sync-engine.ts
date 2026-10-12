@@ -9,8 +9,10 @@
 
 import {
   deleteMessagesInFolder,
+  getMessage,
   getThread,
   getThreadIdByMessageIdHeader,
+  listFolders,
   recomputeThreadAggregates,
   updateAccountSyncStatus,
   updateFolderSyncCursor,
@@ -83,16 +85,21 @@ export class SyncEngine {
   /** Fetch the remote folders and persist them locally (idempotent). */
   async ensureFolders(account: Account): Promise<Folder[]> {
     const remoteFolders = await this.provider.listFolders();
+    const existing = await listFolders(this.db, account.id);
+    const cursorByRemoteId = new Map(existing.map((folder) => [folder.remoteFolderId, folder]));
+
     const folders: Folder[] = [];
     for (const remote of remoteFolders) {
+      const previous = cursorByRemoteId.get(remote.remoteFolderId);
       const folder: Folder = {
         id: deterministicId(account.id, remote.remoteFolderId),
         accountId: account.id,
         remoteFolderId: remote.remoteFolderId,
         name: remote.name,
         role: remote.role,
-        lastUidValidity: null,
-        lastSyncedUid: null,
+        // Preserve the sync cursor across runs; only a first sighting is null.
+        lastUidValidity: previous?.lastUidValidity ?? null,
+        lastSyncedUid: previous?.lastSyncedUid ?? null,
       };
       await upsertFolder(this.db, folder);
       folders.push(folder);
@@ -120,8 +127,10 @@ export class SyncEngine {
     let maxUid = folder.lastSyncedUid ?? -1;
 
     for (const remote of fetch.messages) {
-      const message = await this.persistMessage(account, folder, remote, knownThreads);
-      added.push(message);
+      const persisted = await this.persistMessage(account, folder, remote, knownThreads);
+      if (persisted.isNew) {
+        added.push(persisted.message);
+      }
       maxUid = Math.max(maxUid, remote.remoteUid);
     }
 
@@ -135,7 +144,7 @@ export class SyncEngine {
     folder: Folder,
     remote: RemoteMessage,
     knownThreads: Map<string, string>,
-  ): Promise<Message> {
+  ): Promise<{ message: Message; isNew: boolean }> {
     const messageIdHeader = remote.messageIdHeader;
     const threadKey = computeThreadKey(
       {
@@ -188,6 +197,7 @@ export class SyncEngine {
       syncState: 'synced',
     };
 
+    const isNew = (await getMessage(this.db, message.id)) === null;
     await upsertMessage(this.db, message);
     await recomputeThreadAggregates(this.db, threadId);
 
@@ -196,7 +206,7 @@ export class SyncEngine {
       knownThreads.set(id, threadKey);
     }
 
-    return message;
+    return { message, isNew };
   }
 
   /**

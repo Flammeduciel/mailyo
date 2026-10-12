@@ -20,19 +20,13 @@ export type {
   TokenStore,
 } from '@/providers/types';
 
-export {
-  MockMailProvider,
-  type MockProviderOptions,
-} from '@/providers/mock/mock-mail-provider';
+export { MockMailProvider, type MockProviderOptions } from '@/providers/mock/mock-mail-provider';
 
 export { ProviderRegistry, providerRegistry } from '@/providers/registry';
 
 export { SecureTokenStore } from '@/providers/oauth/secure-token-store';
 
-export {
-  createGmailOAuthAdapter,
-  type GmailOAuthConfig,
-} from '@/providers/oauth/gmail-oauth';
+export { createGmailOAuthAdapter, type GmailOAuthConfig } from '@/providers/oauth/gmail-oauth';
 
 export {
   createDemoAccount,
@@ -40,4 +34,5 @@ export {
   createDemoProvider,
   createDemoRemoteMessages,
   createDemoRules,
+  DEMO_ACCOUNT_ID,
 } from '@/providers/demo/demo-data';

@@ -32,26 +32,29 @@ npx expo run:android   # ou run:ios — crée le dev build (CNG, pas de dossier 
 ```
 src/
   app/                     # routes Expo Router (présentation / navigation)
-    _layout.tsx            # providers (gesture, safe-area, thème) + migrations SQLite
+    _layout.tsx            # providers (gesture, safe-area, thème) + AppProvider
     (tabs)/
-      _layout.tsx          # onglets Inbox / Paramètres
-      inbox/index.tsx
-      settings/index.tsx
-    thread/[id].tsx        # conversation
+      _layout.tsx          # onglets Réception / Paramètres
+      inbox/index.tsx      # liste des conversations
+      settings/index.tsx   # comptes, notifications, règles, fiabilité
+    thread/[id].tsx        # conversation (bulles + réponse)
     compose.tsx            # nouveau message (SMTP)
-    login.tsx              # configuration compte IMAP/OAuth2
-  ui/                      # composants de présentation réutilisables
-  state/                   # store d'application (useSyncExternalStore)
-  domain/                  # cœur métier pur et testable (threading, règles, sanitize…)
+    search.tsx             # recherche plein texte (FTS5)
+    login.tsx              # démo + connexion Gmail OAuth2
+    onboarding.tsx         # fiabilité notifications / batterie / arrière-plan
+    rules/edit.tsx         # création / édition d'une règle de notification
+  ui/                      # design system (AppText, Button, Chips, Screen…)
+  state/                   # AppProvider + useServiceQuery (accès au service)
+  services/                # MailService : composition root de l'application
+  domain/                  # cœur métier pur et testable (threading, règles, recherche…)
   data/                    # SQLite, migrations, repositories
-    db/                    # abstraction Database + adaptateur expo-sqlite + schéma
-    repositories/          # accès typés aux tables (accounts, messages, threads…)
-  providers/               # contrats des adaptateurs fournisseurs (OAuth/IMAP/SMTP)
-  sync/                    # moteur de synchronisation + file d'opérations
-  notifications/           # résolution des règles + publication système
-  components/              # ThemedText, ThemedView, ui/collapsible
-  constants/               # theme, config
-  hooks/                   # useTheme, useColorScheme
+    db/                    # abstraction Database + adaptateur expo-sqlite + schéma + FTS5
+    repositories/          # accès typés aux tables (accounts, messages, threads, settings…)
+  providers/               # contrats fournisseurs + MockMailProvider + OAuth Gmail
+  sync/                    # moteur de synchronisation + file d'opérations + arrière-plan
+  notifications/           # résolution des règles + canaux + publication système
+  constants/config.ts      # constantes (timeouts IMAP, nom de base, canal…)
+  hooks/                   # useColorScheme
 ```
 
 ## Configuration native (CNG)
@@ -60,6 +63,7 @@ Aucun dossier `ios/` / `android/` n'est committé : la config vit dans
 `app.json` (permissions Android, plugins) et est régénérée au build.
 Permissions Android : `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`,
 `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`.
+`expo-background-task` enregistre une sync périodique (`src/sync/background-sync.ts`).
 
 ## Scripts
 
@@ -74,8 +78,12 @@ npm test
 
 - Schéma SQLite appliqué idempotemment au démarrage (`PRAGMA user_version`) +
   index plein texte **FTS5** (`messages_fts`) pour la recherche.
-- Les implémentations natives Gmail OAuth / IMAP IDLE / SMTP restent à écrire
-  dans `src/providers/` (elles implémentent l'interface `MailProvider`).
-- Un `MockMailProvider` déterministe permet de faire tourner toute la chaîne
+- Les implémentations natives Gmail / IMAP IDLE / SMTP restent à écrire dans
+  `src/providers/` (elles implémentent l'interface `MailProvider`). La réception
+  **instantanée** (IMAP `IDLE`) exige un service de premier plan natif ; en
+  attendant, `expo-background-task` assure une relève périodique.
+- Un `MockMailProvider` déterministe, connecté via l'écran de connexion
+  (« compte de démonstration »), fait tourner toute la chaîne
   (sync → threading → règles → UI → notifications) sans appareil ni identifiants.
+
 

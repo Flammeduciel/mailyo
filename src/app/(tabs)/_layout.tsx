@@ -1,39 +1,44 @@
 import { Tabs } from 'expo-router';
-import type { ColorValue } from 'react-native';
+import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
+import { View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontSize, useAppTheme } from '@/ui';
 
-function TabIcon({ glyph, color }: { glyph: string; color: ColorValue }) {
-  return <ThemedText style={{ color }}>{glyph}</ThemedText>;
+function TabIcon({ icon, color }: { icon: string; color: string }) {
+  return (
+    <SymbolView
+      name={{ ios: icon as SFSymbol, android: icon as AndroidSymbol, web: icon as AndroidSymbol }}
+      size={FontSize.lg}
+      tintColor={color}
+      fallback={<View style={{ width: FontSize.lg, height: FontSize.lg }} />}
+    />
+  );
 }
 
 export default function TabsLayout() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+  const colors = useAppTheme();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.text,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: { backgroundColor: colors.background },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
       }}
     >
       <Tabs.Screen
         name="inbox"
         options={{
-          title: 'Inbox',
-          tabBarIcon: ({ color }) => <TabIcon glyph="✉" color={color} />,
+          title: 'Réception',
+          tabBarIcon: ({ color }) => <TabIcon icon="tray.fill" color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Paramètres',
-          tabBarIcon: ({ color }) => <TabIcon glyph="⚙" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon icon="gearshape.fill" color={color as string} />,
         }}
       />
     </Tabs>

@@ -37,8 +37,7 @@ export function createGmailOAuthAdapter(config: GmailOAuthConfig): OAuthAdapter 
       WebBrowser.maybeCompleteAuthSession();
 
       const redirectUri =
-        config.redirectUri.trim() ||
-        makeRedirectUri({ scheme: APP_SCHEME, path: 'oauthredirect' });
+        config.redirectUri.trim() || makeRedirectUri({ scheme: APP_SCHEME, path: 'oauthredirect' });
 
       const request = new AuthRequest({
         clientId: config.clientId,
@@ -52,7 +51,9 @@ export function createGmailOAuthAdapter(config: GmailOAuthConfig): OAuthAdapter 
 
       const result = await request.promptAsync(GOOGLE_DISCOVERY);
       if (result.type === 'error') {
-        throw new Error(`Autorisation Gmail refusée : ${result.error?.message ?? 'erreur inconnue'}`);
+        throw new Error(
+          `Autorisation Gmail refusée : ${result.error?.message ?? 'erreur inconnue'}`,
+        );
       }
       if (result.type !== 'success') {
         throw new Error(`Autorisation Gmail interrompue (${result.type})`);

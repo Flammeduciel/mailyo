@@ -4,18 +4,18 @@
  * the caller injects `now`. The actual presentation lives in `notifier.ts`.
  */
 
-import type { Message, NotificationRule, VibrationMode } from '@/domain/models';
+import type {
+  Message,
+  NotificationContentMode,
+  NotificationRule,
+  QuietHours,
+  VibrationMode,
+} from '@/domain/models';
 import { evaluateRules } from '@/domain/rules';
 import { buildPreview } from '@/domain/sanitize';
 import { SILENT_CHANNEL_ID, channelIdForDecision } from '@/notifications/channels';
 
-export type NotificationContentMode = 'full' | 'sender' | 'hidden';
-
-/** A daily quiet window; `start === end` means disabled. May wrap past midnight. */
-export interface QuietHours {
-  startHour: number;
-  endHour: number;
-}
+export type { NotificationContentMode, QuietHours } from '@/domain/models';
 
 export function isWithinQuietHours(quietHours: QuietHours | null | undefined, date: Date): boolean {
   if (!quietHours) {

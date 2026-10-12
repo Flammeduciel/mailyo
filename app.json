@@ -11,7 +11,10 @@
       "icon": "./assets/expo.icon",
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
         "NSFaceIDUsageDescription": "Déverrouillez MailYo pour accéder à vos emails."
       }
     },
@@ -54,7 +57,8 @@
         }
       ],
       "expo-audio",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true,

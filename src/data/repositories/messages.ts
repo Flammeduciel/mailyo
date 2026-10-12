@@ -7,6 +7,7 @@
 
 import type { Database, SqlValue } from '@/data/db/database';
 import type { EmailAddress, Message, SyncState } from '@/domain/models';
+import { buildFtsQuery } from '@/domain/search';
 
 interface MessageRow {
   id: string;
@@ -237,20 +238,25 @@ export async function searchMessages(
   query: string,
   options?: { accountId?: string; limit?: number },
 ): Promise<Message[]> {
-  const pattern = `%${query.toLowerCase()}%`;
-  const conditions = [
-    '(LOWER(subject) LIKE ? OR LOWER(body_text) LIKE ? OR LOWER(sender_address) LIKE ?)',
-  ];
-  const params: SqlValue[] = [pattern, pattern, pattern];
+  const match = buildFtsQuery(query);
+  if (match === null) {
+    return [];
+  }
+
+  const conditions = ['messages_fts MATCH ?'];
+  const params: SqlValue[] = [match];
   if (options?.accountId !== undefined) {
-    conditions.push('account_id = ?');
+    conditions.push('m.account_id = ?');
     params.push(options.accountId);
   }
   params.push(options?.limit ?? -1);
 
   const rows = await db.getAllAsync<MessageRow>(
-    `SELECT * FROM messages WHERE ${conditions.join(' AND ')}
-     ORDER BY received_at DESC, id DESC LIMIT ?`,
+    `SELECT m.* FROM messages_fts f
+       JOIN messages m ON m.rowid = f.rowid
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY m.received_at DESC, m.id DESC
+     LIMIT ?`,
     params,
   );
   return rows.map(mapMessage);

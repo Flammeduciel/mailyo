@@ -88,6 +88,21 @@ export type RuleMatchType = 'sender' | 'domain' | 'subject' | 'vip' | 'all';
 export type RuleAction = 'notify' | 'silent';
 export type VibrationMode = 'default' | 'short' | 'long' | 'none';
 
+/**
+ * How much of a message a notification reveals. Lives in the domain because it
+ * is a persisted preference, not a presentation detail.
+ */
+export type NotificationContentMode = 'full' | 'sender' | 'hidden';
+
+/**
+ * Daily window during which notifications are silenced (unless a VIP rule
+ * matches). `startHour === endHour` disables it; ranges may wrap past midnight.
+ */
+export interface QuietHours {
+  startHour: number;
+  endHour: number;
+}
+
 export interface NotificationRule {
   id: string;
   /** null = applies to every account (global rule). */

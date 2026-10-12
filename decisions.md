@@ -31,11 +31,14 @@ sections sont thématiques.
 
 - **Contexte :** le plan demande une « couche repository et gestion d'état
   explicite » qui distingue données synchronisées, cache et état d'interface.
-- **Décision :** repositories asynchrones + un store minimal basé sur
-  `useSyncExternalStore`, sans Redux/Zustand/MobX.
+- **Décision :** repositories asynchrones + un `MailService` (composition root)
+  exposé par un contexte React (`src/state/app-context.tsx`) et un hook de
+  chargement `useServiceQuery` qui se recharge sur un compteur `revision`. Pas de
+  Redux/Zustand/MobX, pas de store maison redondant.
 - **Justification :** évite une dépendance et une abstraction non justifiées par
-  le périmètre MVP. Le store est testable en isolation. Une migration vers une
-  bibliothèque reste possible sans toucher aux repositories.
+  le périmètre MVP. Les repositories restent la source de vérité persistée ;
+  l'écran ne connaît que le service. Une migration vers une bibliothèque reste
+  possible sans toucher aux repositories.
 
 ### D-003 — Tests avec jest-expo + Testing Library, colocalisés
 
@@ -47,9 +50,9 @@ sections sont thématiques.
 ### D-004 — Design « classique et propre »
 
 - **Décision :** jetons de design centralisés (couleurs, espacements, rayons,
-  typographie) dans `src/constants/theme.ts`, composants réutilisables dans
-  `src/ui/`. Style sobre : fond neutre, accent unique, bulles de message
-  arrondies, listes denses, thème clair/sombre automatique.
+  typographie) dans `src/ui/theme.ts`, composants réutilisables dans `src/ui/`.
+  Style sobre : fond neutre, accent unique, bulles de message arrondies, listes
+  denses, thème clair/sombre automatique.
 - **Justification :** cohérence visuelle, pas de dépendance UI externe, facile à
   faire évoluer.
 
@@ -62,11 +65,12 @@ sections sont thématiques.
 ```
 src/app/          routes expo-router (présentation / navigation)
 src/ui/           composants de présentation réutilisables
-src/state/        store d'application (useSyncExternalStore)
+src/state/        AppProvider + useServiceQuery (accès au service)
+src/services/     MailService (composition root)
 src/domain/       logique métier pure et testable (threading, règles, etc.)
 src/data/         SQLite, migrations, repositories, seed
 src/providers/    adaptateurs fournisseurs (OAuth/IMAP/SMTP) derrière interfaces
-src/sync/         moteur de synchronisation, file d'opérations
+src/sync/         moteur de synchronisation, file d'opérations, arrière-plan
 src/notifications/ résolution des règles + publication système
 ```
 
@@ -151,12 +155,15 @@ src/notifications/ résolution des règles + publication système
   sans module natif ni appareil. Ce qui est testé est exactement ce que
   l'appareil exécutera.
 
-### D-016 — Store d'état maison
+### D-016 — Service applicatif plutôt que store d'état
 
-- **Décision :** `src/state/store.ts` expose `createStore` + `useSelector`
-  (`useSyncExternalStore`), sans dépendance externe.
-- **Justification :** suffisant pour le MVP, testable en isolation, cohérent avec
-  « gestion d'état explicite » sans ajouter de bibliothèque.
+- **Décision :** `src/services/mail-service.ts` est le composition root que l'UI
+  consomme (bootstrap, sync, envoi, règles, notifications). Il est exposé par
+  `src/state/app-context.tsx` (contexte React) et lu par `useServiceQuery`, qui
+  recharge les écrans quand `revision` change. Aucun store d'état maison.
+- **Justification :** suffisant pour le MVP, directement testable sans React
+  (voir `mail-service.test.ts`), cohérent avec « gestion d'état explicite » sans
+  ajouter de bibliothèque ni dupliquer la source de vérité.
 
 ### D-017 — Adaptateurs fournisseurs mockés pour le MVP
 
@@ -167,13 +174,56 @@ src/notifications/ résolution des règles + publication système
   réception → threading → règles → notification → UI sans dépendre d'un appareil
   ni d'identifiants Google, sans mentir sur les capacités réelles.
 
-### D-018 — Aucune synchro d'arrière-plan dans le MVP
+### D-018 — Synchro d'arrière-plan périodique (expo-background-task)
 
-- **Décision :** ne pas embarquer `expo-background-task`/`expo-task-manager` pour
-  l'instant. La synchro d'arrière-plan est explicitement V1 (§5, §8) et dépend
-  d'une preuve native (Phase 0).
-- **Justification :** éviter une dépendance native inutilisée et une promesse non
-  tenue.
+- **Décision :** `src/sync/background-sync.ts` enregistre une tâche
+  `expo-task-manager` déclenchée par `expo-background-task` (WorkManager Android /
+  BGTaskScheduler iOS). Elle rouvre la base et exécute un `MailService.initialize()`
+  sans passer par React. Cadence minimale : 15 min.
+- **Justification :** c'est la synchronisation d'arrière-plan atteignable sans
+  code natif personnalisé, et elle relève réellement les nouveaux messages app
+  fermée. La réception **instantanée** (IMAP `IDLE`) exige un service de premier
+  plan natif, hors du périmètre Expo managé : point d'intégration documenté, pas
+  une promesse tenue à moitié.
+- **Conséquence :** `expo-background-task` + `expo-task-manager` sont des
+  dépendances assumées, exercées par l'écran `/onboarding`.
+
+### D-030 — Service applicatif (`MailService`)
+
+- **Décision :** `src/services/mail-service.ts` séquence repositories, registre de
+  fournisseurs, moteur de sync et notifier. L'UI ne connaît que lui. Les
+  paramètres applicatifs (contenu des notifications, thème, heures calmes) sont
+  stockés dans la table `app_settings` via `src/domain/settings.ts` (pur, testé).
+- **Justification :** un seul point de composition, testable avec le vrai SQLite
+  en mémoire et `MockMailProvider`, sans appareil.
+
+### D-031 — Recherche plein texte FTS5
+
+- **Contexte :** le plan demande une recherche par objet, expéditeur et contenu.
+- **Décision :** table virtuelle `messages_fts` (external content) alimentée par
+  triggers SQL, requête construite par `buildFtsQuery` (pur, testé) pour échapper
+  l'entrée utilisateur et éviter l'injection de syntaxe FTS.
+- **Justification :** recherche instantanée côté appareil, sans requête réseau ni
+  scan complet.
+
+### D-032 — Sons de notification par règle
+
+- **Décision :** les règles `sender`/`domain`/`subject`/`vip` portent un `soundId`
+  et un `vibrationMode` ; `evaluateRules` (pur) les résout, `resolve.ts` produit
+  le contenu, `channels.ts` mappe vers un canal Android par son, et `notifier.ts`
+  publie. Les règles ne s'appliquent qu'aux messages réellement nouveaux et non
+  lus provenant d'autrui.
+- **Justification :** exigence produit centrale (« son personnalisé par
+  expéditeur »), testée de bout en bout en pur.
+
+### D-033 — Écrans : rattachement au service, pas aux repositories
+
+- **Décision :** chaque écran (`inbox`, `thread/[id]`, `search`, `compose`,
+  `settings`, `rules/edit`, `login`, `onboarding`) lit et mute via `useApp()` /
+  `useServiceQuery`. Les valeurs dépendant du temps (`now`) sont calculées dans le
+  chargeur asynchrone, jamais pendant le rendu.
+- **Justification :** règle de pureté React (`react-hooks`) et un seul chemin de
+  données.
 
 ---
 

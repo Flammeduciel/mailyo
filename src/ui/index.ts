@@ -3,6 +3,7 @@ export { Avatar, getInitials, type AvatarProps } from './Avatar';
 export { Badge, type BadgeProps } from './Badge';
 export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Card, type CardProps } from './Card';
+export { Chips, type ChipOption, type ChipsProps } from './Chips';
 export { ConversationRow, formatThreadTime, type ConversationRowProps } from './ConversationRow';
 export { Divider, type DividerProps } from './Divider';
 export { EmptyState, type EmptyStateProps } from './EmptyState';

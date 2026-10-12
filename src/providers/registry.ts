@@ -25,7 +25,11 @@ export class ProviderRegistry {
    * Return the provider registered for the account, or create and register an
    * empty `MockMailProvider` when none exists yet.
    */
-  getOrCreate(input: { accountId: string; provider: ProviderId; emailAddress: string }): MailProvider {
+  getOrCreate(input: {
+    accountId: string;
+    provider: ProviderId;
+    emailAddress: string;
+  }): MailProvider {
     const existing = this.providers.get(input.accountId);
     if (existing) {
       return existing;
@@ -42,6 +46,5 @@ export class ProviderRegistry {
     this.providers.delete(accountId);
   }
 }
-
 /** Shared registry used by the application. */
 export const providerRegistry = new ProviderRegistry();

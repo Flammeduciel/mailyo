@@ -8,7 +8,7 @@
 
 import type { Database } from '@/data/db/database';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const MIGRATION_1 = `
 CREATE TABLE IF NOT EXISTS accounts (
@@ -175,7 +175,20 @@ CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
 END;
 `;
 
-const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2];
+/**
+ * Key/value application settings (theme, notification content mode, default
+ * sound, quiet hours, active account...). Deliberately a plain table rather than
+ * a native KV store so preferences are covered by the same real-SQL tests as the
+ * rest of the data layer.
+ */
+const MIGRATION_3 = `
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+);
+`;
+
+const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 /** Apply every pending migration. Resumable and idempotent. */
 export async function migrate(db: Database): Promise<void> {

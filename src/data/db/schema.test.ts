@@ -48,6 +48,7 @@ describe('database schema', () => {
       'drafts',
       'pending_operations',
       'messages_fts',
+      'app_settings',
     ]) {
       expect(names).toContain(table);
     }
