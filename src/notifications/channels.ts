@@ -35,6 +35,7 @@ const DEFAULT_SOUND: BuiltInSound = { id: 'default', name: 'Par défaut', file: 
 export const BUILT_IN_SOUNDS: BuiltInSound[] = [
   DEFAULT_SOUND,
   { id: 'soft', name: 'Doux', file: 'soft.wav' },
+  { id: 'chime', name: 'Carillon', file: 'chime.wav' },
   { id: 'urgent', name: 'Urgent', file: 'urgent.wav' },
   { id: 'none', name: 'Aucun', file: null },
 ];

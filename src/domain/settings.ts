@@ -45,7 +45,10 @@ function parseQuietHours(raw: string): QuietHours | null {
       typeof (parsed as QuietHours).startHour === 'number' &&
       typeof (parsed as QuietHours).endHour === 'number'
     ) {
-      return { startHour: (parsed as QuietHours).startHour, endHour: (parsed as QuietHours).endHour };
+      return {
+        startHour: (parsed as QuietHours).startHour,
+        endHour: (parsed as QuietHours).endHour,
+      };
     }
   } catch {
     // fall through to null
@@ -72,12 +75,11 @@ export function parseAppSettings(raw: Record<string, string>): AppSettings {
       contentMode !== undefined && (CONTENT_MODES as readonly string[]).includes(contentMode)
         ? (contentMode as NotificationContentMode)
         : DEFAULT_SETTINGS.contentMode,
-    defaultSoundId: sound === undefined ? DEFAULT_SETTINGS.defaultSoundId : sound === '' ? null : sound,
+    defaultSoundId:
+      sound === undefined ? DEFAULT_SETTINGS.defaultSoundId : sound === '' ? null : sound,
     quietHours: quiet === undefined ? DEFAULT_SETTINGS.quietHours : parseQuietHours(quiet),
     theme:
-      theme === 'light' || theme === 'dark' || theme === 'system'
-        ? theme
-        : DEFAULT_SETTINGS.theme,
+      theme === 'light' || theme === 'dark' || theme === 'system' ? theme : DEFAULT_SETTINGS.theme,
   };
 }
 

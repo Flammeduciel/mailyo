@@ -92,7 +92,11 @@ export default function SettingsScreen() {
             />
           ))}
           <View style={styles.cardAction}>
-            <Button label="Ajouter un compte" variant="secondary" onPress={() => router.push('/login')} />
+            <Button
+              label="Ajouter un compte"
+              variant="secondary"
+              onPress={() => router.push('/login')}
+            />
           </View>
         </Card>
 
@@ -191,7 +195,11 @@ export default function SettingsScreen() {
 
         <SectionTitle title="À propos" />
         <Card style={styles.card}>
-          <SettingRow label="MailYo" description="Messagerie email instantanée" icon="info.circle" />
+          <SettingRow
+            label="MailYo"
+            description="Messagerie email instantanée"
+            icon="info.circle"
+          />
           <SettingRow label="Version" description="0.1.0 (MVP)" />
           <AppText variant="caption" color="textSecondary" style={styles.privacy}>
             Aucune donnée n’est envoyée à un serveur intermédiaire. Vos emails restent chez votre

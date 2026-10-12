@@ -31,10 +31,7 @@ export async function getAllSettings(db: Database): Promise<Record<string, strin
   return result;
 }
 
-export async function setSettings(
-  db: Database,
-  entries: Record<string, string>,
-): Promise<void> {
+export async function setSettings(db: Database, entries: Record<string, string>): Promise<void> {
   for (const [key, value] of Object.entries(entries)) {
     await setSetting(db, key, value);
   }

@@ -9,7 +9,12 @@
  */
 
 import type { Database } from '@/data/db/database';
-import { deleteAccount, getAccount, insertAccount, listAccounts } from '@/data/repositories/accounts';
+import {
+  deleteAccount,
+  getAccount,
+  insertAccount,
+  listAccounts,
+} from '@/data/repositories/accounts';
 import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
@@ -49,7 +54,12 @@ import {
 } from '@/domain/threading';
 import type { Notifier } from '@/notifications/notifier';
 import { resolveNotification } from '@/notifications/resolve';
-import { DEFAULT_SETTINGS, parseAppSettings, serializeAppSettings, type AppSettings } from '@/domain/settings';
+import {
+  DEFAULT_SETTINGS,
+  parseAppSettings,
+  serializeAppSettings,
+  type AppSettings,
+} from '@/domain/settings';
 import { createDemoProvider, createDemoRules, DEMO_ACCOUNT_ID } from '@/providers/demo/demo-data';
 import { MockMailProvider } from '@/providers/mock/mock-mail-provider';
 import { ProviderRegistry } from '@/providers/registry';

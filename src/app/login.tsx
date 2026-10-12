@@ -11,10 +11,7 @@ import { AppText, Button, Card, Header, Screen, SectionTitle, Spacing } from '@/
 /** Configured through `expo.extra.gmailClientId`; empty when the build has none. */
 const GMAIL_CLIENT_ID = (Constants.expoConfig?.extra?.gmailClientId as string | undefined) ?? '';
 
-const GMAIL_SCOPES = [
-  'https://mail.google.com/',
-  'https://www.googleapis.com/auth/userinfo.email',
-];
+const GMAIL_SCOPES = ['https://mail.google.com/', 'https://www.googleapis.com/auth/userinfo.email'];
 
 export default function LoginScreen() {
   const { service, invalidate } = useApp();
@@ -76,10 +73,10 @@ export default function LoginScreen() {
           </AppText>
           <View style={styles.cardAction}>
             <Button
-              label={hasDemo ? 'Ouvrir la boîte de réception' : 'Utiliser le compte de démonstration'}
-              onPress={
-                hasDemo ? () => router.replace('/(tabs)/inbox') : () => void connectDemo()
+              label={
+                hasDemo ? 'Ouvrir la boîte de réception' : 'Utiliser le compte de démonstration'
               }
+              onPress={hasDemo ? () => router.replace('/(tabs)/inbox') : () => void connectDemo()}
               loading={busy}
               disabled={busy}
               testID="connect-demo"

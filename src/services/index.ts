@@ -3,4 +3,8 @@
  * and notification layers together for the UI.
  */
 
-export { MailService, type MailServiceOptions, type SendMessageInput } from '@/services/mail-service';
+export {
+  MailService,
+  type MailServiceOptions,
+  type SendMessageInput,
+} from '@/services/mail-service';

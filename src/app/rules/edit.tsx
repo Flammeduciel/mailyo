@@ -118,7 +118,10 @@ export default function RuleEditScreen() {
 
   return (
     <Screen>
-      <Header title={isEditing ? 'Modifier la règle' : 'Nouvelle règle'} onBack={() => router.back()} />
+      <Header
+        title={isEditing ? 'Modifier la règle' : 'Nouvelle règle'}
+        onBack={() => router.back()}
+      />
       <ScrollView contentContainerStyle={styles.content}>
         <SectionTitle title="Déclencheur" />
         <Chips
@@ -173,7 +176,13 @@ export default function RuleEditScreen() {
         <View style={styles.actions}>
           <Button label="Enregistrer" onPress={onSave} fullWidth testID="rule-save" />
           {isEditing ? (
-            <Button label="Supprimer" variant="danger" onPress={onDelete} fullWidth testID="rule-delete" />
+            <Button
+              label="Supprimer"
+              variant="danger"
+              onPress={onDelete}
+              fullWidth
+              testID="rule-delete"
+            />
           ) : null}
         </View>
       </ScrollView>

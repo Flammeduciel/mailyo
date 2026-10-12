@@ -126,17 +126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh,
       invalidate,
     };
-  }, [
-    service,
-    ready,
-    error,
-    revision,
-    locked,
-    biometricsAvailable,
-    unlock,
-    refresh,
-    invalidate,
-  ]);
+  }, [service, ready, error, revision, locked, biometricsAvailable, unlock, refresh, invalidate]);
 
   // Hide the splash as soon as the app is usable — or once initialisation has
   // failed, so the user is never stuck on a frozen splash screen.

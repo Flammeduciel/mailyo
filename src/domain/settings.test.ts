@@ -34,7 +34,11 @@ describe('app settings', () => {
   });
 
   it('serialises a null sound and disabled quiet hours as empty strings', () => {
-    const raw = serializeAppSettings({ ...DEFAULT_SETTINGS, defaultSoundId: null, quietHours: null });
+    const raw = serializeAppSettings({
+      ...DEFAULT_SETTINGS,
+      defaultSoundId: null,
+      quietHours: null,
+    });
     expect(raw['notification.defaultSoundId']).toBe('');
     expect(raw['notification.quietHours']).toBe('');
     expect(parseAppSettings(raw)).toMatchObject({ defaultSoundId: null, quietHours: null });

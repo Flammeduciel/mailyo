@@ -53,10 +53,14 @@
       [
         "expo-notifications",
         {
-          "defaultChannel": "mailyo-inbox"
+          "defaultChannel": "mailyo-inbox",
+          "sounds": [
+            "./assets/sounds/soft.wav",
+            "./assets/sounds/chime.wav",
+            "./assets/sounds/urgent.wav"
+          ]
         }
       ],
-      "expo-audio",
       "expo-local-authentication",
       "expo-background-task"
     ],

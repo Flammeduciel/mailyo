@@ -14,9 +14,8 @@ réception temps réel, notifications avec **sons personnalisés par expéditeur
 - **Expo SDK 57** / React Native 0.86 / React 19, Expo Router (file-based routing).
 - **expo-sqlite** — cache local (comptes, dossiers, threads, emails, règles).
 - **expo-secure-store** — secrets (mots de passe IMAP, tokens OAuth).
-- **expo-notifications** — notifications locales.
-- **expo-background-task** + **expo-task-manager** — sync/IDLE en arrière-plan.
-- **expo-audio** — sons de notification personnalisés.
+- **expo-notifications** — notifications locales + sons personnalisés (WAV embarqués via le config plugin).
+- **expo-background-task** + **expo-task-manager** — relève périodique en arrière-plan.
 - **expo-auth-session** + **expo-crypto** — OAuth2 (Gmail).
 - **expo-local-authentication** — verrou biométrique.
 
@@ -72,6 +71,7 @@ npm run verify      # typecheck + lint + tests
 npm run typecheck
 npm run lint
 npm test
+npm run sounds:generate   # régénère les sons de notification (assets/sounds/*.wav)
 ```
 
 ## Notes MVP

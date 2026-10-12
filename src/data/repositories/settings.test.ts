@@ -29,7 +29,7 @@ describe('settings repository', () => {
 
   it('writes several keys at once', async () => {
     const db = await createMigratedDatabase();
-    await setSettings(db, { 'a': '1', 'b': '2' });
+    await setSettings(db, { a: '1', b: '2' });
     expect(await getAllSettings(db)).toEqual({ a: '1', b: '2' });
   });
 

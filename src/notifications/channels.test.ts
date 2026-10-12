@@ -20,6 +20,7 @@ describe('channels', () => {
 
     it('returns the matching built-in sound', () => {
       expect(getSound('soft')).toEqual({ id: 'soft', name: 'Doux', file: 'soft.wav' });
+      expect(getSound('chime').file).toBe('chime.wav');
       expect(getSound('urgent').file).toBe('urgent.wav');
       expect(getSound('none').name).toBe('Aucun');
     });
@@ -28,6 +29,7 @@ describe('channels', () => {
       expect(BUILT_IN_SOUNDS.map((sound) => sound.id)).toEqual([
         'default',
         'soft',
+        'chime',
         'urgent',
         'none',
       ]);

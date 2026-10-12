@@ -225,6 +225,19 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** règle de pureté React (`react-hooks`) et un seul chemin de
   données.
 
+### D-034 — Sons de notification embarqués
+
+- **Contexte :** les règles et canaux référençaient des fichiers audio
+  (`soft.wav`, `urgent.wav`) absents du dépôt : les sons personnalisés seraient
+  restés muets.
+- **Décision :** générer trois WAV courts (`soft`, `chime`, `urgent`) dans
+  `assets/sounds/`, les déclarer dans le config plugin `expo-notifications`
+  (`sounds`) et les exposer via `BUILT_IN_SOUNDS`. `expo-audio` (inutilisé) est
+  retiré ; l'écoute de test passe par une vraie notification.
+- **Justification :** un son personnalisé par expéditeur ne fonctionne que si le
+  fichier est embarqué dans le build natif. Assets générés par script, sans
+  dépendance de licence.
+
 ---
 
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)

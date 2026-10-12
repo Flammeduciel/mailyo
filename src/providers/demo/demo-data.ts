@@ -176,7 +176,7 @@ export function createDemoRules(accountId: string): NotificationRule[] {
       matchType: 'sender',
       matchValue: 'claire.fontaine@atelier-nord.fr',
       action: 'notify',
-      soundId: 'demo-chime',
+      soundId: 'chime',
       vibrationMode: 'default',
       enabled: true,
       createdAt: BASE_TIME,

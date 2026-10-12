@@ -53,9 +53,9 @@ export default function OnboardingScreen() {
         />
         <SectionTitle title="Temps réel (IMAP IDLE)" />
         <AppText variant="body" color="textSecondary" style={styles.note}>
-          La réception instantanée par IMAP IDLE nécessite un service de premier plan natif, ajouté au
-          build de développement. En attendant, la synchronisation périodique suffit à recevoir vos
-          messages avec quelques minutes de décalage.
+          La réception instantanée par IMAP IDLE nécessite un service de premier plan natif, ajouté
+          au build de développement. En attendant, la synchronisation périodique suffit à recevoir
+          vos messages avec quelques minutes de décalage.
         </AppText>
       </ScrollView>
     </Screen>

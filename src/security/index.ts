@@ -1,4 +1,1 @@
-export {
-  createExpoBiometricAuthenticator,
-  type BiometricAuthenticator,
-} from './biometrics';
+export { createExpoBiometricAuthenticator, type BiometricAuthenticator } from './biometrics';

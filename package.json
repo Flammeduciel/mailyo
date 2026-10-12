@@ -5,7 +5,6 @@
   "dependencies": {
     "@expo/ui": "~57.0.23",
     "expo": "~57.0.28",
-    "expo-audio": "~57.0.5",
     "expo-auth-session": "~57.0.15",
     "expo-background-task": "~57.0.21",
     "expo-clipboard": "~57.0.2",
@@ -52,7 +51,6 @@
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
@@ -61,6 +59,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
+    "sounds:generate": "node ./scripts/generate-sounds.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{js,ts,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "verify": "npm run typecheck && npm run lint && npm test"
