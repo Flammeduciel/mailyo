@@ -6,6 +6,8 @@
 import type { NotificationContentMode, QuietHours } from '@/domain/models';
 
 export interface AppSettings {
+  /** Require Face ID / fingerprint before showing the app. */
+  biometricLock: boolean;
   /** 'full' shows sender + subject + preview, 'sender' hides the preview, 'hidden' hides everything. */
   contentMode: NotificationContentMode;
   /** Built-in sound id, or null for the system default. */
@@ -17,6 +19,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  biometricLock: false,
   contentMode: 'full',
   defaultSoundId: 'default',
   quietHours: null,
@@ -24,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 const SETTING_KEYS = {
+  biometricLock: 'security.biometricLock',
   contentMode: 'notification.contentMode',
   defaultSoundId: 'notification.defaultSoundId',
   quietHours: 'notification.quietHours',
@@ -51,12 +55,19 @@ function parseQuietHours(raw: string): QuietHours | null {
 
 /** Build typed settings from the raw key/value rows, falling back to defaults. */
 export function parseAppSettings(raw: Record<string, string>): AppSettings {
+  const biometricLock = raw[SETTING_KEYS.biometricLock];
   const contentMode = raw[SETTING_KEYS.contentMode];
   const sound = raw[SETTING_KEYS.defaultSoundId];
   const quiet = raw[SETTING_KEYS.quietHours];
   const theme = raw[SETTING_KEYS.theme];
 
   return {
+    biometricLock:
+      biometricLock === 'true'
+        ? true
+        : biometricLock === 'false'
+          ? false
+          : DEFAULT_SETTINGS.biometricLock,
     contentMode:
       contentMode !== undefined && (CONTENT_MODES as readonly string[]).includes(contentMode)
         ? (contentMode as NotificationContentMode)
@@ -73,6 +84,7 @@ export function parseAppSettings(raw: Record<string, string>): AppSettings {
 /** Flatten typed settings into the key/value rows the repository stores. */
 export function serializeAppSettings(settings: AppSettings): Record<string, string> {
   return {
+    [SETTING_KEYS.biometricLock]: settings.biometricLock ? 'true' : 'false',
     [SETTING_KEYS.contentMode]: settings.contentMode,
     [SETTING_KEYS.defaultSoundId]: settings.defaultSoundId ?? '',
     [SETTING_KEYS.quietHours]: settings.quietHours ? JSON.stringify(settings.quietHours) : '',

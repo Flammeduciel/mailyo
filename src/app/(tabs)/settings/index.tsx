@@ -41,7 +41,7 @@ const THEMES: ChipOption<AppSettings['theme']>[] = [
 ];
 
 export default function SettingsScreen() {
-  const { service } = useApp();
+  const { service, biometricsAvailable } = useApp();
 
   const { data, reload } = useServiceQuery<SettingsData>(async (mailService) => {
     const [accounts, rules] = await Promise.all([
@@ -130,6 +130,24 @@ export default function SettingsScreen() {
               onChange={(theme) => updateSettings({ theme })}
             />
           </View>
+        </Card>
+
+        <SectionTitle title="Sécurité" />
+        <Card style={styles.card}>
+          <SettingRow
+            label="Verrouillage biométrique"
+            description={
+              biometricsAvailable
+                ? "Demander Face ID / empreinte à l'ouverture"
+                : 'Indisponible : aucune biométrie configurée sur cet appareil'
+            }
+            value={data.settings.biometricLock}
+            onValueChange={
+              biometricsAvailable
+                ? (enabled) => updateSettings({ biometricLock: enabled })
+                : undefined
+            }
+          />
         </Card>
 
         <SectionTitle title="Règles de notification" />

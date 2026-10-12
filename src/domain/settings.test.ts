@@ -7,12 +7,30 @@ describe('app settings', () => {
 
   it('round-trips settings through serialisation', () => {
     const settings = {
+      biometricLock: true,
       contentMode: 'sender' as const,
       defaultSoundId: 'urgent',
       quietHours: { startHour: 22, endHour: 6 },
       theme: 'dark' as const,
     };
     expect(parseAppSettings(serializeAppSettings(settings))).toEqual(settings);
+  });
+
+  it('defaults the biometric lock to false and serialises booleans as strings', () => {
+    expect(parseAppSettings({}).biometricLock).toBe(false);
+    expect(DEFAULT_SETTINGS.biometricLock).toBe(false);
+    expect(serializeAppSettings(DEFAULT_SETTINGS)['security.biometricLock']).toBe('false');
+    expect(
+      serializeAppSettings({ ...DEFAULT_SETTINGS, biometricLock: true })['security.biometricLock'],
+    ).toBe('true');
+    expect(parseAppSettings({ 'security.biometricLock': 'true' }).biometricLock).toBe(true);
+    expect(parseAppSettings({ 'security.biometricLock': 'false' }).biometricLock).toBe(false);
+  });
+
+  it('ignores unrecognised biometric lock values', () => {
+    expect(parseAppSettings({ 'security.biometricLock': 'yes' }).biometricLock).toBe(
+      DEFAULT_SETTINGS.biometricLock,
+    );
   });
 
   it('serialises a null sound and disabled quiet hours as empty strings', () => {
