@@ -18,13 +18,35 @@ réception temps réel, notifications avec **sons personnalisés par expéditeur
 - **expo-background-task** + **expo-task-manager** — relève périodique en arrière-plan.
 - **expo-auth-session** + **expo-crypto** — OAuth2 (Gmail).
 - **expo-local-authentication** — verrou biométrique.
+- **expo-dev-client** — development build (indispensable : les modules natifs
+  ci-dessus ne sont **pas** dans Expo Go).
 
 ## Démarrer
 
+MailYo ne tourne **pas** dans Expo Go. Deux chemins selon votre machine.
+
+### A. En local (JDK 17+ et SDK Android requis)
+
 ```bash
 npm install
-npx expo run:android   # ou run:ios — crée le dev build (CNG, pas de dossier natif committé)
+npx expo run:android   # compile le dev build et l'installe (émulateur ou appareil USB)
 ```
+
+Le dossier natif (`android/`) est généré par CNG et n'est pas committé.
+
+### B. Via EAS (build cloud, aucun SDK Android local)
+
+```bash
+npm install --global eas-cli
+eas login
+eas build --profile development --platform android   # APK « development » (voir eas.json)
+# installez l'APK sur votre téléphone, puis :
+npx expo start --dev-client
+```
+
+`eas.json` définit les profils `development`, `preview` et `production`.
+`expo-dev-client` étant installé, `npx expo start` démarre directement en mode
+development build plutôt qu'en Expo Go.
 
 ## Structure
 
@@ -87,3 +109,6 @@ npm run sounds:generate   # régénère les sons de notification (assets/sounds/
 - Un `MockMailProvider` déterministe, connecté via l'écran de connexion
   (« compte de démonstration »), fait tourner toute la chaîne
   (sync → threading → règles → UI → notifications) sans appareil ni identifiants.
+- La cible est **Android** (et iOS). Le **web n'est pas supporté** :
+  `expo-sqlite` (wasm), `expo-secure-store`, la biométrie, les notifications et
+  les tâches d'arrière-plan n'ont pas d'implémentation web fonctionnelle.
