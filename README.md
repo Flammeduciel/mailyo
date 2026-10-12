@@ -53,7 +53,6 @@ src/
   sync/                    # moteur de synchronisation + file d'opérations + arrière-plan
   notifications/           # résolution des règles + canaux + publication système
   constants/config.ts      # constantes (timeouts IMAP, nom de base, canal…)
-  hooks/                   # useColorScheme
 ```
 
 ## Configuration native (CNG)

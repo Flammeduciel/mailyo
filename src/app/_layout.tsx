@@ -1,49 +1,48 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { StyleSheet, useColorScheme, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppProvider, useApp } from '@/state/app-context';
-import { AppText, Button, Screen, Spacing } from '@/ui';
+import { AppText, Button, Screen, Spacing, useResolvedScheme } from '@/ui';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <AppProvider>
-            <AppShell />
-          </AppProvider>
-        </ThemeProvider>
+        <AppProvider>
+          <AppShell />
+        </AppProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
 
-/** Render the lock screen in place of the navigator while the app is locked. */
+/** Navigation chrome follows the persisted theme; the lock screen replaces it. */
 function AppShell() {
   const { locked } = useApp();
-
-  if (locked) {
-    return <LockScreen />;
-  }
+  const scheme = useResolvedScheme();
 
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="compose" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="thread/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="search" options={{ headerShown: false }} />
-      <Stack.Screen name="rules/edit" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-    </Stack>
+    <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {locked ? (
+        <LockScreen />
+      ) : (
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
+          <Stack.Screen name="compose" options={{ headerShown: false, presentation: 'modal' }} />
+          <Stack.Screen name="thread/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="search" options={{ headerShown: false }} />
+          <Stack.Screen name="rules/edit" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        </Stack>
+      )}
+    </ThemeProvider>
   );
 }
 

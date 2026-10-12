@@ -23,3 +23,9 @@ export {
   useAppTheme,
   type AppColors,
 } from './theme';
+export {
+  ThemePreferenceProvider,
+  useResolvedScheme,
+  useThemePreference,
+  type ThemePreference,
+} from './theme-preference';

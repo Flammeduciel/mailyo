@@ -24,6 +24,7 @@ import { SecureTokenStore } from '@/providers';
 import { createExpoBiometricAuthenticator } from '@/security';
 import { MailService } from '@/services/mail-service';
 import { registerBackgroundSync } from '@/sync/background-sync';
+import { ThemePreferenceProvider, type ThemePreference } from '@/ui';
 
 const authenticator = createExpoBiometricAuthenticator();
 
@@ -33,6 +34,10 @@ export interface AppContextValue {
   error: string | null;
   /** Bumped after every mutation so lists reload. */
   revision: number;
+  /** Persisted colour-scheme preference. */
+  theme: ThemePreference;
+  /** Set the preference; persists it and updates the design system. */
+  setTheme: (preference: ThemePreference) => Promise<void>;
   /** True while the biometric app lock is engaged. */
   locked: boolean;
   /** Whether the device can perform a biometric check at all. */
@@ -52,6 +57,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [theme, setThemePreference] = useState<ThemePreference>('system');
   const [locked, setLocked] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
 
@@ -76,6 +82,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setBiometricsAvailable(available);
       setLocked(available && created.getSettings().biometricLock);
+      setThemePreference(created.getSettings().theme);
       await registerBackgroundSync();
     })()
       .catch((cause: unknown) => {
@@ -105,6 +112,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRevision((value) => value + 1);
   }, []);
 
+  const setTheme = useCallback(
+    async (preference: ThemePreference) => {
+      if (!service) {
+        return;
+      }
+      await service.updateSettings({ theme: preference });
+      setThemePreference(preference);
+    },
+    [service],
+  );
+
   const unlock = useCallback(async (): Promise<boolean> => {
     const success = await authenticator.authenticate('Déverrouillez MailYo');
     if (success) {
@@ -122,13 +140,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ready,
       error,
       revision,
+      theme,
+      setTheme,
       locked,
       biometricsAvailable,
       unlock,
       refresh,
       invalidate,
     };
-  }, [service, ready, error, revision, locked, biometricsAvailable, unlock, refresh, invalidate]);
+  }, [
+    service,
+    ready,
+    error,
+    revision,
+    theme,
+    setTheme,
+    locked,
+    biometricsAvailable,
+    unlock,
+    refresh,
+    invalidate,
+  ]);
 
   // Hide the splash as soon as the app is usable — or once initialisation has
   // failed, so the user is never stuck on a frozen splash screen.
@@ -142,7 +174,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <ThemePreferenceProvider value={theme}>
+      <AppContext.Provider value={value}>{children}</AppContext.Provider>
+    </ThemePreferenceProvider>
+  );
 }
 
 /** Consume the app context. Throws outside of `<AppProvider>`. */

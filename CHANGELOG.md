@@ -29,7 +29,9 @@ Toutes les évolutions notables de MailYo. Format inspiré de
 
 - Couche d'état : contexte React (`AppProvider` + `useServiceQuery`) au lieu d'un
   store maison redondant.
-- Design system : composant `Chips` partagé, thèmes clair/sombre centralisés.
+- Design system : composant `Chips` partagé, thèmes clair/sombre centralisés et
+  réellement appliqués selon la préférence utilisateur (plus seulement le
+  système).
 - Nettoyage du gabarit Expo inutilisé et de `expo-audio` (non utilisé).
 
 ### Sécurité

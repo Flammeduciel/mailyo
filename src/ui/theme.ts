@@ -2,10 +2,10 @@
  * MailChat design system — colours, spacing, radii and typography scale.
  *
  * A classic, sober palette: neutral grey surfaces with a single blue accent.
- * No external dependency; light/dark are selected from the OS colour scheme.
+ * No external dependency; light/dark follow the device or the user's preference.
  */
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useResolvedScheme } from './theme-preference';
 
 export interface AppColors {
   background: string;
@@ -92,8 +92,7 @@ export const FontSize = {
   xxl: 28,
 } as const;
 
-/** Resolve the active palette from the OS colour scheme (defaults to light). */
+/** Resolve the active palette from the preference / OS scheme (defaults to light). */
 export function useAppTheme(): AppColors {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? DarkColors : LightColors;
+  return useResolvedScheme() === 'dark' ? DarkColors : LightColors;
 }

@@ -253,6 +253,20 @@ src/notifications/ résolution des règles + publication système
   prétendre qu'une boîte Gmail vide est synchronisée. Le jour où l'adaptateur
   natif arrive, les jetons sont déjà au bon endroit.
 
+### D-036 — Préférence de thème réellement appliquée
+
+- **Contexte :** `AppSettings.theme` était persisté et exposé dans les
+  paramètres, mais `useAppTheme` suivait uniquement le thème du système : le
+  réglage n'avait aucun effet.
+- **Décision :** `ThemePreferenceProvider` (dans `src/ui/theme-preference.tsx`)
+  transporte la préférence ; `useAppTheme`/`useResolvedScheme` la combinent avec
+  `useColorScheme()`. `AppProvider` détient la préférence (chargée à
+  l'initialisation, mise à jour par `setTheme`), et le thème de navigation est
+  dérivé du même schéma résolu.
+- **Justification :** un réglage affiché doit agir, pas mentir. Le contexte de
+  préférence a une valeur par défaut, donc les composants testés hors provider
+  continuent de fonctionner.
+
 ---
 
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)

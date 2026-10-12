@@ -41,7 +41,7 @@ const THEMES: ChipOption<AppSettings['theme']>[] = [
 ];
 
 export default function SettingsScreen() {
-  const { service, biometricsAvailable } = useApp();
+  const { service, biometricsAvailable, setTheme, theme } = useApp();
 
   const { data, reload } = useServiceQuery<SettingsData>(async (mailService) => {
     const [accounts, rules] = await Promise.all([
@@ -154,8 +154,10 @@ export default function SettingsScreen() {
             </AppText>
             <Chips
               options={THEMES}
-              value={data.settings.theme}
-              onChange={(theme) => updateSettings({ theme })}
+              value={theme}
+              onChange={(preference) => {
+                void setTheme(preference);
+              }}
             />
           </View>
         </Card>
