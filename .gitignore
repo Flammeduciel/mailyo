@@ -7,7 +7,7 @@ node_modules/
 .expo/
 dist/
 web-build/
-expo-env.d.ts
+# expo-env.d.ts is committed so typecheck works without running `expo start` first.
 
 # Native
 .kotlin/
