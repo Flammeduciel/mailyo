@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { FontSize, useAppTheme } from './theme';
+import { useAppTheme } from './theme';
 
 /**
  * A small set of sober, desaturated avatar colours. The colour is picked

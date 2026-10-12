@@ -54,14 +54,7 @@
         }
       ],
       "expo-audio",
-      "expo-local-authentication",
-      "expo-background-task",
-      [
-        "expo-auth-session",
-        {
-          "scheme": "mailyo"
-        }
-      ]
+      "expo-local-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

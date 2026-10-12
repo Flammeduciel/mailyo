@@ -1,56 +1,81 @@
-# Welcome to your Expo app 👋
+# MailYo
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Application email mobile type WhatsApp, en **React Native + Expo**, qui parle
+**directement en IMAP/SMTP** (pas de serveur intermédiaire). IMAP IDLE pour la
+réception temps réel, notifications avec **sons personnalisés par expéditeur**.
 
-## Get started
+> ⚠️ **Development build obligatoire.** MailYo dépend de modules natifs
+> (SQLite, notifications, background task, secure store, biométrie, audio) qui
+> ne sont **pas** inclus dans Expo Go. Lancez `npx expo run:android` /
+> `npx expo run:ios` ou `eas build --profile development`.
 
-1. Install dependencies
+## Stack
 
-   ```bash
-   npm install
-   ```
+- **Expo SDK 57** / React Native 0.86 / React 19, Expo Router (file-based routing).
+- **expo-sqlite** — cache local (comptes, dossiers, threads, emails, règles).
+- **expo-secure-store** — secrets (mots de passe IMAP, tokens OAuth).
+- **expo-notifications** — notifications locales.
+- **expo-background-task** + **expo-task-manager** — sync/IDLE en arrière-plan.
+- **expo-audio** — sons de notification personnalisés.
+- **expo-auth-session** + **expo-crypto** — OAuth2 (Gmail).
+- **expo-local-authentication** — verrou biométrique.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Démarrer
 
 ```bash
-npm run reset-project
+npm install
+npx expo run:android   # ou run:ios — crée le dev build (CNG, pas de dossier natif committé)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Structure
 
-### Other setup steps
+```
+src/
+  app/                     # routes Expo Router (présentation / navigation)
+    _layout.tsx            # providers (gesture, safe-area, thème) + migrations SQLite
+    (tabs)/
+      _layout.tsx          # onglets Inbox / Paramètres
+      inbox/index.tsx
+      settings/index.tsx
+    thread/[id].tsx        # conversation
+    compose.tsx            # nouveau message (SMTP)
+    login.tsx              # configuration compte IMAP/OAuth2
+  ui/                      # composants de présentation réutilisables
+  state/                   # store d'application (useSyncExternalStore)
+  domain/                  # cœur métier pur et testable (threading, règles, sanitize…)
+  data/                    # SQLite, migrations, repositories
+    db/                    # abstraction Database + adaptateur expo-sqlite + schéma
+    repositories/          # accès typés aux tables (accounts, messages, threads…)
+  providers/               # contrats des adaptateurs fournisseurs (OAuth/IMAP/SMTP)
+  sync/                    # moteur de synchronisation + file d'opérations
+  notifications/           # résolution des règles + publication système
+  components/              # ThemedText, ThemedView, ui/collapsible
+  constants/               # theme, config
+  hooks/                   # useTheme, useColorScheme
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Configuration native (CNG)
 
-## Learn more
+Aucun dossier `ios/` / `android/` n'est committé : la config vit dans
+`app.json` (permissions Android, plugins) et est régénérée au build.
+Permissions Android : `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`,
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Scripts
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm run verify      # typecheck + lint + tests
+npm run typecheck
+npm run lint
+npm test
+```
 
-## Join the community
+## Notes MVP
 
-Join our community of developers creating universal apps.
+- Schéma SQLite appliqué idempotemment au démarrage (`PRAGMA user_version`) +
+  index plein texte **FTS5** (`messages_fts`) pour la recherche.
+- Les implémentations natives Gmail OAuth / IMAP IDLE / SMTP restent à écrire
+  dans `src/providers/` (elles implémentent l'interface `MailProvider`).
+- Un `MockMailProvider` déterministe permet de faire tourner toute la chaîne
+  (sync → threading → règles → UI → notifications) sans appareil ni identifiants.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.

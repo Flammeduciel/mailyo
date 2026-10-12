@@ -1,4 +1,4 @@
-import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
+import { SymbolView, type AndroidSymbol } from 'expo-symbols';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { ThreadSummary } from '@/domain/models';
@@ -11,8 +11,8 @@ import { FontSize, Radius, Spacing, useAppTheme } from './theme';
 export interface ConversationRowProps {
   thread: ThreadSummary;
   onPress?: () => void;
-  /** Reference timestamp for the "today" check; defaults to Date.now(). */
-  now?: number;
+  /** Reference timestamp for the "today" check. Kept explicit to stay pure. */
+  now: number;
   testID?: string;
 }
 
@@ -35,12 +35,7 @@ export function formatThreadTime(timestamp: number, now: number): string {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
 
-export function ConversationRow({
-  thread,
-  onPress,
-  now = Date.now(),
-  testID,
-}: ConversationRowProps) {
+export function ConversationRow({ thread, onPress, now, testID }: ConversationRowProps) {
   const colors = useAppTheme();
   const isUnread = thread.unreadCount > 0;
   const { lastMessage } = thread;
