@@ -5,6 +5,7 @@
 
 export {
   MailService,
+  type ConnectOAuthAccountInput,
   type MailServiceOptions,
   type SendMessageInput,
 } from '@/services/mail-service';

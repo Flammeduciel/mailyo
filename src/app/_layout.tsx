@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 import { StyleSheet, useColorScheme, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -48,6 +49,11 @@ function AppShell() {
 
 function LockScreen() {
   const { unlock } = useApp();
+
+  // Prompt for biometrics straight away; the button retries if it is dismissed.
+  useEffect(() => {
+    void unlock();
+  }, [unlock]);
 
   return (
     <Screen>
