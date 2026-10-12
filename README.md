@@ -5,7 +5,7 @@ Application email mobile type WhatsApp, en **React Native + Expo**, qui parle
 réception temps réel, notifications avec **sons personnalisés par expéditeur**.
 
 > ⚠️ **Development build obligatoire.** MailYo dépend de modules natifs
-> (SQLite, notifications, background task, secure store, biométrie, audio) qui
+> (SQLite, notifications, background task, secure store, biométrie, OAuth2) qui
 > ne sont **pas** inclus dans Expo Go. Lancez `npx expo run:android` /
 > `npx expo run:ios` ou `eas build --profile development`.
 
@@ -32,6 +32,7 @@ npx expo run:android   # ou run:ios — crée le dev build (CNG, pas de dossier 
 src/
   app/                     # routes Expo Router (présentation / navigation)
     _layout.tsx            # providers (gesture, safe-area, thème) + AppProvider
+    index.tsx              # route d'entrée → redirige vers /(tabs)/inbox
     (tabs)/
       _layout.tsx          # onglets Réception / Paramètres
       inbox/index.tsx      # liste des conversations

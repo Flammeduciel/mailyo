@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
@@ -226,7 +227,10 @@ export default function SettingsScreen() {
             description="Messagerie email instantanée"
             icon="info.circle"
           />
-          <SettingRow label="Version" description="0.1.0 (MVP)" />
+          <SettingRow
+            label="Version"
+            description={`${Constants.expoConfig?.version ?? '—'} (MVP)`}
+          />
           <AppText variant="caption" color="textSecondary" style={styles.privacy}>
             Aucune donnée n’est envoyée à un serveur intermédiaire. Vos emails restent chez votre
             fournisseur.

@@ -267,6 +267,28 @@ src/notifications/ résolution des règles + publication système
   préférence a une valeur par défaut, donc les composants testés hors provider
   continuent de fonctionner.
 
+### D-037 — Route d'entrée `/` explicite
+
+- **Contexte :** aucune route `index` n'existait sous `src/app/`. Expo Router
+  ouvre l'application sur `/`, qui n'était donc apparié à aucun écran ; les seules
+  entrées navigables étaient `/inbox` et `/settings`.
+- **Décision :** `src/app/index.tsx` redirige vers `/(tabs)/inbox`. La liste des
+  conversations porte l'état « rien pour l'instant » (action « Ajouter un
+  compte » vers `/login`), de sorte que l'accueil première ouverture vit à un
+  seul endroit. L'écran de fiabilité (`/onboarding`) reste accessible depuis les
+  paramètres.
+- **Justification :** le point d'entrée doit exister et mener à l'écran qui
+  possède déjà le parcours de première ouverture, sans dupliquer cette logique
+  dans une route supplémentaire. Testé (`src/app/index.test.tsx`).
+
+### D-038 — Version affichée lue depuis la configuration
+
+- **Contexte :** l'écran « À propos » affichait une version codée en dur
+  (`0.1.0`) divergente de `app.json`/`package.json` (`1.0.0`).
+- **Décision :** lire `Constants.expoConfig?.version` (`expo-constants`) au lieu
+  d'une constante littérale.
+- **Justification :** une valeur affichée doit refléter le build, pas dériver.
+
 ---
 
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)
