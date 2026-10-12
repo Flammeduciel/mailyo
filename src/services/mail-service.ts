@@ -67,9 +67,14 @@ import {
   type AppSettings,
 } from '@/domain/settings';
 import { createDemoProvider, createDemoRules, DEMO_ACCOUNT_ID } from '@/providers/demo/demo-data';
-import type { MailProvider, OAuthTokens, TokenStore } from '@/providers/types';
+import type {
+  MailProvider,
+  OutgoingMessage,
+  OAuthTokens,
+  SendResult,
+  TokenStore,
+} from '@/providers/types';
 import { ProviderRegistry } from '@/providers/registry';
-import type { OutgoingMessage, SendResult } from '@/providers/types';
 import { SyncEngine } from '@/sync/sync-engine';
 
 export interface SendMessageInput {

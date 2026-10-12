@@ -86,5 +86,3 @@ npm run sounds:generate   # régénère les sons de notification (assets/sounds/
 - Un `MockMailProvider` déterministe, connecté via l'écran de connexion
   (« compte de démonstration »), fait tourner toute la chaîne
   (sync → threading → règles → UI → notifications) sans appareil ni identifiants.
-
-
