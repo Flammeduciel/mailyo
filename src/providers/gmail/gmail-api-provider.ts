@@ -17,6 +17,7 @@ import type {
   FetchOlderMessagesInput,
   MailProvider,
   OutgoingMessage,
+  RemoteAttachment,
   RemoteFolder,
   RemoteMessage,
   SendResult,
@@ -42,6 +43,8 @@ const FETCH_CONCURRENCY = 8;
 const FOLDERS: RemoteFolder[] = [
   { remoteFolderId: 'INBOX', name: 'Boîte de réception', role: 'inbox' },
   { remoteFolderId: 'SENT', name: 'Envoyés', role: 'sent' },
+  // Gmail's own spam filter: shown in the list with a "Spam" badge.
+  { remoteFolderId: 'SPAM', name: 'Spam', role: 'spam' },
 ];
 
 export class GmailApiError extends Error {
@@ -121,6 +124,7 @@ export class GmailApiProvider implements MailProvider {
         this.gmailIds.set(remote.remoteUid, message.id);
         messages.push(remote);
       }
+      input.onProgress?.(Math.min(i + FETCH_CONCURRENCY, ids.length), Math.min(ids.length, limit));
     }
 
     messages.sort((a, b) => a.remoteUid - b.remoteUid);
@@ -204,6 +208,7 @@ export class GmailApiProvider implements MailProvider {
     do {
       const params = [
         `labelIds=${encodeURIComponent(label)}`,
+        ...(label === 'SPAM' || label === 'TRASH' ? ['includeSpamTrash=true'] : []),
         `maxResults=${Math.min(max - ids.length, 500)}`,
       ];
       if (query) {
@@ -220,6 +225,68 @@ export class GmailApiProvider implements MailProvider {
       pageToken = data.nextPageToken;
     } while (pageToken && ids.length < max);
     return ids;
+  }
+
+  async saveDraft(draftId: string | null, message: OutgoingMessage): Promise<string> {
+    const body = JSON.stringify({ message: { raw: buildRawMessage(this.emailAddress, message) } });
+    const data = (await this.requestJson(
+      draftId ? `/drafts/${encodeURIComponent(draftId)}` : '/drafts',
+      {
+        method: draftId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      },
+    )) as { id?: string };
+    if (!data.id) {
+      throw new GmailApiError('Brouillon non enregistré', 500);
+    }
+    return data.id;
+  }
+
+  async deleteDraft(draftId: string): Promise<void> {
+    await this.request(`/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
+  }
+
+  async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {
+    await this.modifyLabels(
+      remoteUid,
+      isSpam ? { add: ['SPAM'], remove: ['INBOX'] } : { add: ['INBOX'], remove: ['SPAM'] },
+    );
+  }
+
+  async fetchUnsubscribeHeaders(
+    remoteUid: number,
+  ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }> {
+    const gmailId = await this.resolveGmailId(remoteUid);
+    const data = (await this.requestJson(
+      `/messages/${gmailId}?format=metadata&metadataHeaders=List-Unsubscribe&metadataHeaders=List-Unsubscribe-Post`,
+    )) as GmailMessage;
+    const find = (name: string) =>
+      data.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
+      null;
+    return {
+      listUnsubscribe: find('List-Unsubscribe'),
+      listUnsubscribePost: find('List-Unsubscribe-Post'),
+    };
+  }
+
+  async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {
+    const gmailId = await this.resolveGmailId(remoteUid);
+    const message = await this.getMessage(gmailId);
+    return gmailMessageToRemote(message, 'INBOX').attachments ?? [];
+  }
+
+  /** Attachment content as standard base64 (Gmail returns base64url). */
+  async downloadAttachment(remoteUid: number, remotePartId: string): Promise<string> {
+    const gmailId = await this.resolveGmailId(remoteUid);
+    const data = (await this.requestJson(
+      `/messages/${gmailId}/attachments/${encodeURIComponent(remotePartId)}`,
+    )) as { data?: string };
+    if (!data.data) {
+      throw new GmailApiError('Pièce jointe introuvable sur Gmail', 404);
+    }
+    const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
+    return base64 + '='.repeat((4 - (base64.length % 4)) % 4);
   }
 
   private async getMessage(id: string): Promise<GmailMessage> {

@@ -1,6 +1,7 @@
 import {
   base64ToBytes,
   buildRawMessage,
+  repairMojibake,
   bytesToBase64Url,
   decodeCharset,
   decodeEncodedWords,
@@ -53,7 +54,11 @@ describe('gmail codec', () => {
               { mimeType: 'text/html', body: { data: b64url('<p>Bonjour à tous</p>') } },
             ],
           },
-          { mimeType: 'application/pdf', filename: 'ordre.pdf', body: { attachmentId: 'att1' } },
+          {
+            mimeType: 'application/pdf',
+            filename: 'ordre.pdf',
+            body: { attachmentId: 'att1', size: 48213 },
+          },
         ],
       },
     };
@@ -78,6 +83,16 @@ describe('gmail codec', () => {
       isRead: false,
       isStarred: true,
       hasAttachments: true,
+      attachments: [
+        {
+          filename: 'ordre.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 48213,
+          remotePartId: 'att1',
+        },
+      ],
+      listUnsubscribe: '',
+      listUnsubscribePost: null,
       category: 'primary',
     });
   });
@@ -111,5 +126,32 @@ describe('gmailCategory', () => {
     expect(gmailCategory(['INBOX', 'CATEGORY_FORUMS'])).toBe('forums');
     expect(gmailCategory(['INBOX'])).toBe('primary');
     expect(gmailCategory(['SENT'])).toBeNull();
+  });
+
+  it('builds a multipart message when files are attached', () => {
+    const raw = buildRawMessage('moi@gmail.com', {
+      to: [{ name: '', address: 'bob@example.com' }],
+      cc: [],
+      bcc: [],
+      subject: 'Devis',
+      bodyText: 'Ci-joint.',
+      attachments: [
+        { filename: 'devis été.pdf', mimeType: 'application/pdf', base64: 'JVBERi0xLjQ=' },
+      ],
+    });
+    const decoded = utf8Decode(base64ToBytes(raw));
+    expect(decoded).toMatch(/Content-Type: multipart\/mixed; boundary="mailyo_/);
+    expect(decoded).toContain('Content-Type: application/pdf; name="=?UTF-8?B?');
+    expect(decoded).toContain('Content-Disposition: attachment; filename=');
+    expect(decoded).toContain('JVBERi0xLjQ=');
+    expect(decoded.trim().endsWith('--')).toBe(true);
+  });
+
+  it('repairs UTF-8 text mislabelled as Latin-1, and leaves real text alone', () => {
+    expect(repairMojibake('Livrables S22 Â· Fullstack A')).toBe('Livrables S22 · Fullstack A');
+    expect(repairMojibake('RÃ©union demain')).toBe('Réunion demain');
+    expect(repairMojibake('Itâ€™s ok')).toBe('It’s ok');
+    expect(repairMojibake('Réunion · café')).toBe('Réunion · café');
+    expect(repairMojibake('Âge')).toBe('Âge');
   });
 });

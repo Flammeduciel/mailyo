@@ -9,7 +9,10 @@
 
 import type { EmailAddress, MailCategory } from '@/domain/models';
 import { parseAddress, parseAddressList } from '@/domain/mime';
-import type { OutgoingMessage, RemoteMessage } from '@/providers/types';
+import { repairMojibake } from '@/domain/mojibake';
+import type { OutgoingMessage, RemoteAttachment, RemoteMessage } from '@/providers/types';
+
+export { repairMojibake };
 
 // ---------------------------------------------------------------------------
 // Byte codecs
@@ -179,7 +182,7 @@ export interface GmailHeader {
 
 function header(headers: GmailHeader[] | undefined, name: string): string | null {
   const found = headers?.find((entry) => entry.name.toLowerCase() === name.toLowerCase());
-  return found ? decodeEncodedWords(found.value) : null;
+  return found ? repairMojibake(decodeEncodedWords(found.value)) : null;
 }
 
 function charsetOf(contentType: string | null): string | null {
@@ -212,6 +215,7 @@ interface ExtractedBody {
   text: string | null;
   html: string | null;
   hasAttachments: boolean;
+  attachments: RemoteAttachment[];
 }
 
 function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
@@ -226,6 +230,12 @@ function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
   }
   if (isAttachment) {
     acc.hasAttachments = true;
+    acc.attachments.push({
+      filename: repairMojibake(part.filename || 'Pièce jointe'),
+      mimeType: part.mimeType || 'application/octet-stream',
+      sizeBytes: part.body?.size ?? 0,
+      remotePartId: part.body?.attachmentId ?? null,
+    });
     return;
   }
   const data = part.body?.data;
@@ -253,7 +263,7 @@ function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
 export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: string): RemoteMessage {
   const headers = message.payload?.headers;
   const from = parseAddress(header(headers, 'From') ?? '') ?? { name: '', address: '' };
-  const body: ExtractedBody = { text: null, html: null, hasAttachments: false };
+  const body: ExtractedBody = { text: null, html: null, hasAttachments: false, attachments: [] };
   if (message.payload) {
     walkParts(message.payload, body);
   }
@@ -277,6 +287,9 @@ export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: stri
     isRead: !labels.includes('UNREAD'),
     isStarred: labels.includes('STARRED'),
     hasAttachments: body.hasAttachments,
+    attachments: body.attachments,
+    listUnsubscribe: header(headers, 'List-Unsubscribe') ?? '',
+    listUnsubscribePost: header(headers, 'List-Unsubscribe-Post'),
     category: gmailCategory(labels),
   };
 }
@@ -345,21 +358,52 @@ export function buildRawMessage(from: string, message: OutgoingMessage): string 
     lines.push(`Bcc: ${formatAddressHeader(message.bcc)}`);
   }
   lines.push(`Subject: ${encodeHeaderValue(message.subject)}`);
+  if (message.date) {
+    lines.push(`Date: ${new Date(message.date).toUTCString().replace('GMT', '+0000')}`);
+  }
+  if (message.messageId) {
+    lines.push(`Message-ID: ${message.messageId}`);
+  }
   if (message.inReplyTo) {
     lines.push(`In-Reply-To: ${message.inReplyTo}`);
   }
   if (message.references) {
     lines.push(`References: ${message.references}`);
   }
-  lines.push(
-    'MIME-Version: 1.0',
+  const wrap = (base64: string) => base64.match(/.{1,76}/g)?.join('\r\n') ?? '';
+  const body = wrap(bytesToBase64(utf8Encode(message.bodyText.replace(/\r?\n/g, '\r\n'))));
+  const attachments = message.attachments ?? [];
+
+  if (attachments.length === 0) {
+    lines.push(
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+    );
+    return bytesToBase64Url(utf8Encode(`${lines.join('\r\n')}\r\n${body}\r\n`));
+  }
+
+  const boundary = `mailyo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  lines.push('MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${boundary}"`, '');
+  const parts = [
+    `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
-  );
-
-  const body = bytesToBase64(utf8Encode(message.bodyText.replace(/\r?\n/g, '\r\n')));
-  const wrapped = body.match(/.{1,76}/g)?.join('\r\n') ?? '';
-
-  return bytesToBase64Url(utf8Encode(`${lines.join('\r\n')}\r\n${wrapped}\r\n`));
+    body,
+  ];
+  for (const attachment of attachments) {
+    const name = encodeHeaderValue(attachment.filename).replace(/"/g, '');
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.mimeType || 'application/octet-stream'}; name="${name}"`,
+      `Content-Disposition: attachment; filename="${name}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      wrap(attachment.base64.replace(/\s+/g, '')),
+    );
+  }
+  parts.push(`--${boundary}--`, '');
+  return bytesToBase64Url(utf8Encode(`${lines.join('\r\n')}\r\n${parts.join('\r\n')}`));
 }

@@ -25,15 +25,32 @@ jest.mock('react-native-webview', () => {
 });
 
 // Worklets/Reanimated need their native runtime; both ship official Jest mocks.
-jest.mock('react-native-worklets', () => jest.requireActual('react-native-worklets/lib/module/mock'));
+jest.mock('react-native-worklets', () =>
+  jest.requireActual('react-native-worklets/lib/module/mock'),
+);
 jest.mock('react-native-reanimated', () => jest.requireActual('react-native-reanimated/mock'));
 
 // The swipe wrapper renders its children.
 jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
   const React = jest.requireActual('react');
-  const Swipeable = React.forwardRef(
-    ({ children }: { children: React.ReactNode }, _ref: unknown) =>
-      React.createElement(React.Fragment, null, children),
+  const Swipeable = React.forwardRef(({ children }: { children: React.ReactNode }, _ref: unknown) =>
+    React.createElement(React.Fragment, null, children),
   );
   return { __esModule: true, default: Swipeable };
+});
+
+// expo-video needs its native player: a no-op player and a plain View.
+jest.mock('expo-video', () => {
+  const { View } = jest.requireActual('react-native');
+  const player = {
+    play: jest.fn(),
+    pause: jest.fn(),
+    release: jest.fn(),
+    generateThumbnailsAsync: jest.fn(async () => []),
+  };
+  return {
+    useVideoPlayer: () => player,
+    createVideoPlayer: () => player,
+    VideoView: View,
+  };
 });

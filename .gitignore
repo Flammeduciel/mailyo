@@ -47,3 +47,7 @@ example
 
 expo-env.d.ts
 # @end expo-cli
+
+# Native build output of local Expo modules
+modules/*/android/build/
+modules/*/android/.cxx/

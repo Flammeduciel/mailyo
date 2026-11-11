@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { AppText } from './AppText';
@@ -7,6 +8,8 @@ export interface FilterChipOption<T extends string> {
   value: T;
   label: string;
   count?: number;
+  /** Material icon shown before the label. */
+  icon?: string;
 }
 
 export interface FilterChipsProps<T extends string> {
@@ -23,6 +26,8 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      // A horizontal ScrollView grows by default: keep the row at its own height.
+      style={styles.scroll}
       contentContainerStyle={styles.row}
     >
       {options.map((option) => {
@@ -39,6 +44,13 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
               { backgroundColor: selected ? colors.primaryContainer : colors.chip },
             ]}
           >
+            {option.icon ? (
+              <MaterialIcons
+                name={option.icon as keyof typeof MaterialIcons.glyphMap}
+                size={15}
+                color={selected ? colors.onPrimaryContainer : colors.chipText}
+              />
+            ) : null}
             <AppText
               variant="caption"
               weight="medium"
@@ -54,6 +66,9 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 0,
+  },
   row: {
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
@@ -63,6 +78,8 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: Spacing.md + 2,
     borderRadius: Radius.pill,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
 });

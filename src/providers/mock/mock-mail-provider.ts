@@ -13,6 +13,7 @@ import type {
   MailProvider,
   OutgoingMessage,
   RemoteFolder,
+  RemoteAttachment,
   RemoteMessage,
   SendResult,
   SendStatus,
@@ -134,6 +135,23 @@ export class MockMailProvider implements MailProvider {
     }
   }
 
+  async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {
+    const message = this.findMessage(remoteUid);
+    if (message) {
+      message.folderRemoteId = isSpam ? 'SPAM' : 'INBOX';
+    }
+  }
+
+  async fetchUnsubscribeHeaders(
+    remoteUid: number,
+  ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }> {
+    const message = this.findMessage(remoteUid);
+    return {
+      listUnsubscribe: message?.listUnsubscribe ?? null,
+      listUnsubscribePost: message?.listUnsubscribePost ?? null,
+    };
+  }
+
   async moveToTrash(remoteUid: number): Promise<void> {
     const message = this.findMessage(remoteUid);
     if (message) {
@@ -168,6 +186,22 @@ export class MockMailProvider implements MailProvider {
     this.uidValidity = uidValidity;
   }
 
+  readonly drafts = new Map<string, OutgoingMessage>();
+
+  async saveDraft(draftId: string | null, message: OutgoingMessage): Promise<string> {
+    const id = draftId ?? `draft-${this.drafts.size + 1}`;
+    this.drafts.set(id, message);
+    return id;
+  }
+
+  async deleteDraft(draftId: string): Promise<void> {
+    this.drafts.delete(draftId);
+  }
+
+  async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {
+    return (this.findMessage(remoteUid)?.attachments ?? []).map((a) => ({ ...a }));
+  }
+
   private findMessage(remoteUid: number): RemoteMessage | undefined {
     return this.messages.find((message) => message.remoteUid === remoteUid);
   }
@@ -180,5 +214,10 @@ export class MockMailProvider implements MailProvider {
 }
 
 function cloneMessage(message: RemoteMessage): RemoteMessage {
-  return { ...message, to: [...message.to], cc: [...message.cc] };
+  return {
+    ...message,
+    to: [...message.to],
+    cc: [...message.cc],
+    attachments: message.attachments?.map((attachment) => ({ ...attachment })),
+  };
 }

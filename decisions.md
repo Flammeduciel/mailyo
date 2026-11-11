@@ -346,6 +346,29 @@ src/notifications/ résolution des règles + publication système
 
 ---
 
+### D-041 — IMAP/SMTP via un module natif Expo (Jakarta Mail), Microsoft reporté
+
+- **Contexte :** après Gmail (API REST), il faut couvrir les autres boîtes : Yahoo,
+  iCloud, Orange, Free, SFR, La Poste, OVH, GMX, Zoho, Fastmail… Une app Expo n'a
+  pas de sockets TCP/TLS bruts côté JavaScript.
+- **Décision :** un module Expo local (`modules/mailyo-imap`, Kotlin) qui enveloppe
+  Jakarta Mail (IMAP + SMTP) et expose une API asynchrone au JS ; un
+  `ImapMailProvider` implémente `MailProvider` par-dessus. Android d'abord (cible
+  de l'app) ; iOS plus tard (MailCore2). Outlook / Hotmail / Microsoft 365 passera
+  par l'API Microsoft Graph dans une étape ultérieure : affiché « Bientôt
+  disponible » d'ici là.
+- **Justification :** pas de serveur intermédiaire (les mots de passe restent dans
+  le stockage sécurisé du téléphone), bibliothèque mature, et le moteur de synchro
+  est déjà conçu autour des UID/UIDVALIDITY d'IMAP. Un client IMAP JavaScript sur
+  `react-native-tcp-socket` aurait été plus fragile ; une passerelle serveur aurait
+  fait transiter les identifiants.
+- **Conséquence :** nécessite un development build / APK (pas Expo Go).
+
+### D-042 — Commits au nom du propriétaire du dépôt
+
+- **Décision :** aucun commit ne porte de mention « Co-Authored-By », « Claude »,
+  « Claude Code » ou « Anthropic » ; l'auteur est le propriétaire du dépôt.
+
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)
 
 Ces points du §22 ne peuvent être validés que par prototype sur appareil :

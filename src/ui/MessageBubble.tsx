@@ -2,11 +2,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { Message } from '@/domain/models';
+import type { Attachment, EmailAddress, Message } from '@/domain/models';
 import { tidyPlainText } from '@/domain/plain-text';
 import { splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
+import { AttachmentList } from './AttachmentList';
+import { CopyAvatars } from './CopyAvatars';
+import type { PdfPreviewSource } from './PdfThumbnail';
 import { HtmlMessageView } from './HtmlMessageView';
 import { RichText } from './RichText';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
@@ -28,6 +31,18 @@ export interface MessageBubbleProps {
   /** The replied-to message is in the conversation, so the quoted history is redundant. */
   parentInThread?: boolean;
   onQuotePress?: (parentId: string) => void;
+  attachments?: Attachment[];
+  onOpenAttachment?: (attachment: Attachment) => void;
+  resolveAttachment?: (attachmentId: string) => Promise<Attachment>;
+  onSaveAttachment?: (attachment: Attachment) => void;
+  attachmentProgress?: { id: string; ratio: number | null } | null;
+  autoPreviewMaxBytes?: number;
+  pdfPreview?: PdfPreviewSource;
+  /** People in copy, shown as faces under the bubble; tap opens their contact. */
+  onCopyPress?: (people: EmailAddress[]) => void;
+  photoOf?: (address: string) => string | undefined;
+  /** Hide remote images of HTML mails until the user asks for them. */
+  blockRemoteImages?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   selected?: boolean;
@@ -72,6 +87,16 @@ export function MessageBubble({
   quoted,
   parentInThread = Boolean(quoted),
   onQuotePress,
+  attachments = [],
+  onOpenAttachment,
+  resolveAttachment,
+  onSaveAttachment,
+  attachmentProgress,
+  autoPreviewMaxBytes,
+  pdfPreview,
+  blockRemoteImages = false,
+  onCopyPress,
+  photoOf,
   onPress,
   onLongPress,
   selected = false,
@@ -82,6 +107,7 @@ export function MessageBubble({
   const [showHistory, setShowHistory] = useState(false);
   const html = shouldRenderHtml(message);
   const split = useMemo(() => splitQuotedText(message.bodyText), [message.bodyText]);
+  const bodyText = useMemo(() => tidyPlainText(split.body).trim(), [split.body]);
   const textColor = isOwn ? colors.bubbleOutgoingText : colors.bubbleIncomingText;
 
   return (
@@ -92,6 +118,7 @@ export function MessageBubble({
       delayLongPress={300}
       style={[
         styles.container,
+        html && styles.containerWide,
         isOwn ? styles.containerOwn : styles.containerIncoming,
         (selected || highlighted) && { backgroundColor: colors.primaryContainer + 'AA' },
       ]}
@@ -100,6 +127,7 @@ export function MessageBubble({
         style={[
           styles.bubble,
           html && styles.bubbleWide,
+          attachments.length > 0 && !html ? styles.bubbleAttachments : null,
           quoted && !html ? styles.bubbleQuoting : null,
           isOwn
             ? { backgroundColor: colors.bubbleOutgoing, borderTopRightRadius: Radius.sm / 2 }
@@ -133,10 +161,17 @@ export function MessageBubble({
         ) : null}
 
         {html && message.bodyHtmlSanitized ? (
-          <HtmlMessageView html={message.bodyHtmlSanitized} allowHistory={!parentInThread} />
+          <HtmlMessageView
+            html={message.bodyHtmlSanitized}
+            allowHistory={!parentInThread}
+            blockImages={blockRemoteImages}
+          />
         ) : (
           <>
-            <RichText style={{ color: textColor }}>{tidyPlainText(split.body)}</RichText>
+            {/* A mail that only carries files has no text: no empty line above them. */}
+            {bodyText.length > 0 ? (
+              <RichText style={{ color: textColor }}>{bodyText}</RichText>
+            ) : null}
             {/* The parent is already in the conversation: no need to unfold it again. */}
             {split.quoted && !parentInThread ? (
               <>
@@ -154,6 +189,29 @@ export function MessageBubble({
             ) : null}
           </>
         )}
+
+        {attachments.length > 0 ? (
+          <AttachmentList
+            attachments={attachments}
+            onOpen={(attachment) => onOpenAttachment?.(attachment)}
+            resolve={resolveAttachment}
+            onSave={onSaveAttachment}
+            progress={attachmentProgress}
+            autoPreviewMaxBytes={autoPreviewMaxBytes}
+            pdfPreview={pdfPreview}
+            testID={testID ? `${testID}-attachments` : undefined}
+          />
+        ) : null}
+
+        {message.cc.length > 0 && onCopyPress ? (
+          <CopyAvatars
+            people={message.cc}
+            photoOf={photoOf}
+            onPress={onCopyPress}
+            textColor={textColor}
+            testID={testID ? `${testID}-cc` : undefined}
+          />
+        ) : null}
 
         <View style={styles.footer}>
           {message.isStarred ? (
@@ -184,6 +242,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 2,
   },
+  // HTML mails use the whole screen width: no side gutter.
+  containerWide: {
+    paddingHorizontal: Spacing.xs,
+  },
   containerOwn: {
     alignItems: 'flex-end',
   },
@@ -208,6 +270,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: '100%',
     paddingHorizontal: Spacing.xs,
+  },
+  bubbleAttachments: {
+    minWidth: '70%',
   },
   // A short reply must not squeeze the quoted message into an unreadable sliver.
   bubbleQuoting: {

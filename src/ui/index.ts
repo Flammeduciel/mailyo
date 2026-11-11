@@ -43,7 +43,12 @@ export {
 export { AppBar, type AppBarAction, type AppBarProps } from './AppBar';
 export { AccountRow, type AccountRowProps } from './AccountRow';
 export { ContactSheet, type ContactSheetProps } from './ContactSheet';
-export { BottomTabBar, type BottomTabBarProps, type TabBarProps, type TabMeta } from './BottomTabBar';
+export {
+  BottomTabBar,
+  type BottomTabBarProps,
+  type TabBarProps,
+  type TabMeta,
+} from './BottomTabBar';
 export { Fab, type FabProps } from './Fab';
 export { FilterChips, type FilterChipOption, type FilterChipsProps } from './FilterChips';
 export { PopupMenu, type PopupMenuItem, type PopupMenuProps } from './PopupMenu';
@@ -53,3 +58,23 @@ export { HtmlMessageView, type HtmlMessageViewProps } from './HtmlMessageView';
 export { openLink } from './open-link';
 export { RichText, type RichTextProps } from './RichText';
 export { SwipeToReply, type SwipeToReplyProps } from './SwipeToReply';
+export { AttachmentList, type AttachmentListProps } from './AttachmentList';
+// AttachmentViewer is imported directly (it pulls native video/PDF modules).
+export { ThreadSkeleton } from './ThreadSkeleton';
+export { VideoThumbnail, type VideoThumbnailProps } from './VideoThumbnail';
+export { UndoSnackbar, type UndoSnackbarProps } from './UndoSnackbar';
+export { SyncRing, type SyncRingProps } from './SyncRing';
+export { RecipientField, type RecipientFieldProps } from './RecipientField';
+export {
+  ComposeAttachmentCard,
+  type ComposeAttachment,
+  type ComposeAttachmentCardProps,
+} from './ComposeAttachmentCard';
+export { CopyAvatars, type CopyAvatarsProps } from './CopyAvatars';
+export { PeopleSheet, type PeopleSheetProps } from './PeopleSheet';
+export {
+  AttachmentPickerSheet,
+  type AttachmentPickerSheetProps,
+  type AttachmentSource,
+} from './AttachmentPickerSheet';
+export { ServiceLogo, type ServiceLogoProps } from './ServiceLogo';

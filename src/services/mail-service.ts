@@ -15,13 +15,37 @@ import {
   insertAccount,
   listAccounts,
 } from '@/data/repositories/accounts';
+import {
+  clearDownloadedAttachmentPaths,
+  getAttachment,
+  listAttachmentsByThread,
+  listStarredRemoteAttachments,
+  searchAttachmentsByName,
+  type FileSearchHit,
+  replaceMessageAttachments,
+  setAttachmentDownloaded,
+  setAttachmentState,
+} from '@/data/repositories/attachments';
+import {
+  deleteDraft as deleteDraftRow,
+  getDraft,
+  listDrafts as listDraftsRows,
+  upsertDraft,
+} from '@/data/repositories/drafts';
 import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
   deleteMessage,
   findMessageIdHeaderByRemoteUid,
+  findRemoteFolderByRemoteUid,
   getMessage,
   getCorrespondence,
+  listCorrespondents,
+  listMailingSenders,
+  listMessagesMissingUnsubscribe,
+  moveMessageToFolder,
+  setUnsubscribeHeaders,
+  type MailingSender,
   getThreadIdByMessageIdHeader,
   listThreadingRows,
   type Correspondence,
@@ -41,21 +65,28 @@ import {
 import {
   deleteEmptyThreads,
   getThread,
+  countThreadSummaries,
+  isThreadSpam,
   listThreadSummaries,
   recomputeThreadAggregates,
+  type ConversationCounts,
   setThreadArchived as setThreadArchivedRow,
   setThreadPinned as setThreadPinnedRow,
   type ListThreadSummariesOptions,
   upsertThread,
 } from '@/data/repositories/threads';
-import { getAllSettings, setSetting, setSettings } from '@/data/repositories/settings';
+import { getAllSettings, getSetting, setSetting, setSettings } from '@/data/repositories/settings';
 import type {
   Account,
+  Attachment,
+  Draft,
   Message,
   NotificationRule,
   ProviderId,
   ThreadSummary,
 } from '@/domain/models';
+import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
+import { parseListUnsubscribe } from '@/domain/html-privacy';
 import { createId, deterministicId } from '@/domain/ids';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
@@ -86,8 +117,18 @@ import type {
 import { GmailApiProvider } from '@/providers/gmail/gmail-api-provider';
 import { fetchGoogleContacts, type ContactDetails } from '@/providers/gmail/google-contacts';
 import { createGmailTokenProvider } from '@/providers/gmail/gmail-tokens';
+import {
+  attachmentCacheSize,
+  clearAttachmentCache,
+  readFileAsBase64,
+  writeAttachmentToCache,
+  type AttachmentWriter,
+} from '@/services/attachment-files';
+import type { MailyoImapNative } from '../../modules/mailyo-imap';
+import type { ImapAccountConfig, ImapCredentialStore } from '@/providers/imap/credentials';
+import { ImapMailProvider } from '@/providers/imap/imap-provider';
 import { ProviderRegistry } from '@/providers/registry';
-import { SyncEngine } from '@/sync/sync-engine';
+import { SyncEngine, toLocalAttachments, type SyncProgress } from '@/sync/sync-engine';
 
 const THREADING_VERSION_KEY = 'threading.version';
 const THREADING_VERSION = '2';
@@ -105,6 +146,40 @@ export interface SendMessageInput {
   /** Local id of the message being answered; enables reply headers. */
   replyToMessageId?: string;
   mode?: ReplyMode;
+  /** Local files picked in the composer. */
+  attachments?: PickedAttachment[];
+}
+
+export type { FileSearchHit };
+
+const UNSUBSCRIBED_KEY = 'subscriptions.unsubscribed';
+
+export type UnsubscribeResult =
+  { kind: 'done' } | { kind: 'open'; url: string } | { kind: 'failed' };
+
+export type { MailingSender };
+
+export interface SaveDraftInput {
+  draftId?: string | null;
+  accountId: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+}
+
+/** A file chosen on the device, before it is read and sent. */
+export interface PickedAttachment {
+  uri: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export interface ConnectImapAccountInput {
+  emailAddress: string;
+  displayName?: string;
+  config: ImapAccountConfig;
 }
 
 export interface ConnectOAuthAccountInput {
@@ -126,6 +201,14 @@ export interface MailServiceOptions {
   fetchImpl?: typeof fetch;
   now?: () => number;
   fetchLimit?: number;
+  /** Stores downloaded attachment bytes; defaults to the app cache directory. */
+  attachmentWriter?: AttachmentWriter;
+  /** IMAP settings + passwords (secure storage); omit where IMAP is not used. */
+  imapCredentials?: ImapCredentialStore;
+  /** Native IMAP/SMTP client loader (Android module); injected in tests. */
+  imapNative?: () => MailyoImapNative;
+  /** Reads a picked local file as base64; defaults to expo-file-system. */
+  attachmentReader?: (uri: string) => Promise<string>;
 }
 
 export class MailService {
@@ -137,6 +220,10 @@ export class MailService {
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly fetchLimit: number;
+  private readonly attachmentWriter: AttachmentWriter;
+  private readonly attachmentReader: (uri: string) => Promise<string>;
+  private readonly imapCredentials: ImapCredentialStore | null;
+  private readonly imapNative: (() => MailyoImapNative) | null;
   private settings: AppSettings = DEFAULT_SETTINGS;
   private contactPhotos = new Map<string, string>();
   private contactDetails = new Map<string, ContactDetails>();
@@ -152,6 +239,10 @@ export class MailService {
     this.fetchImpl = options.fetchImpl;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
+    this.attachmentWriter = options.attachmentWriter ?? writeAttachmentToCache;
+    this.attachmentReader = options.attachmentReader ?? readFileAsBase64;
+    this.imapCredentials = options.imapCredentials ?? null;
+    this.imapNative = options.imapNative ?? null;
   }
 
   /**
@@ -221,6 +312,34 @@ export class MailService {
   }
 
   /** How much mail was exchanged with an address, across all accounts. */
+  /**
+   * Recipient suggestions: everyone mail was exchanged with (most recent
+   * first), then saved Google contacts never written to. Names prefer the
+   * saved contact name.
+   */
+  async listContacts(): Promise<ContactSuggestion[]> {
+    const accounts = await listAccounts(this.db);
+    const correspondents = await listCorrespondents(
+      this.db,
+      accounts.map((account) => account.emailAddress),
+    );
+    const seen = new Set<string>();
+    // No-reply senders cannot be written to: never suggest them.
+    const result: ContactSuggestion[] = correspondents
+      .filter((c) => !isNoReplyAddress(c.address))
+      .map((c) => {
+        seen.add(c.address.toLowerCase());
+        const saved = this.contactDetails.get(c.address.toLowerCase())?.name;
+        return { name: saved || c.name, address: c.address, count: c.count, lastAt: c.lastAt };
+      });
+    for (const [address, details] of this.contactDetails) {
+      if (!seen.has(address) && details.saved && !isNoReplyAddress(address)) {
+        result.push({ name: details.name ?? '', address, count: 0, lastAt: null });
+      }
+    }
+    return result;
+  }
+
   async getCorrespondence(emailAddress: string): Promise<Correspondence> {
     return getCorrespondence(this.db, emailAddress);
   }
@@ -469,7 +588,50 @@ export class MailService {
         fetchImpl: this.fetchImpl,
       });
     }
+    if (account.provider === 'imap' && this.imapCredentials && this.imapNative) {
+      const credentials = this.imapCredentials;
+      return new ImapMailProvider({
+        emailAddress: account.emailAddress,
+        loadConfig: () => credentials.load(account.id),
+        native: this.imapNative,
+        lookupFolder: (remoteUid) => findRemoteFolderByRemoteUid(this.db, account.id, remoteUid),
+      });
+    }
     return null;
+  }
+
+  /**
+   * Add an IMAP account (Yahoo, iCloud, Orange…): the servers are tested with
+   * the given password first, then the settings go to secure storage.
+   */
+  async connectImapAccount(input: ConnectImapAccountInput): Promise<Account> {
+    if (!this.imapCredentials || !this.imapNative) {
+      throw new Error('IMAP indisponible sur cet appareil.');
+    }
+    const auth = { username: input.config.username, password: input.config.password };
+    await this.imapNative().testConnection(
+      { ...input.config.imap, ...auth },
+      { ...input.config.smtp, ...auth },
+    );
+    const existing = (await listAccounts(this.db)).find(
+      (a) => a.provider === 'imap' && a.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
+    );
+    const account: Account = existing ?? {
+      id: createId('account'),
+      provider: 'imap',
+      emailAddress: input.emailAddress,
+      displayName: input.displayName ?? input.emailAddress,
+      authType: 'password',
+      syncEnabled: true,
+      lastSyncAt: null,
+      syncStatus: 'idle',
+      createdAt: this.now(),
+    };
+    if (!existing) await insertAccount(this.db, account);
+    await this.imapCredentials.save(account.id, input.config);
+    const provider = this.createProviderFor(account);
+    if (provider) this.registry.register(account.id, provider);
+    return account;
   }
 
   async listConversations(options?: ListThreadSummariesOptions): Promise<ThreadSummary[]> {
@@ -524,9 +686,33 @@ export class MailService {
   }
 
   /** Sync every account, present notifications for genuinely new messages. */
-  async syncAll(): Promise<void> {
-    const accounts = await listAccounts(this.db);
-    for (const account of accounts) {
+  /**
+   * Synchronise every account. `onProgress` receives the overall ratio (0..1)
+   * and the number of messages stored so far, so screens can show a progress
+   * ring and refresh the list while the first sync is still running.
+   */
+  syncAll(onProgress?: (progress: SyncProgress) => void): Promise<void> {
+    // One run at a time: a second caller joins the run in progress and also
+    // receives its progress.
+    if (onProgress) this.syncListeners.add(onProgress);
+    if (!this.syncRun) {
+      this.syncRun = this.runSyncAll((progress) => {
+        for (const listener of this.syncListeners) listener(progress);
+      }).finally(() => {
+        this.syncRun = null;
+        this.syncListeners.clear();
+      });
+    }
+    return this.syncRun;
+  }
+
+  private syncRun: Promise<void> | null = null;
+  private readonly syncListeners = new Set<(progress: SyncProgress) => void>();
+
+  private async runSyncAll(onProgress: (progress: SyncProgress) => void): Promise<void> {
+    const accounts = (await listAccounts(this.db)).filter((a) => a.syncEnabled);
+    let storedBefore = 0;
+    for (const [index, account] of accounts.entries()) {
       if (!account.syncEnabled) {
         continue;
       }
@@ -539,15 +725,24 @@ export class MailService {
         provider,
         now: this.now,
         fetchLimit: this.fetchLimit,
+        onProgress: (progress) =>
+          onProgress({
+            ratio: (index + progress.ratio) / accounts.length,
+            stored: storedBefore + progress.stored,
+          }),
       });
       try {
         const result = await engine.syncAccount(account);
+        storedBefore += result.fetchedCount;
         await this.notifyIncoming(account, result.added);
       } catch (error) {
         // One unreachable account (offline, expired token) must not block the
         // others nor app start-up; the engine already flagged it `error`.
         console.warn(`[MailService] sync failed for ${account.emailAddress}`, error);
       }
+    }
+    if (this.settings.offlineStarredAttachments) {
+      await this.downloadStarredAttachments();
     }
   }
 
@@ -556,6 +751,111 @@ export class MailService {
     const messages = await listMessagesByThread(this.db, threadId);
     await this.markThreadRead(threadId, true);
     return messages;
+  }
+
+  /** Attachments of a conversation, grouped by message id. */
+  async getThreadAttachments(threadId: string): Promise<Record<string, Attachment[]>> {
+    await this.backfillThreadAttachments(threadId);
+    const grouped: Record<string, Attachment[]> = {};
+    for (const attachment of await listAttachmentsByThread(this.db, threadId)) {
+      (grouped[attachment.messageId] ??= []).push(attachment);
+    }
+    return grouped;
+  }
+
+  /**
+   * Mails synced before attachments were stored only carry the paperclip flag:
+   * fetch their attachment list once, when the conversation is opened.
+   */
+  private async backfillThreadAttachments(threadId: string): Promise<void> {
+    const known = new Set(
+      (await listAttachmentsByThread(this.db, threadId)).map((a) => a.messageId),
+    );
+    for (const message of await listMessagesByThread(this.db, threadId)) {
+      if (!message.hasAttachments || known.has(message.id) || message.remoteUid === null) {
+        continue;
+      }
+      const provider = this.registry.get(message.accountId);
+      if (!provider?.fetchAttachments) {
+        continue;
+      }
+      try {
+        const remote = await provider.fetchAttachments(message.remoteUid);
+        await replaceMessageAttachments(
+          this.db,
+          message.id,
+          toLocalAttachments(message.id, remote),
+        );
+      } catch {
+        // Offline or message gone: keep the paperclip only, retry next time.
+      }
+    }
+  }
+
+  /**
+   * A URI the UI can display or open. Returns the cached copy when there is
+   * one, otherwise downloads the attachment through its provider and caches it.
+   */
+  async resolveAttachment(attachmentId: string): Promise<Attachment> {
+    const attachment = await getAttachment(this.db, attachmentId);
+    if (!attachment) {
+      throw new Error('Pièce jointe introuvable.');
+    }
+    if (attachment.localPath) {
+      return attachment;
+    }
+    const message = await getMessage(this.db, attachment.messageId);
+    const provider = message ? this.registry.get(message.accountId) : undefined;
+    if (!message || message.remoteUid === null || !attachment.remotePartId) {
+      throw new Error('Pièce jointe non disponible hors ligne.');
+    }
+    if (!provider?.downloadAttachment) {
+      throw new Error('Ce compte ne permet pas de télécharger les pièces jointes.');
+    }
+    await setAttachmentState(this.db, attachment.id, 'downloading');
+    try {
+      const base64 = await provider.downloadAttachment(message.remoteUid, attachment.remotePartId);
+      const localPath = await this.attachmentWriter(attachment, base64);
+      await setAttachmentDownloaded(this.db, attachment.id, localPath);
+      return { ...attachment, localPath, downloadState: 'downloaded' };
+    } catch (cause) {
+      await setAttachmentState(this.db, attachment.id, 'failed');
+      throw cause;
+    }
+  }
+
+  /** Bytes used by downloaded attachments. */
+  attachmentCacheSize(): number {
+    try {
+      return attachmentCacheSize();
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Delete downloaded files and forget their local paths (they are re-fetched on demand). */
+  async clearAttachmentCache(): Promise<void> {
+    clearAttachmentCache();
+    await clearDownloadedAttachmentPaths(this.db);
+  }
+
+  /**
+   * "Favoris hors ligne": download the attachments of starred mails, within
+   * the size limit used for automatic previews (at least 10 Mo).
+   */
+  async downloadStarredAttachments(): Promise<number> {
+    const limit = Math.max(10, this.settings.autoPreviewMaxMb) * 1024 * 1024;
+    let downloaded = 0;
+    for (const attachment of await listStarredRemoteAttachments(this.db)) {
+      if (attachment.sizeBytes > limit) continue;
+      try {
+        await this.resolveAttachment(attachment.id);
+        downloaded += 1;
+      } catch {
+        // Retried on the next sync.
+      }
+    }
+    return downloaded;
   }
 
   async getThreadMessages(threadId: string): Promise<Message[]> {
@@ -594,6 +894,149 @@ export class MailService {
       }
     }
     await setMessageStarred(this.db, messageId, isStarred);
+  }
+
+  async isThreadSpam(threadId: string): Promise<boolean> {
+    return isThreadSpam(this.db, threadId);
+  }
+
+  /** Conversation counts for the filter chips (Toutes, Non lus, Pièces jointes, Spam). */
+  async conversationCounts(options?: ListThreadSummariesOptions): Promise<ConversationCounts> {
+    return countThreadSummaries(this.db, { includeArchived: false, ...options });
+  }
+
+  /**
+   * "Signaler comme spam" / "Ce n'est pas du spam": moves the received mail of
+   * the thread to the provider's spam folder (or back to the inbox), so the
+   * provider's filter learns from it.
+   */
+  async setThreadSpam(threadId: string, isSpam: boolean): Promise<void> {
+    const messages = await listMessagesByThread(this.db, threadId);
+    for (const message of messages) {
+      const account = await getAccount(this.db, message.accountId);
+      if (!account || isSelf(message.senderAddress, account.emailAddress)) continue;
+      const target = await getFolderByRole(this.db, account.id, isSpam ? 'spam' : 'inbox');
+      const provider = this.registry.get(account.id);
+      if (provider?.setSpam && message.remoteUid !== null) {
+        try {
+          await provider.setSpam(message.remoteUid, isSpam);
+        } catch {
+          // Applied locally anyway; the next sync reconciles.
+        }
+      }
+      if (target) await moveMessageToFolder(this.db, message.id, target.id);
+      if (isSpam && !message.isRead) await setMessageRead(this.db, message.id, true);
+    }
+    await recomputeThreadAggregates(this.db, threadId);
+  }
+
+  /**
+   * Senders of bulk mail (newsletters, promotions), most frequent first. Older
+   * messages are first checked for their List-Unsubscribe header (metadata
+   * only, no content is downloaded).
+   */
+  async listSubscriptions(): Promise<(MailingSender & { unsubscribed: boolean })[]> {
+    await this.backfillUnsubscribeHeaders();
+    const done = await this.unsubscribedSenders();
+    return (await listMailingSenders(this.db)).map((sender) => ({
+      ...sender,
+      unsubscribed: done.has(sender.address),
+    }));
+  }
+
+  private async unsubscribedSenders(): Promise<Set<string>> {
+    try {
+      const raw = await getSetting(this.db, UNSUBSCRIBED_KEY);
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  private async rememberUnsubscribed(address: string): Promise<void> {
+    const done = await this.unsubscribedSenders();
+    done.add(address.toLowerCase());
+    await setSetting(this.db, UNSUBSCRIBED_KEY, JSON.stringify([...done]));
+  }
+
+  private async backfillUnsubscribeHeaders(): Promise<void> {
+    const missing = await listMessagesMissingUnsubscribe(this.db, 150);
+    for (const message of missing) {
+      const provider = this.registry.get(message.accountId);
+      if (!provider?.fetchUnsubscribeHeaders) {
+        await setUnsubscribeHeaders(this.db, message.id, null, null);
+        continue;
+      }
+      try {
+        const headers = await provider.fetchUnsubscribeHeaders(message.remoteUid);
+        await setUnsubscribeHeaders(
+          this.db,
+          message.id,
+          headers.listUnsubscribe,
+          headers.listUnsubscribePost,
+        );
+      } catch {
+        // Offline: retried next time the screen opens.
+        return;
+      }
+    }
+  }
+
+  /**
+   * Unsubscribe from a sender: RFC 8058 one-click POST when offered (silent,
+   * no browser), else the unsubscribe email, else the web page to open.
+   */
+  async unsubscribe(sender: MailingSender): Promise<UnsubscribeResult> {
+    const targets = parseListUnsubscribe(sender.listUnsubscribe);
+    const oneClick = /list-unsubscribe=one-click/i.test(sender.listUnsubscribePost ?? '');
+    if (targets.url && oneClick) {
+      try {
+        const response = await (this.fetchImpl ?? fetch)(targets.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'List-Unsubscribe=One-Click',
+        });
+        if (response.ok) {
+          await this.rememberUnsubscribed(sender.address);
+          return { kind: 'done' };
+        }
+      } catch {
+        // Fall back to the other methods.
+      }
+    }
+    if (targets.mailto) {
+      const [address, query = ''] = targets.mailto.replace(/^mailto:/i, '').split('?');
+      const params = new URLSearchParams(query);
+      const result = await this.send({
+        accountId: sender.accountId,
+        to: decodeURIComponent(address),
+        subject: params.get('subject') ?? 'unsubscribe',
+        body: params.get('body') ?? 'unsubscribe',
+      });
+      if (result.status === 'sent') {
+        await this.rememberUnsubscribed(sender.address);
+        return { kind: 'done' };
+      }
+    }
+    if (targets.url) {
+      // The page finishes the job: remembered as done once opened.
+      await this.rememberUnsubscribed(sender.address);
+      return { kind: 'open', url: targets.url };
+    }
+    return { kind: 'failed' };
+  }
+
+  /** Archive every conversation whose last message comes from this sender. */
+  async archiveSender(address: string): Promise<number> {
+    const threads = await listThreadSummaries(this.db, { includeArchived: false });
+    let count = 0;
+    for (const thread of threads) {
+      if (thread.contact.address.toLowerCase() === address.toLowerCase()) {
+        await setThreadArchivedRow(this.db, thread.id, true);
+        count += 1;
+      }
+    }
+    return count;
   }
 
   async archiveThread(threadId: string): Promise<void> {
@@ -638,6 +1081,76 @@ export class MailService {
     return searchMessages(this.db, trimmed);
   }
 
+  /** Attachments whose file name contains the query, newest first. */
+  async searchFiles(query: string): Promise<FileSearchHit[]> {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) {
+      return [];
+    }
+    return searchAttachmentsByName(this.db, trimmed);
+  }
+
+  /**
+   * Save the compose form as a draft, locally first (never lost), then on the
+   * server when the provider supports drafts. Returns the local draft id.
+   */
+  async saveDraft(input: SaveDraftInput): Promise<string> {
+    const existing = input.draftId ? await getDraft(this.db, input.draftId) : null;
+    const draft: Draft = {
+      id: existing?.id ?? createId('drf'),
+      accountId: input.accountId,
+      remoteDraftId: existing?.remoteDraftId ?? null,
+      to: parseAddressList(input.to),
+      cc: input.cc ? parseAddressList(input.cc) : [],
+      bcc: [],
+      subject: input.subject,
+      body: input.body,
+      updatedAt: this.now(),
+      syncState: 'pending',
+    };
+    await upsertDraft(this.db, draft);
+
+    const provider = this.registry.get(input.accountId);
+    if (provider?.saveDraft) {
+      try {
+        const remoteDraftId = await provider.saveDraft(draft.remoteDraftId, {
+          to: draft.to,
+          cc: draft.cc,
+          bcc: [],
+          subject: draft.subject,
+          bodyText: draft.body,
+        });
+        await upsertDraft(this.db, { ...draft, remoteDraftId, syncState: 'synced' });
+      } catch {
+        // Offline: the local copy stays "pending" and is pushed on the next save.
+      }
+    }
+    return draft.id;
+  }
+
+  async listDrafts(accountId: string): Promise<Draft[]> {
+    return listDraftsRows(this.db, accountId);
+  }
+
+  async getDraft(draftId: string): Promise<Draft | null> {
+    return getDraft(this.db, draftId);
+  }
+
+  /** Remove a draft locally and on the server (after sending or discarding it). */
+  async discardDraft(draftId: string): Promise<void> {
+    const draft = await getDraft(this.db, draftId);
+    if (!draft) return;
+    await deleteDraftRow(this.db, draftId);
+    const provider = this.registry.get(draft.accountId);
+    if (draft.remoteDraftId && provider?.deleteDraft) {
+      try {
+        await provider.deleteDraft(draft.remoteDraftId);
+      } catch {
+        // Already gone on the server.
+      }
+    }
+  }
+
   /**
    * Send a message. For a reply, recipients and reference headers are derived
    * from the answered message ({@link buildReplyHeaders}); otherwise the raw
@@ -676,6 +1189,23 @@ export class MailService {
       }
     }
 
+    const picked = input.attachments ?? [];
+    let files: OutgoingMessage['attachments'];
+    try {
+      files = await Promise.all(
+        picked.map(async (file) => ({
+          filename: file.filename,
+          mimeType: file.mimeType,
+          base64: await this.attachmentReader(file.uri),
+        })),
+      );
+    } catch (cause) {
+      return {
+        status: 'failed',
+        error: `Pièce jointe illisible : ${cause instanceof Error ? cause.message : String(cause)}`,
+      };
+    }
+
     const outgoing: OutgoingMessage = {
       to,
       cc,
@@ -684,11 +1214,14 @@ export class MailService {
       bodyText: input.body,
       inReplyTo,
       references,
+      attachments: files,
+      messageId: formatMessageId(`${createId('m')}@${account.emailAddress}`),
+      date: this.now(),
     };
 
     const result = await provider.send(outgoing);
     if (result.status === 'sent') {
-      await this.persistSent(account, outgoing, this.now());
+      await this.persistSent(account, outgoing, this.now(), picked);
     }
     return result;
   }
@@ -697,13 +1230,15 @@ export class MailService {
     account: Account,
     outgoing: OutgoingMessage,
     now: number,
+    picked: PickedAttachment[] = [],
   ): Promise<void> {
     const sentFolder = await getFolderByRole(this.db, account.id, 'sent');
     if (!sentFolder) {
       return;
     }
 
-    const messageIdHeader = formatMessageId(`${createId('m')}@${account.emailAddress}`);
+    const messageIdHeader =
+      outgoing.messageId ?? formatMessageId(`${createId('m')}@${account.emailAddress}`);
     const known = await this.buildKnownThreadMap(account.id);
     const threadKey = computeThreadKey(
       {
@@ -728,8 +1263,9 @@ export class MailService {
       });
     }
 
+    const sentId = `${account.id}::sent::${deterministicId(messageIdHeader)}`;
     await upsertMessage(this.db, {
-      id: `${account.id}::sent::${deterministicId(messageIdHeader)}`,
+      id: sentId,
       accountId: account.id,
       folderId: sentFolder.id,
       remoteUid: null,
@@ -747,9 +1283,26 @@ export class MailService {
       receivedAt: now,
       isRead: true,
       isStarred: false,
-      hasAttachments: false,
+      hasAttachments: picked.length > 0,
       syncState: 'synced',
     });
+    if (picked.length > 0) {
+      // The local files stay viewable in the conversation right away.
+      await replaceMessageAttachments(
+        this.db,
+        sentId,
+        toLocalAttachments(
+          sentId,
+          picked.map((file) => ({
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            remotePartId: null,
+            contentUri: file.uri,
+          })),
+        ),
+      );
+    }
     await recomputeThreadAggregates(this.db, threadId);
   }
 
@@ -786,8 +1339,14 @@ export class MailService {
       return;
     }
     const rules = await listRulesRepo(this.db, account.id);
+    const spamFolder = await getFolderByRole(this.db, account.id, 'spam');
     for (const message of messages) {
-      if (message.isRead || isSelf(message.senderAddress, account.emailAddress)) {
+      // Spam is visible in the list (flagged) but never rings.
+      if (
+        message.isRead ||
+        isSelf(message.senderAddress, account.emailAddress) ||
+        (spamFolder && message.folderId === spamFolder.id)
+      ) {
         continue;
       }
       const decision = resolveNotification({
@@ -847,6 +1406,7 @@ export class MailService {
   async deleteAccountData(accountId: string): Promise<void> {
     this.registry.remove(accountId);
     await this.tokenStore?.remove(accountId);
+    await this.imapCredentials?.remove(accountId);
     await deleteAccount(this.db, accountId);
   }
 }

@@ -21,6 +21,8 @@ export interface ConversationRowProps {
   selected?: boolean;
   /** Sender's profile photo; initials are shown without one. */
   photoUri?: string;
+  /** Several conversations (subjects) with this person are grouped in the row. */
+  subjectCount?: number;
   testID?: string;
 }
 
@@ -64,6 +66,7 @@ export function ConversationRow({
   isOwnLast = false,
   selected = false,
   photoUri,
+  subjectCount = 1,
   testID,
 }: ConversationRowProps) {
   const colors = useAppTheme();
@@ -103,6 +106,17 @@ export function ConversationRow({
             <MaterialIcons name="check" size={14} color={colors.onPrimary} />
           </View>
         ) : null}
+        {/* Several subjects with this person: a tiny count under the face. */}
+        {subjectCount > 1 ? (
+          <AppText
+            variant="caption"
+            weight="semibold"
+            style={[styles.subjectCount, { color: colors.primary }]}
+            testID={testID ? `${testID}-subjects` : undefined}
+          >
+            {subjectCount} sujets
+          </AppText>
+        ) : null}
       </View>
 
       <View style={styles.content}>
@@ -110,6 +124,14 @@ export function ConversationRow({
           <AppText weight={isUnread ? 'bold' : 'semibold'} numberOfLines={1} style={styles.name}>
             {senderName}
           </AppText>
+          {thread.isSpam ? (
+            <View style={[styles.subjects, { backgroundColor: colors.danger + '22' }]}>
+              <MaterialIcons name="report" size={12} color={colors.danger} />
+              <AppText variant="caption" weight="semibold" style={{ color: colors.danger }}>
+                Spam
+              </AppText>
+            </View>
+          ) : null}
           <AppText
             variant="caption"
             weight={isUnread ? 'semibold' : 'regular'}
@@ -122,7 +144,9 @@ export function ConversationRow({
         <View style={styles.line}>
           {isOwnLast ? <MaterialIcons name="done-all" size={16} color={colors.primary} /> : null}
           {thread.hasAttachments ? (
-            <MaterialIcons name="attach-file" size={15} color={colors.textMuted} />
+            <View style={[styles.clip, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="attach-file" size={13} color={colors.primary} />
+            </View>
           ) : null}
           <Text
             numberOfLines={1}
@@ -184,6 +208,28 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.md - 1,
     lineHeight: 20,
+  },
+  subjectCount: {
+    fontSize: 10,
+    lineHeight: 12,
+    textAlign: 'center',
+    marginTop: 3,
+  },
+  clip: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '45deg' }],
+  },
+  subjects: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
   },
   subject: {
     fontWeight: '500',

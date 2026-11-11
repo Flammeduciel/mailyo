@@ -1,6 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { formatFileSize } from '@/domain/attachments';
+
 import { AppText } from './AppText';
 import { IconButton } from './IconButton';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
@@ -19,6 +21,10 @@ export interface ChatComposerProps {
   onCancelReply?: () => void;
   /** Extra bottom padding (navigation bar inset when the keyboard is hidden). */
   bottomInset?: number;
+  /** Files picked for this message, shown as removable chips. */
+  attachments?: { filename: string; sizeBytes: number }[];
+  onAttach?: () => void;
+  onRemoveAttachment?: (index: number) => void;
 }
 
 /**
@@ -33,9 +39,12 @@ export function ChatComposer({
   replyTo,
   onCancelReply,
   bottomInset = 0,
+  attachments = [],
+  onAttach,
+  onRemoveAttachment,
 }: ChatComposerProps) {
   const colors = useAppTheme();
-  const canSend = value.trim().length > 0 && !sending;
+  const canSend = (value.trim().length > 0 || attachments.length > 0) && !sending;
 
   return (
     <View style={[styles.row, { paddingBottom: Spacing.sm + bottomInset }]}>
@@ -61,15 +70,49 @@ export function ChatComposer({
             />
           </View>
         ) : null}
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="Message"
-          placeholderTextColor={colors.textMuted}
-          multiline
-          style={[styles.input, { color: colors.text }]}
-          testID="thread-input"
-        />
+        {attachments.length > 0 ? (
+          <View style={styles.chips}>
+            {attachments.map((file, index) => (
+              <View
+                key={`${file.filename}-${index}`}
+                style={[styles.chip, { backgroundColor: colors.quoteBackground }]}
+              >
+                <MaterialIcons name="attach-file" size={14} color={colors.textSecondary} />
+                <AppText variant="caption" numberOfLines={1} style={styles.chipText}>
+                  {file.filename} · {formatFileSize(file.sizeBytes)}
+                </AppText>
+                <Pressable
+                  onPress={() => onRemoveAttachment?.(index)}
+                  accessibilityLabel={`Retirer ${file.filename}`}
+                  hitSlop={Spacing.sm}
+                >
+                  <MaterialIcons name="close" size={14} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <View style={styles.inputRow}>
+          <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            placeholder="Message"
+            placeholderTextColor={colors.textMuted}
+            multiline
+            style={[styles.input, { color: colors.text }]}
+            testID="thread-input"
+          />
+          {onAttach ? (
+            <IconButton
+              icon="attach-file"
+              accessibilityLabel="Joindre un fichier"
+              onPress={onAttach}
+              size={22}
+              color={colors.textSecondary}
+              testID="composer-attach"
+            />
+          ) : null}
+        </View>
       </View>
       <Pressable
         accessibilityRole="button"
@@ -127,7 +170,30 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.sm,
   },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    padding: Spacing.xs,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  chipText: {
+    flexShrink: 1,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
   input: {
+    flex: 1,
     minHeight: 40,
     maxHeight: 140,
     paddingHorizontal: Spacing.md,

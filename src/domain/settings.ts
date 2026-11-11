@@ -16,6 +16,14 @@ export interface AppSettings {
   quietHours: QuietHours | null;
   /** Preferred colour scheme; 'system' follows the device. */
   theme: 'system' | 'light' | 'dark';
+  /** Images up to this size (Mo) are fetched automatically for thumbnails; 0 disables it. */
+  autoPreviewMaxMb: number;
+  /** Ask before downloading attachments larger than this (Mo) on mobile data. */
+  cellularConfirmMb: number;
+  /** Remote images in HTML mails stay hidden until "Afficher les images" (tracking pixels). */
+  blockRemoteImages: boolean;
+  /** Keep attachments of starred mails available offline. */
+  offlineStarredAttachments: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +32,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSoundId: 'default',
   quietHours: null,
   theme: 'system',
+  autoPreviewMaxMb: 3,
+  cellularConfirmMb: 10,
+  blockRemoteImages: true,
+  offlineStarredAttachments: false,
 };
 
 const SETTING_KEYS = {
@@ -32,7 +44,20 @@ const SETTING_KEYS = {
   defaultSoundId: 'notification.defaultSoundId',
   quietHours: 'notification.quietHours',
   theme: 'app.theme',
+  autoPreviewMaxMb: 'attachments.autoPreviewMaxMb',
+  cellularConfirmMb: 'attachments.cellularConfirmMb',
+  blockRemoteImages: 'privacy.blockRemoteImages',
+  offlineStarredAttachments: 'attachments.offlineStarred',
 } as const;
+
+function parseNumber(raw: string | undefined, fallback: number): number {
+  const value = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function parseBoolean(raw: string | undefined, fallback: boolean): boolean {
+  return raw === 'true' ? true : raw === 'false' ? false : fallback;
+}
 
 const CONTENT_MODES: readonly NotificationContentMode[] = ['full', 'sender', 'hidden'];
 
@@ -80,6 +105,22 @@ export function parseAppSettings(raw: Record<string, string>): AppSettings {
     quietHours: quiet === undefined ? DEFAULT_SETTINGS.quietHours : parseQuietHours(quiet),
     theme:
       theme === 'light' || theme === 'dark' || theme === 'system' ? theme : DEFAULT_SETTINGS.theme,
+    autoPreviewMaxMb: parseNumber(
+      raw[SETTING_KEYS.autoPreviewMaxMb],
+      DEFAULT_SETTINGS.autoPreviewMaxMb,
+    ),
+    cellularConfirmMb: parseNumber(
+      raw[SETTING_KEYS.cellularConfirmMb],
+      DEFAULT_SETTINGS.cellularConfirmMb,
+    ),
+    blockRemoteImages: parseBoolean(
+      raw[SETTING_KEYS.blockRemoteImages],
+      DEFAULT_SETTINGS.blockRemoteImages,
+    ),
+    offlineStarredAttachments: parseBoolean(
+      raw[SETTING_KEYS.offlineStarredAttachments],
+      DEFAULT_SETTINGS.offlineStarredAttachments,
+    ),
   };
 }
 
@@ -91,5 +132,9 @@ export function serializeAppSettings(settings: AppSettings): Record<string, stri
     [SETTING_KEYS.defaultSoundId]: settings.defaultSoundId ?? '',
     [SETTING_KEYS.quietHours]: settings.quietHours ? JSON.stringify(settings.quietHours) : '',
     [SETTING_KEYS.theme]: settings.theme,
+    [SETTING_KEYS.autoPreviewMaxMb]: String(settings.autoPreviewMaxMb),
+    [SETTING_KEYS.cellularConfirmMb]: String(settings.cellularConfirmMb),
+    [SETTING_KEYS.blockRemoteImages]: settings.blockRemoteImages ? 'true' : 'false',
+    [SETTING_KEYS.offlineStarredAttachments]: settings.offlineStarredAttachments ? 'true' : 'false',
   };
 }

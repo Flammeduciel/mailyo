@@ -14,7 +14,13 @@ export interface EmptyStateProps {
   testID?: string;
 }
 
-export function EmptyState({ icon = 'inbox', title, description, action, testID }: EmptyStateProps) {
+export function EmptyState({
+  icon = 'inbox',
+  title,
+  description,
+  action,
+  testID,
+}: EmptyStateProps) {
   const colors = useAppTheme();
 
   return (

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mailyo",
+    "name": "MailYo",
     "slug": "mailyo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     ],
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
@@ -23,7 +23,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#6A4CF2",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -49,9 +49,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 160
         }
       ],
       "expo-sqlite",
@@ -68,7 +68,18 @@
         }
       ],
       "expo-local-authentication",
-      "expo-background-task"
+      "expo-background-task",
+      "expo-video",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MailYo accède à vos photos pour les joindre à vos emails.",
+          "cameraPermission": "MailYo utilise l’appareil photo pour joindre une photo à un email.",
+          "microphonePermission": false
+        }
+      ],
+      "./modules/mailyo-imap/plugin/with-mail-packaging.js"
     ],
     "experiments": {
       "typedRoutes": true,

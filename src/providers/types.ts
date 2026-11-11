@@ -17,6 +17,20 @@ export interface RemoteFolder {
 }
 
 /** A message as returned by a provider, before local ids/threading are assigned. */
+/** Attachment metadata as announced by the provider. */
+export interface RemoteAttachment {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** Provider handle used by `downloadAttachment` (Gmail attachmentId, MIME part…). */
+  remotePartId: string | null;
+  /**
+   * Directly usable URI (https:, file:, data:) when the content is already
+   * reachable without a download — used by the demo provider.
+   */
+  contentUri?: string | null;
+}
+
 export interface RemoteMessage {
   remoteUid: number;
   folderRemoteId: string;
@@ -34,6 +48,9 @@ export interface RemoteMessage {
   isRead: boolean;
   isStarred: boolean;
   hasAttachments: boolean;
+  attachments?: RemoteAttachment[];
+  listUnsubscribe?: string | null;
+  listUnsubscribePost?: string | null;
   /** Provider category (Gmail tabs), when the provider has one. */
   category?: MailCategory | null;
 }
@@ -52,11 +69,20 @@ export interface FetchMessagesInput {
   /** Last UID already stored locally, or null for the initial sync. */
   lastSyncedUid: number | null;
   limit?: number;
+  /** Download progress, for providers that fetch messages one by one. */
+  onProgress?: (fetched: number, total: number) => void;
 }
 
 export interface FetchMessagesResult {
   uidValidity: number;
   messages: RemoteMessage[];
+}
+
+/** A file attached to an outgoing message, already read as base64. */
+export interface OutgoingAttachment {
+  filename: string;
+  mimeType: string;
+  base64: string;
 }
 
 export interface OutgoingMessage {
@@ -68,6 +94,11 @@ export interface OutgoingMessage {
   bodyHtml?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
+  attachments?: OutgoingAttachment[];
+  /** Message-ID chosen by the app, also used for the local copy (no duplicate when the Sent folder syncs). */
+  messageId?: string | null;
+  /** Send time (ms), for the Date header. */
+  date?: number | null;
 }
 
 /**
@@ -98,6 +129,19 @@ export interface MailProvider {
   star(remoteUid: number, isStarred: boolean): Promise<void>;
   archive(remoteUid: number): Promise<void>;
   moveToTrash(remoteUid: number): Promise<void>;
+  /** Raw bytes (base64) of an attachment, for providers that need a download. */
+  downloadAttachment?(remoteUid: number, remotePartId: string): Promise<string>;
+  /** Create (no id) or replace a server-side draft; returns its id. */
+  saveDraft?(draftId: string | null, message: OutgoingMessage): Promise<string>;
+  deleteDraft?(draftId: string): Promise<void>;
+  /** Move a message to (true) or out of (false) the spam folder. */
+  setSpam?(remoteUid: number, isSpam: boolean): Promise<void>;
+  /** List-Unsubscribe headers of an already synced message (backfill). */
+  fetchUnsubscribeHeaders?(
+    remoteUid: number,
+  ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }>;
+  /** Attachment list of an already synced message (backfill for older mails). */
+  fetchAttachments?(remoteUid: number): Promise<RemoteAttachment[]>;
   /**
    * Subscribe to "new message" hints (IMAP IDLE in production). Returns an
    * unsubscribe function. The mock implementation can be driven manually.

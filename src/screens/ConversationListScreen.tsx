@@ -20,6 +20,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { firstToOpen, groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
+import type { ConversationCounts } from '@/data/repositories/threads';
 import type { ConversationFilter, ConversationTab, ThreadSummary } from '@/domain/models';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
@@ -33,6 +35,7 @@ import {
   FilterChips,
   PopupMenu,
   SearchPill,
+  SyncRing,
   Spacing,
   useAppTheme,
   type AppBarAction,
@@ -50,13 +53,21 @@ export interface ConversationListScreenProps {
 
 interface ListData {
   threads: ThreadSummary[];
+  counts: ConversationCounts;
   unread: number;
   archivedCount: number;
   selfAddresses: string[];
   now: number;
 }
 
-const INITIAL: ListData = { threads: [], unread: 0, archivedCount: 0, selfAddresses: [], now: 0 };
+const INITIAL: ListData = {
+  threads: [],
+  counts: { all: 0, unread: 0, attachments: 0, spam: 0 },
+  unread: 0,
+  archivedCount: 0,
+  selfAddresses: [],
+  now: 0,
+};
 
 const EMPTY_COPY: Record<string, { title: string; description: string }> = {
   discussions: {
@@ -87,7 +98,7 @@ export function ConversationListScreen({
   title,
 }: ConversationListScreenProps) {
   const colors = useAppTheme();
-  const { service, refresh, invalidate } = useApp();
+  const { service, refresh, invalidate, sync } = useApp();
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,9 +108,9 @@ export function ConversationListScreen({
   const exhausted = useRef(false);
 
   const { data, reload } = useServiceQuery<ListData>(async (mailService) => {
-    const [threads, unreadThreads, archivedThreads, accounts] = await Promise.all([
+    const [threads, counts, archivedThreads, accounts] = await Promise.all([
       mailService.listConversations({ tab, filter, archivedOnly: archived, limit }),
-      mailService.listConversations({ tab, filter: 'unread', archivedOnly: archived }),
+      mailService.conversationCounts({ tab, archivedOnly: archived }),
       tab === 'discussions'
         ? mailService.listConversations({ archivedOnly: true })
         : Promise.resolve([]),
@@ -107,7 +118,8 @@ export function ConversationListScreen({
     ]);
     return {
       threads,
-      unread: unreadThreads.length,
+      counts,
+      unread: counts.unread,
       archivedCount: archivedThreads.length,
       selfAddresses: accounts.map((account) => account.emailAddress.toLowerCase()),
       now: Date.now(),
@@ -185,9 +197,31 @@ export function ConversationListScreen({
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
+  // One row per person: a row stands for every conversation with them.
+  const groups = useMemo(() => groupThreadsByContact(data.threads), [data.threads]);
   const selectedThreads = useMemo(
-    () => data.threads.filter((thread) => selected.has(thread.id)),
-    [data.threads, selected],
+    () => groups.filter((group) => selected.has(group.key)).flatMap((group) => group.threads),
+    [groups, selected],
+  );
+
+  const openGroup = useCallback(
+    (group: ContactGroup) => {
+      // Something unread, or a single subject: straight into that conversation.
+      // The subject list only shows when everything has been read.
+      if (group.threads.length === 1 || group.unreadCount > 0) {
+        router.push(`/thread/${firstToOpen(group).id}`);
+        return;
+      }
+      router.push({
+        pathname: '/contact/[address]',
+        params: {
+          address: group.lead.contact.address,
+          tab: tab ?? '',
+          archived: archived ? '1' : '',
+        },
+      });
+    },
+    [tab, archived],
   );
 
   const runOnSelection = useCallback(
@@ -204,6 +238,7 @@ export function ConversationListScreen({
   const allPinned = selectedThreads.length > 0 && selectedThreads.every((t) => t.isPinned);
   const allStarred = selectedThreads.length > 0 && selectedThreads.every((t) => t.isStarred);
   const anyUnread = selectedThreads.some((t) => t.unreadCount > 0);
+  const allSpam = selectedThreads.length > 0 && selectedThreads.every((t) => t.isSpam);
 
   const selectionActions: AppBarAction[] = [
     {
@@ -232,7 +267,7 @@ export function ConversationListScreen({
       label: 'Supprimer',
       onPress: () =>
         Alert.alert(
-          `Supprimer ${selected.size} conversation${selected.size > 1 ? 's' : ''} ?`,
+          `Supprimer ${selectedThreads.length} conversation${selectedThreads.length > 1 ? 's' : ''} ?`,
           'Les emails seront placés dans la corbeille.',
           [
             { text: 'Annuler', style: 'cancel' },
@@ -244,6 +279,12 @@ export function ConversationListScreen({
           ],
         ),
       testID: 'selection-delete',
+    },
+    {
+      icon: allSpam ? 'report-off' : 'report',
+      label: allSpam ? 'Ce n’est pas du spam' : 'Signaler comme spam',
+      onPress: () => void runOnSelection((t) => service.setThreadSpam(t.id, !allSpam)),
+      testID: 'selection-spam',
     },
     {
       icon: anyUnread ? 'mark-email-read' : 'mark-email-unread',
@@ -273,9 +314,20 @@ export function ConversationListScreen({
   ];
 
   const chips: FilterChipOption<ConversationFilter>[] = [
-    { value: 'all', label: 'Toutes' },
-    { value: 'unread', label: 'Non lus', count: data.unread || undefined },
-    { value: 'attachments', label: 'Pièces jointes' },
+    { value: 'all', label: 'Toutes', count: data.counts.all || undefined },
+    {
+      value: 'unread',
+      label: 'Non lus',
+      icon: 'mark-email-unread',
+      count: data.counts.unread || undefined,
+    },
+    {
+      value: 'attachments',
+      label: 'Pièces jointes',
+      icon: 'attach-file',
+      count: data.counts.attachments || undefined,
+    },
+    { value: 'spam', label: 'Spam', icon: 'report', count: data.counts.spam || undefined },
   ];
 
   const empty = EMPTY_COPY[archived ? 'archived' : (tab ?? 'discussions')];
@@ -311,10 +363,22 @@ export function ConversationListScreen({
       )}
 
       <FlatList
-        data={data.threads}
-        keyExtractor={(item) => item.id}
+        data={groups}
+        keyExtractor={(item) => item.key}
         ListHeaderComponent={
           <View>
+            {sync && groups.length > 0 && !archived ? (
+              <View style={[styles.syncBar, { backgroundColor: colors.primaryContainer }]}>
+                <SyncRing ratio={sync.ratio} size={30} strokeWidth={3} showLabel={false} />
+                <AppText variant="caption" weight="semibold" style={styles.syncText}>
+                  Récupération de vos emails…
+                  {sync.stored > 0 ? ` ${sync.stored} reçus` : ''}
+                </AppText>
+                <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
+                  {Math.round(sync.ratio * 100)} %
+                </AppText>
+              </View>
+            ) : null}
             {archived ? null : (
               <SearchPill onPress={() => router.push('/search')} testID="list-search" />
             )}
@@ -343,21 +407,28 @@ export function ConversationListScreen({
           </View>
         }
         renderItem={({ item }) => {
+          const lead = item.lead;
           const isOwnLast = data.selfAddresses.includes(
-            item.lastMessage.senderAddress.toLowerCase(),
+            lead.lastMessage.senderAddress.toLowerCase(),
           );
           return (
             <ConversationRow
-              thread={item}
+              thread={{
+                ...lead,
+                unreadCount: item.unreadCount,
+                isPinned: item.isPinned,
+                isStarred: item.isStarred,
+                hasAttachments: item.hasAttachments,
+                isSpam: item.threads.some((t) => t.isSpam),
+              }}
+              subjectCount={item.threads.length}
               now={data.now}
               isOwnLast={isOwnLast}
-              selected={selected.has(item.id)}
-              photoUri={service.getContactPhoto(item.contact.address)}
-              onPress={() =>
-                selecting ? toggleSelected(item.id) : router.push(`/thread/${item.id}`)
-              }
-              onLongPress={() => toggleSelected(item.id)}
-              testID={`conversation-${item.id}`}
+              selected={selected.has(item.key)}
+              photoUri={service.getContactPhoto(lead.contact.address)}
+              onPress={() => (selecting ? toggleSelected(item.key) : openGroup(item))}
+              onLongPress={() => toggleSelected(item.key)}
+              testID={`conversation-${lead.id}`}
             />
           );
         }}
@@ -371,20 +442,32 @@ export function ConversationListScreen({
           )
         }
         ListEmptyComponent={
-          <EmptyState
-            icon={archived ? 'archive' : 'forum'}
-            title={empty.title}
-            description={empty.description}
-            action={
-              data.selfAddresses.length === 0 ? (
-                <Button
-                  label="Ajouter un compte"
-                  variant="secondary"
-                  onPress={() => router.push('/login')}
-                />
-              ) : undefined
-            }
-          />
+          sync && !archived ? (
+            <View style={styles.syncEmpty} testID="list-syncing">
+              <SyncRing ratio={sync.ratio} size={96} strokeWidth={7} />
+              <AppText variant="subtitle" weight="semibold">
+                Récupération de vos emails…
+              </AppText>
+              <AppText variant="body" color="textSecondary" style={styles.syncHint}>
+                Vos conversations apparaissent au fur et à mesure.
+              </AppText>
+            </View>
+          ) : (
+            <EmptyState
+              icon={archived ? 'archive' : 'forum'}
+              title={empty.title}
+              description={empty.description}
+              action={
+                data.selfAddresses.length === 0 ? (
+                  <Button
+                    label="Ajouter un compte"
+                    variant="secondary"
+                    onPress={() => router.push('/login')}
+                  />
+                ) : undefined
+              }
+            />
+          )
         }
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
@@ -408,6 +491,28 @@ export function ConversationListScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+  },
+  syncBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: 24,
+  },
+  syncText: {
+    flex: 1,
+  },
+  syncEmpty: {
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingTop: 96,
+    paddingHorizontal: Spacing.xl,
+  },
+  syncHint: {
+    textAlign: 'center',
   },
   archivedRow: {
     flexDirection: 'row',
