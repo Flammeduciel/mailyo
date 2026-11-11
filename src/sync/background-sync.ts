@@ -15,14 +15,15 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 
 import { getDatabase } from '@/data/db/instance';
-import { MailService } from '@/services/mail-service';
+import { createAppMailService } from '@/services/create-app-service';
 
 export const BACKGROUND_SYNC_TASK = 'mailyo.background-sync';
 
 TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
   try {
     const db = await getDatabase();
-    const service = new MailService({ db });
+    // Same wiring as the app (tokens, IMAP credentials, notifier), or nothing syncs.
+    const service = createAppMailService(db);
     await service.initialize();
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch (error) {

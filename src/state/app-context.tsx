@@ -7,7 +7,6 @@
  * without a heavy state library.
  */
 
-import Constants from 'expo-constants';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   createContext,
@@ -20,10 +19,9 @@ import {
 } from 'react';
 
 import { getDatabase } from '@/data/db/instance';
-import { createExpoNotificationApi, Notifier } from '@/notifications/notifier';
-import { SecureTokenStore } from '@/providers';
 import { createExpoBiometricAuthenticator } from '@/security';
-import { MailService } from '@/services/mail-service';
+import { createAppMailService } from '@/services/create-app-service';
+import type { MailService } from '@/services/mail-service';
 import { registerBackgroundSync } from '@/sync/background-sync';
 import { ThemePreferenceProvider, type ThemePreference } from '@/ui';
 
@@ -98,12 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       const db = await getDatabase();
-      const created = new MailService({
-        db,
-        notifier: new Notifier(createExpoNotificationApi()),
-        tokenStore: new SecureTokenStore(),
-        gmailClientId: (Constants.expoConfig?.extra?.gmailClientId as string | undefined) ?? '',
-      });
+      const created = createAppMailService(db);
       if (cancelled) {
         return;
       }

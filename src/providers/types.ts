@@ -95,6 +95,10 @@ export interface OutgoingMessage {
   inReplyTo?: string | null;
   references?: string | null;
   attachments?: OutgoingAttachment[];
+  /** Message-ID chosen by the app, also used for the local copy (no duplicate when the Sent folder syncs). */
+  messageId?: string | null;
+  /** Send time (ms), for the Date header. */
+  date?: number | null;
 }
 
 /**

@@ -358,6 +358,12 @@ export function buildRawMessage(from: string, message: OutgoingMessage): string 
     lines.push(`Bcc: ${formatAddressHeader(message.bcc)}`);
   }
   lines.push(`Subject: ${encodeHeaderValue(message.subject)}`);
+  if (message.date) {
+    lines.push(`Date: ${new Date(message.date).toUTCString().replace('GMT', '+0000')}`);
+  }
+  if (message.messageId) {
+    lines.push(`Message-ID: ${message.messageId}`);
+  }
   if (message.inReplyTo) {
     lines.push(`In-Reply-To: ${message.inReplyTo}`);
   }

@@ -41,6 +41,7 @@ function AppShell() {
           <Stack.Screen name="files/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="contact/[address]" options={{ headerShown: false }} />
           <Stack.Screen name="subscriptions" options={{ headerShown: false }} />
+          <Stack.Screen name="imap-login" options={{ headerShown: false }} />
           <Stack.Screen name="search" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="archived" options={{ headerShown: false }} />

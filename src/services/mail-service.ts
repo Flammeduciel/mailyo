@@ -37,6 +37,7 @@ import {
   countUnread,
   deleteMessage,
   findMessageIdHeaderByRemoteUid,
+  findRemoteFolderByRemoteUid,
   getMessage,
   getCorrespondence,
   listCorrespondents,
@@ -123,6 +124,9 @@ import {
   writeAttachmentToCache,
   type AttachmentWriter,
 } from '@/services/attachment-files';
+import type { MailyoImapNative } from '../../modules/mailyo-imap';
+import type { ImapAccountConfig, ImapCredentialStore } from '@/providers/imap/credentials';
+import { ImapMailProvider } from '@/providers/imap/imap-provider';
 import { ProviderRegistry } from '@/providers/registry';
 import { SyncEngine, toLocalAttachments, type SyncProgress } from '@/sync/sync-engine';
 
@@ -172,6 +176,12 @@ export interface PickedAttachment {
   sizeBytes: number;
 }
 
+export interface ConnectImapAccountInput {
+  emailAddress: string;
+  displayName?: string;
+  config: ImapAccountConfig;
+}
+
 export interface ConnectOAuthAccountInput {
   emailAddress: string;
   displayName?: string;
@@ -193,6 +203,10 @@ export interface MailServiceOptions {
   fetchLimit?: number;
   /** Stores downloaded attachment bytes; defaults to the app cache directory. */
   attachmentWriter?: AttachmentWriter;
+  /** IMAP settings + passwords (secure storage); omit where IMAP is not used. */
+  imapCredentials?: ImapCredentialStore;
+  /** Native IMAP/SMTP client loader (Android module); injected in tests. */
+  imapNative?: () => MailyoImapNative;
   /** Reads a picked local file as base64; defaults to expo-file-system. */
   attachmentReader?: (uri: string) => Promise<string>;
 }
@@ -208,6 +222,8 @@ export class MailService {
   private readonly fetchLimit: number;
   private readonly attachmentWriter: AttachmentWriter;
   private readonly attachmentReader: (uri: string) => Promise<string>;
+  private readonly imapCredentials: ImapCredentialStore | null;
+  private readonly imapNative: (() => MailyoImapNative) | null;
   private settings: AppSettings = DEFAULT_SETTINGS;
   private contactPhotos = new Map<string, string>();
   private contactDetails = new Map<string, ContactDetails>();
@@ -225,6 +241,8 @@ export class MailService {
     this.fetchLimit = options.fetchLimit ?? 50;
     this.attachmentWriter = options.attachmentWriter ?? writeAttachmentToCache;
     this.attachmentReader = options.attachmentReader ?? readFileAsBase64;
+    this.imapCredentials = options.imapCredentials ?? null;
+    this.imapNative = options.imapNative ?? null;
   }
 
   /**
@@ -570,7 +588,50 @@ export class MailService {
         fetchImpl: this.fetchImpl,
       });
     }
+    if (account.provider === 'imap' && this.imapCredentials && this.imapNative) {
+      const credentials = this.imapCredentials;
+      return new ImapMailProvider({
+        emailAddress: account.emailAddress,
+        loadConfig: () => credentials.load(account.id),
+        native: this.imapNative,
+        lookupFolder: (remoteUid) => findRemoteFolderByRemoteUid(this.db, account.id, remoteUid),
+      });
+    }
     return null;
+  }
+
+  /**
+   * Add an IMAP account (Yahoo, iCloud, Orange…): the servers are tested with
+   * the given password first, then the settings go to secure storage.
+   */
+  async connectImapAccount(input: ConnectImapAccountInput): Promise<Account> {
+    if (!this.imapCredentials || !this.imapNative) {
+      throw new Error('IMAP indisponible sur cet appareil.');
+    }
+    const auth = { username: input.config.username, password: input.config.password };
+    await this.imapNative().testConnection(
+      { ...input.config.imap, ...auth },
+      { ...input.config.smtp, ...auth },
+    );
+    const existing = (await listAccounts(this.db)).find(
+      (a) => a.provider === 'imap' && a.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
+    );
+    const account: Account = existing ?? {
+      id: createId('account'),
+      provider: 'imap',
+      emailAddress: input.emailAddress,
+      displayName: input.displayName ?? input.emailAddress,
+      authType: 'password',
+      syncEnabled: true,
+      lastSyncAt: null,
+      syncStatus: 'idle',
+      createdAt: this.now(),
+    };
+    if (!existing) await insertAccount(this.db, account);
+    await this.imapCredentials.save(account.id, input.config);
+    const provider = this.createProviderFor(account);
+    if (provider) this.registry.register(account.id, provider);
+    return account;
   }
 
   async listConversations(options?: ListThreadSummariesOptions): Promise<ThreadSummary[]> {
@@ -1154,6 +1215,8 @@ export class MailService {
       inReplyTo,
       references,
       attachments: files,
+      messageId: formatMessageId(`${createId('m')}@${account.emailAddress}`),
+      date: this.now(),
     };
 
     const result = await provider.send(outgoing);
@@ -1174,7 +1237,8 @@ export class MailService {
       return;
     }
 
-    const messageIdHeader = formatMessageId(`${createId('m')}@${account.emailAddress}`);
+    const messageIdHeader =
+      outgoing.messageId ?? formatMessageId(`${createId('m')}@${account.emailAddress}`);
     const known = await this.buildKnownThreadMap(account.id);
     const threadKey = computeThreadKey(
       {
@@ -1342,6 +1406,7 @@ export class MailService {
   async deleteAccountData(accountId: string): Promise<void> {
     this.registry.remove(accountId);
     await this.tokenStore?.remove(accountId);
+    await this.imapCredentials?.remove(accountId);
     await deleteAccount(this.db, accountId);
   }
 }

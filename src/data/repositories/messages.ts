@@ -173,6 +173,21 @@ export async function findMessageIdHeaderByRemoteUid(
   return row?.message_id_header ?? null;
 }
 
+/** Remote folder holding a stored message (IMAP UIDs are per folder); inbox first. */
+export async function findRemoteFolderByRemoteUid(
+  db: Database,
+  accountId: string,
+  remoteUid: number,
+): Promise<string | null> {
+  const row = await db.getFirstAsync<{ remote_folder_id: string }>(
+    `SELECT f.remote_folder_id FROM messages m JOIN folders f ON f.id = m.folder_id
+      WHERE m.account_id = ? AND m.remote_uid = ?
+      ORDER BY CASE f.role WHEN 'inbox' THEN 0 WHEN 'spam' THEN 1 ELSE 2 END LIMIT 1`,
+    [accountId, remoteUid],
+  );
+  return row?.remote_folder_id ?? null;
+}
+
 export async function listMessagesByThread(db: Database, threadId: string): Promise<Message[]> {
   const rows = await db.getAllAsync<MessageRow>(
     'SELECT * FROM messages WHERE thread_id = ? ORDER BY received_at ASC, id ASC',

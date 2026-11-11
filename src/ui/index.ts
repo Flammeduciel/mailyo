@@ -77,3 +77,4 @@ export {
   type AttachmentPickerSheetProps,
   type AttachmentSource,
 } from './AttachmentPickerSheet';
+export { ServiceLogo, type ServiceLogoProps } from './ServiceLogo';
