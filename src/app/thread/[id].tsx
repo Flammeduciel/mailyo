@@ -3,6 +3,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Keyboard,
@@ -17,11 +18,12 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Correspondence } from '@/data/repositories/messages';
-import type { Message } from '@/domain/models';
+import type { Attachment, Message } from '@/domain/models';
 import { splitQuotedText } from '@/domain/quote';
 import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
+import { AttachmentViewer } from '@/ui/AttachmentViewer';
 import {
   AppBar,
   AppText,
@@ -50,12 +52,13 @@ function isNoReplyAddress(email: string): boolean {
 
 interface ThreadData {
   messages: Message[];
+  attachments: Record<string, Attachment[]>;
   selfAddress: string;
   /** Reference time for day labels, captured when the data is loaded. */
   now: number;
 }
 
-const INITIAL: ThreadData = { messages: [], selfAddress: '', now: 0 };
+const INITIAL: ThreadData = { messages: [], attachments: {}, selfAddress: '', now: 0 };
 
 type Row =
   | { type: 'message'; key: string; message: Message; showSender: boolean }
@@ -108,6 +111,11 @@ export default function ThreadScreen() {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [keyboardShown, setKeyboardShown] = useState(false);
+  const [viewed, setViewed] = useState<Attachment | null>(null);
+  const resolveAttachment = useCallback(
+    (attachmentId: string) => service.resolveAttachment(attachmentId),
+    [service],
+  );
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardShown(true));
@@ -118,10 +126,11 @@ export default function ThreadScreen() {
     };
   }, []);
 
-  const { data, reload } = useServiceQuery<ThreadData>(async (mailService) => {
+  const { data, loading, reload } = useServiceQuery<ThreadData>(async (mailService) => {
     const messages = await mailService.openThread(id);
     const account = messages[0] ? await mailService.getAccountById(messages[0].accountId) : null;
-    return { messages, selfAddress: account?.emailAddress ?? '', now: Date.now() };
+    const attachments = await mailService.getThreadAttachments(id);
+    return { messages, attachments, selfAddress: account?.emailAddress ?? '', now: Date.now() };
   }, INITIAL);
 
   const self = data.selfAddress.toLowerCase();
@@ -227,9 +236,7 @@ export default function ThreadScreen() {
 
   const jumpTo = useCallback(
     (messageId: string) => {
-      const index = rows.findIndex(
-        (row) => row.type === 'message' && row.message.id === messageId,
-      );
+      const index = rows.findIndex((row) => row.type === 'message' && row.message.id === messageId);
       if (index < 0) {
         return;
       }
@@ -459,6 +466,9 @@ export default function ThreadScreen() {
           quoted={parents.get(message.id)?.adjacent ? undefined : parents.get(message.id)?.quote}
           parentInThread={parents.has(message.id)}
           onQuotePress={jumpTo}
+          attachments={data.attachments[message.id]}
+          onOpenAttachment={setViewed}
+          resolveAttachment={resolveAttachment}
           selected={selected.has(message.id)}
           highlighted={highlighted === message.id}
           onPress={selecting ? () => toggleSelected(message.id) : undefined}
@@ -522,12 +532,18 @@ export default function ThreadScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           onScrollToIndexFailed={() => undefined}
-          ListEmptyComponent={
-            <View style={styles.flip}>
-              <EmptyState title="Conversation vide" description="Aucun message dans ce fil." />
-            </View>
-          }
         />
+
+        {/* Outside the inverted list: inside it, the text came out upside down. */}
+        {rows.length === 0 ? (
+          <View style={styles.overlay} pointerEvents="none">
+            {loading ? (
+              <ActivityIndicator color={colors.primary} size="large" testID="thread-loading" />
+            ) : (
+              <EmptyState title="Conversation vide" description="Aucun message dans ce fil." />
+            )}
+          </View>
+        ) : null}
 
         {noReply ? (
           <View
@@ -567,13 +583,23 @@ export default function ThreadScreen() {
         )}
       </KeyboardAvoidingView>
 
+      <AttachmentViewer
+        attachment={viewed}
+        resolve={resolveAttachment}
+        onClose={() => setViewed(null)}
+      />
+
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
 
       {correspondentAddress ? (
         <ContactSheet
           visible={contactOpen}
           onClose={() => setContactOpen(false)}
-          name={service.getContactDetails(correspondentAddress)?.name || correspondent || correspondentAddress}
+          name={
+            service.getContactDetails(correspondentAddress)?.name ||
+            correspondent ||
+            correspondentAddress
+          }
           address={correspondentAddress}
           photoUri={service.getContactPhoto(correspondentAddress)}
           details={service.getContactDetails(correspondentAddress)}
@@ -617,9 +643,10 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: Radius.md,
   },
-  flip: {
-    transform: [{ scaleY: -1 }],
-    flex: 1,
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   noReplyBanner: {
     flexDirection: 'row',

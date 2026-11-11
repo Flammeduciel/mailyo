@@ -180,5 +180,10 @@ export class MockMailProvider implements MailProvider {
 }
 
 function cloneMessage(message: RemoteMessage): RemoteMessage {
-  return { ...message, to: [...message.to], cc: [...message.cc] };
+  return {
+    ...message,
+    to: [...message.to],
+    cc: [...message.cc],
+    attachments: message.attachments?.map((attachment) => ({ ...attachment })),
+  };
 }

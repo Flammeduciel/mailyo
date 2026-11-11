@@ -53,3 +53,5 @@ export { HtmlMessageView, type HtmlMessageViewProps } from './HtmlMessageView';
 export { openLink } from './open-link';
 export { RichText, type RichTextProps } from './RichText';
 export { SwipeToReply, type SwipeToReplyProps } from './SwipeToReply';
+export { AttachmentList, type AttachmentListProps } from './AttachmentList';
+// AttachmentViewer is imported directly (it pulls native video/PDF modules).

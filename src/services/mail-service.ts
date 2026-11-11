@@ -15,6 +15,12 @@ import {
   insertAccount,
   listAccounts,
 } from '@/data/repositories/accounts';
+import {
+  getAttachment,
+  listAttachmentsByThread,
+  setAttachmentDownloaded,
+  setAttachmentState,
+} from '@/data/repositories/attachments';
 import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
@@ -51,6 +57,7 @@ import {
 import { getAllSettings, setSetting, setSettings } from '@/data/repositories/settings';
 import type {
   Account,
+  Attachment,
   Message,
   NotificationRule,
   ProviderId,
@@ -86,6 +93,7 @@ import type {
 import { GmailApiProvider } from '@/providers/gmail/gmail-api-provider';
 import { fetchGoogleContacts, type ContactDetails } from '@/providers/gmail/google-contacts';
 import { createGmailTokenProvider } from '@/providers/gmail/gmail-tokens';
+import { writeAttachmentToCache, type AttachmentWriter } from '@/services/attachment-files';
 import { ProviderRegistry } from '@/providers/registry';
 import { SyncEngine } from '@/sync/sync-engine';
 
@@ -126,6 +134,8 @@ export interface MailServiceOptions {
   fetchImpl?: typeof fetch;
   now?: () => number;
   fetchLimit?: number;
+  /** Stores downloaded attachment bytes; defaults to the app cache directory. */
+  attachmentWriter?: AttachmentWriter;
 }
 
 export class MailService {
@@ -137,6 +147,7 @@ export class MailService {
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly fetchLimit: number;
+  private readonly attachmentWriter: AttachmentWriter;
   private settings: AppSettings = DEFAULT_SETTINGS;
   private contactPhotos = new Map<string, string>();
   private contactDetails = new Map<string, ContactDetails>();
@@ -152,6 +163,7 @@ export class MailService {
     this.fetchImpl = options.fetchImpl;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
+    this.attachmentWriter = options.attachmentWriter ?? writeAttachmentToCache;
   }
 
   /**
@@ -556,6 +568,47 @@ export class MailService {
     const messages = await listMessagesByThread(this.db, threadId);
     await this.markThreadRead(threadId, true);
     return messages;
+  }
+
+  /** Attachments of a conversation, grouped by message id. */
+  async getThreadAttachments(threadId: string): Promise<Record<string, Attachment[]>> {
+    const grouped: Record<string, Attachment[]> = {};
+    for (const attachment of await listAttachmentsByThread(this.db, threadId)) {
+      (grouped[attachment.messageId] ??= []).push(attachment);
+    }
+    return grouped;
+  }
+
+  /**
+   * A URI the UI can display or open. Returns the cached copy when there is
+   * one, otherwise downloads the attachment through its provider and caches it.
+   */
+  async resolveAttachment(attachmentId: string): Promise<Attachment> {
+    const attachment = await getAttachment(this.db, attachmentId);
+    if (!attachment) {
+      throw new Error('Pièce jointe introuvable.');
+    }
+    if (attachment.localPath) {
+      return attachment;
+    }
+    const message = await getMessage(this.db, attachment.messageId);
+    const provider = message ? this.registry.get(message.accountId) : undefined;
+    if (!message || message.remoteUid === null || !attachment.remotePartId) {
+      throw new Error('Pièce jointe non disponible hors ligne.');
+    }
+    if (!provider?.downloadAttachment) {
+      throw new Error('Ce compte ne permet pas de télécharger les pièces jointes.');
+    }
+    await setAttachmentState(this.db, attachment.id, 'downloading');
+    try {
+      const base64 = await provider.downloadAttachment(message.remoteUid, attachment.remotePartId);
+      const localPath = await this.attachmentWriter(attachment, base64);
+      await setAttachmentDownloaded(this.db, attachment.id, localPath);
+      return { ...attachment, localPath, downloadState: 'downloaded' };
+    } catch (cause) {
+      await setAttachmentState(this.db, attachment.id, 'failed');
+      throw cause;
+    }
   }
 
   async getThreadMessages(threadId: string): Promise<Message[]> {

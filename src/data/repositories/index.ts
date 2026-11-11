@@ -11,3 +11,4 @@ export * from '@/data/repositories/pending-operations';
 export * from '@/data/repositories/rules';
 export * from '@/data/repositories/settings';
 export * from '@/data/repositories/threads';
+export * from '@/data/repositories/attachments';

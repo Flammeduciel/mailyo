@@ -68,7 +68,9 @@
         }
       ],
       "expo-local-authentication",
-      "expo-background-task"
+      "expo-background-task",
+      "expo-video",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

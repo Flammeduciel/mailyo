@@ -53,7 +53,11 @@ describe('gmail codec', () => {
               { mimeType: 'text/html', body: { data: b64url('<p>Bonjour à tous</p>') } },
             ],
           },
-          { mimeType: 'application/pdf', filename: 'ordre.pdf', body: { attachmentId: 'att1' } },
+          {
+            mimeType: 'application/pdf',
+            filename: 'ordre.pdf',
+            body: { attachmentId: 'att1', size: 48213 },
+          },
         ],
       },
     };
@@ -78,6 +82,9 @@ describe('gmail codec', () => {
       isRead: false,
       isStarred: true,
       hasAttachments: true,
+      attachments: [
+        { filename: 'ordre.pdf', mimeType: 'application/pdf', sizeBytes: 48213, remotePartId: 'att1' },
+      ],
       category: 'primary',
     });
   });

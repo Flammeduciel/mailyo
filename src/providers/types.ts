@@ -17,6 +17,20 @@ export interface RemoteFolder {
 }
 
 /** A message as returned by a provider, before local ids/threading are assigned. */
+/** Attachment metadata as announced by the provider. */
+export interface RemoteAttachment {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** Provider handle used by `downloadAttachment` (Gmail attachmentId, MIME part…). */
+  remotePartId: string | null;
+  /**
+   * Directly usable URI (https:, file:, data:) when the content is already
+   * reachable without a download — used by the demo provider.
+   */
+  contentUri?: string | null;
+}
+
 export interface RemoteMessage {
   remoteUid: number;
   folderRemoteId: string;
@@ -34,6 +48,7 @@ export interface RemoteMessage {
   isRead: boolean;
   isStarred: boolean;
   hasAttachments: boolean;
+  attachments?: RemoteAttachment[];
   /** Provider category (Gmail tabs), when the provider has one. */
   category?: MailCategory | null;
 }
@@ -98,6 +113,8 @@ export interface MailProvider {
   star(remoteUid: number, isStarred: boolean): Promise<void>;
   archive(remoteUid: number): Promise<void>;
   moveToTrash(remoteUid: number): Promise<void>;
+  /** Raw bytes (base64) of an attachment, for providers that need a download. */
+  downloadAttachment?(remoteUid: number, remotePartId: string): Promise<string>;
   /**
    * Subscribe to "new message" hints (IMAP IDLE in production). Returns an
    * unsubscribe function. The mock implementation can be driven manually.

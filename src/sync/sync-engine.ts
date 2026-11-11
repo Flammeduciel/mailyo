@@ -15,6 +15,7 @@ import {
   getThreadIdByMessageIdHeader,
   listFolders,
   recomputeThreadAggregates,
+  replaceMessageAttachments,
   updateAccountSyncStatus,
   updateFolderSyncCursor,
   upsertFolder,
@@ -22,7 +23,7 @@ import {
   upsertThread,
 } from '@/data/repositories';
 import type { Database } from '@/data/db/database';
-import type { Account, Folder, Message, Thread } from '@/domain/models';
+import type { Account, Attachment, Folder, Message, Thread } from '@/domain/models';
 import { deterministicId } from '@/domain/ids';
 import { normalizeSubject } from '@/domain/subject';
 import { htmlToText, sanitizeHtml } from '@/domain/sanitize';
@@ -225,13 +226,26 @@ export class SyncEngine {
       receivedAt: remote.receivedAt,
       isRead: remote.isRead,
       isStarred: remote.isStarred,
-      hasAttachments: remote.hasAttachments,
+      hasAttachments: remote.hasAttachments || (remote.attachments?.length ?? 0) > 0,
       syncState: 'synced',
       category: remote.category ?? null,
     };
 
     const isNew = (await getMessage(this.db, message.id)) === null;
     await upsertMessage(this.db, message);
+    if (remote.attachments) {
+      const attachments: Attachment[] = remote.attachments.map((attachment, index) => ({
+        id: `att_${deterministicId(message.id, String(index), attachment.filename)}`,
+        messageId: message.id,
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        remotePartId: attachment.remotePartId,
+        localPath: attachment.contentUri ?? null,
+        downloadState: attachment.contentUri ? 'downloaded' : 'remote',
+      }));
+      await replaceMessageAttachments(this.db, message.id, attachments);
+    }
     await recomputeThreadAggregates(this.db, threadId);
 
     // Make the freshly stored id resolvable for the rest of this batch.

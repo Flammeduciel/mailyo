@@ -2,11 +2,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { Message } from '@/domain/models';
+import type { Attachment, Message } from '@/domain/models';
 import { tidyPlainText } from '@/domain/plain-text';
 import { splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
+import { AttachmentList } from './AttachmentList';
 import { HtmlMessageView } from './HtmlMessageView';
 import { RichText } from './RichText';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
@@ -28,6 +29,9 @@ export interface MessageBubbleProps {
   /** The replied-to message is in the conversation, so the quoted history is redundant. */
   parentInThread?: boolean;
   onQuotePress?: (parentId: string) => void;
+  attachments?: Attachment[];
+  onOpenAttachment?: (attachment: Attachment) => void;
+  resolveAttachment?: (attachmentId: string) => Promise<Attachment>;
   onPress?: () => void;
   onLongPress?: () => void;
   selected?: boolean;
@@ -72,6 +76,9 @@ export function MessageBubble({
   quoted,
   parentInThread = Boolean(quoted),
   onQuotePress,
+  attachments = [],
+  onOpenAttachment,
+  resolveAttachment,
   onPress,
   onLongPress,
   selected = false,
@@ -100,6 +107,7 @@ export function MessageBubble({
         style={[
           styles.bubble,
           html && styles.bubbleWide,
+          attachments.length > 0 && !html ? styles.bubbleAttachments : null,
           quoted && !html ? styles.bubbleQuoting : null,
           isOwn
             ? { backgroundColor: colors.bubbleOutgoing, borderTopRightRadius: Radius.sm / 2 }
@@ -155,6 +163,15 @@ export function MessageBubble({
           </>
         )}
 
+        {attachments.length > 0 ? (
+          <AttachmentList
+            attachments={attachments}
+            onOpen={(attachment) => onOpenAttachment?.(attachment)}
+            resolve={resolveAttachment}
+            testID={testID ? `${testID}-attachments` : undefined}
+          />
+        ) : null}
+
         <View style={styles.footer}>
           {message.isStarred ? (
             <MaterialIcons name="star" size={12} color={colors.textMuted} />
@@ -208,6 +225,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: '100%',
     paddingHorizontal: Spacing.xs,
+  },
+  bubbleAttachments: {
+    minWidth: '70%',
   },
   // A short reply must not squeeze the quoted message into an unreadable sliver.
   bubbleQuoting: {

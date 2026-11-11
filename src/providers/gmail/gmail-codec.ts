@@ -9,7 +9,7 @@
 
 import type { EmailAddress, MailCategory } from '@/domain/models';
 import { parseAddress, parseAddressList } from '@/domain/mime';
-import type { OutgoingMessage, RemoteMessage } from '@/providers/types';
+import type { OutgoingMessage, RemoteAttachment, RemoteMessage } from '@/providers/types';
 
 // ---------------------------------------------------------------------------
 // Byte codecs
@@ -212,6 +212,7 @@ interface ExtractedBody {
   text: string | null;
   html: string | null;
   hasAttachments: boolean;
+  attachments: RemoteAttachment[];
 }
 
 function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
@@ -226,6 +227,12 @@ function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
   }
   if (isAttachment) {
     acc.hasAttachments = true;
+    acc.attachments.push({
+      filename: part.filename || 'Pièce jointe',
+      mimeType: part.mimeType || 'application/octet-stream',
+      sizeBytes: part.body?.size ?? 0,
+      remotePartId: part.body?.attachmentId ?? null,
+    });
     return;
   }
   const data = part.body?.data;
@@ -253,7 +260,7 @@ function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
 export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: string): RemoteMessage {
   const headers = message.payload?.headers;
   const from = parseAddress(header(headers, 'From') ?? '') ?? { name: '', address: '' };
-  const body: ExtractedBody = { text: null, html: null, hasAttachments: false };
+  const body: ExtractedBody = { text: null, html: null, hasAttachments: false, attachments: [] };
   if (message.payload) {
     walkParts(message.payload, body);
   }
@@ -277,6 +284,7 @@ export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: stri
     isRead: !labels.includes('UNREAD'),
     isStarred: labels.includes('STARRED'),
     hasAttachments: body.hasAttachments,
+    attachments: body.attachments,
     category: gmailCategory(labels),
   };
 }

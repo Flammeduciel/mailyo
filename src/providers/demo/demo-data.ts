@@ -91,6 +91,29 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
       isRead: false,
       isStarred: true,
       hasAttachments: true,
+      attachments: [
+        {
+          filename: 'ordre-du-jour.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 13_264,
+          remotePartId: null,
+          contentUri: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        },
+        {
+          filename: 'salle-de-reunion.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 348_160,
+          remotePartId: null,
+          contentUri: 'https://picsum.photos/id/237/800/600.jpg',
+        },
+        {
+          filename: 'visite-des-locaux.mp4',
+          mimeType: 'video/mp4',
+          sizeBytes: 1_057_149,
+          remotePartId: null,
+          contentUri: 'https://download.samplelib.com/mp4/sample-5s.mp4',
+        },
+      ],
     },
     {
       remoteUid: 2,

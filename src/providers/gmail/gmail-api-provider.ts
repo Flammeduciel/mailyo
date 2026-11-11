@@ -222,6 +222,19 @@ export class GmailApiProvider implements MailProvider {
     return ids;
   }
 
+  /** Attachment content as standard base64 (Gmail returns base64url). */
+  async downloadAttachment(remoteUid: number, remotePartId: string): Promise<string> {
+    const gmailId = await this.resolveGmailId(remoteUid);
+    const data = (await this.requestJson(
+      `/messages/${gmailId}/attachments/${encodeURIComponent(remotePartId)}`,
+    )) as { data?: string };
+    if (!data.data) {
+      throw new GmailApiError('Pièce jointe introuvable sur Gmail', 404);
+    }
+    const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
+    return base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  }
+
   private async getMessage(id: string): Promise<GmailMessage> {
     return (await this.requestJson(`/messages/${id}?format=full`)) as GmailMessage;
   }
