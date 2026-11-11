@@ -225,8 +225,16 @@ export function ContactSheet({
                     label="Échanges"
                     value={`${stats.received} reçu${stats.received > 1 ? 's' : ''} · ${stats.sent} envoyé${stats.sent > 1 ? 's' : ''}`}
                   />
-                  <DetailRow icon="history" label="Premier échange" value={formatDate(stats.firstAt)} />
-                  <DetailRow icon="schedule" label="Dernier échange" value={formatDate(stats.lastAt)} />
+                  <DetailRow
+                    icon="history"
+                    label="Premier échange"
+                    value={formatDate(stats.firstAt)}
+                  />
+                  <DetailRow
+                    icon="schedule"
+                    label="Dernier échange"
+                    value={formatDate(stats.lastAt)}
+                  />
                 </View>
               ) : null}
             </ScrollView>
@@ -237,7 +245,15 @@ export function ContactSheet({
   );
 }
 
-function SheetAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function SheetAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) {
   const colors = useAppTheme();
   return (
     <Pressable

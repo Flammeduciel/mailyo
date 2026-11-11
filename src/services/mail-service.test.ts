@@ -84,6 +84,27 @@ describe('MailService', () => {
     );
   });
 
+  it('lists demo attachments and backfills the ones of older mails', async () => {
+    const { service, db } = await bootstrap();
+    const threads = await service.listConversations();
+    const meeting = threads.find((t) => t.normalizedSubject.includes('réunion'));
+    expect(meeting).toBeDefined();
+
+    const grouped = await service.getThreadAttachments(meeting!.id);
+    const files = Object.values(grouped).flat();
+    expect(files.map((f) => f.filename)).toEqual([
+      'ordre-du-jour.pdf',
+      'salle-de-reunion.jpg',
+      'visite-des-locaux.mp4',
+    ]);
+    expect(files[0].sizeBytes).toBe(13_264);
+
+    // A mail synced before attachments were stored only has the flag.
+    await db.runAsync('DELETE FROM attachments');
+    const backfilled = Object.values(await service.getThreadAttachments(meeting!.id)).flat();
+    expect(backfilled).toHaveLength(3);
+  });
+
   it('finds messages with the FTS index', async () => {
     const { service } = await bootstrap();
 
@@ -164,7 +185,12 @@ describe('MailService OAuth accounts', () => {
     };
     await insertAccount(db, { ...base, id: 'dup-1', createdAt: NOW });
     await insertAccount(db, { ...base, id: 'dup-2', createdAt: NOW + 1 });
-    await insertAccount(db, { ...base, id: 'dup-3', emailAddress: 'A@gmail.com', createdAt: NOW + 2 });
+    await insertAccount(db, {
+      ...base,
+      id: 'dup-3',
+      emailAddress: 'A@gmail.com',
+      createdAt: NOW + 2,
+    });
     await tokenStore.save('dup-2', tokens);
 
     await service.loadState();

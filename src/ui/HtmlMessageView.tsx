@@ -9,8 +9,6 @@ import { Radius, Spacing, useAppTheme } from './theme';
 export interface HtmlMessageViewProps {
   /** Already sanitised HTML (`sanitizeHtml`). */
   html: string;
-  /** Height before "Afficher plus". */
-  collapsedHeight?: number;
   /** Offer the quoted-history toggle (off when the parent is already shown). */
   allowHistory?: boolean;
   testID?: string;
@@ -78,16 +76,10 @@ function buildDocument(html: string, textColor: string, linkColor: string): stri
  * a chat bubble. Emails are designed for light backgrounds, so the content
  * always sits on a white card, even in dark mode.
  */
-export function HtmlMessageView({
-  html,
-  collapsedHeight = 420,
-  allowHistory = true,
-  testID,
-}: HtmlMessageViewProps) {
+export function HtmlMessageView({ html, allowHistory = true, testID }: HtmlMessageViewProps) {
   const colors = useAppTheme();
   const webView = useRef<WebView>(null);
   const [height, setHeight] = useState(60);
-  const [expanded, setExpanded] = useState(false);
   const [hasQuote, setHasQuote] = useState(false);
   const [quotesShown, setQuotesShown] = useState(false);
 
@@ -117,12 +109,9 @@ export function HtmlMessageView({
     return false;
   }, []);
 
-  const clipped = !expanded && height > collapsedHeight;
-  const visibleHeight = clipped ? collapsedHeight : height;
-
   return (
     <View testID={testID}>
-      <View style={[styles.card, { height: visibleHeight }]}>
+      <View style={[styles.card, { height }]}>
         <WebView
           ref={webView}
           originWhitelist={['*']}
@@ -141,13 +130,6 @@ export function HtmlMessageView({
         />
       </View>
       <View style={styles.links}>
-        {clipped || (expanded && height > collapsedHeight) ? (
-          <Pressable onPress={() => setExpanded((value) => !value)} hitSlop={Spacing.sm}>
-            <AppText variant="caption" weight="semibold" style={{ color: colors.link }}>
-              {expanded ? 'Réduire' : 'Afficher plus'}
-            </AppText>
-          </Pressable>
-        ) : null}
         {hasQuote && allowHistory ? (
           <Pressable
             onPress={() => {

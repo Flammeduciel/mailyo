@@ -83,7 +83,12 @@ describe('gmail codec', () => {
       isStarred: true,
       hasAttachments: true,
       attachments: [
-        { filename: 'ordre.pdf', mimeType: 'application/pdf', sizeBytes: 48213, remotePartId: 'att1' },
+        {
+          filename: 'ordre.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 48213,
+          remotePartId: 'att1',
+        },
       ],
       category: 'primary',
     });

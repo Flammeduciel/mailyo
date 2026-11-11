@@ -12,6 +12,10 @@ describe('app settings', () => {
       defaultSoundId: 'urgent',
       quietHours: { startHour: 22, endHour: 6 },
       theme: 'dark' as const,
+      autoPreviewMaxMb: 1.5,
+      cellularConfirmMb: 0,
+      blockRemoteImages: false,
+      offlineStarredAttachments: true,
     };
     expect(parseAppSettings(serializeAppSettings(settings))).toEqual(settings);
   });

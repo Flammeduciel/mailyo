@@ -106,25 +106,21 @@ export default function LoginScreen() {
     <Screen>
       <Header title="Ajouter un compte" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
-
         {/* Intro */}
         <AppText variant="body" color="textSecondary" style={styles.intro}>
           Choisissez votre fournisseur de messagerie pour connecter votre boîte mail.
         </AppText>
 
         {/* Provider list */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
           {providers.map((provider, index) => (
             <View key={provider.id}>
               {index > 0 ? (
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
               ) : null}
-              <View
-                style={[
-                  styles.providerRow,
-                  !provider.available && styles.providerRowDisabled,
-                ]}
-              >
+              <View style={[styles.providerRow, !provider.available && styles.providerRowDisabled]}>
                 {/* Icon */}
                 <View style={[styles.providerIcon, { backgroundColor: provider.iconBg }]}>
                   <MaterialIcons
@@ -172,7 +168,12 @@ export default function LoginScreen() {
         {/* Connected accounts */}
         {accounts.length > 0 ? (
           <>
-            <AppText variant="caption" weight="semibold" color="textSecondary" style={styles.sectionLabel}>
+            <AppText
+              variant="caption"
+              weight="semibold"
+              color="textSecondary"
+              style={styles.sectionLabel}
+            >
               COMPTES CONNECTÉS
             </AppText>
             <View
@@ -215,7 +216,6 @@ export default function LoginScreen() {
             {message}
           </AppText>
         ) : null}
-
       </ScrollView>
     </Screen>
   );

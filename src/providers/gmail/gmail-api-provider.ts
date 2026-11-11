@@ -17,6 +17,7 @@ import type {
   FetchOlderMessagesInput,
   MailProvider,
   OutgoingMessage,
+  RemoteAttachment,
   RemoteFolder,
   RemoteMessage,
   SendResult,
@@ -220,6 +221,12 @@ export class GmailApiProvider implements MailProvider {
       pageToken = data.nextPageToken;
     } while (pageToken && ids.length < max);
     return ids;
+  }
+
+  async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {
+    const gmailId = await this.resolveGmailId(remoteUid);
+    const message = await this.getMessage(gmailId);
+    return gmailMessageToRemote(message, 'INBOX').attachments ?? [];
   }
 
   /** Attachment content as standard base64 (Gmail returns base64url). */

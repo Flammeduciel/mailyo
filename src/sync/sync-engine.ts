@@ -27,13 +27,22 @@ import type { Account, Attachment, Folder, Message, Thread } from '@/domain/mode
 import { deterministicId } from '@/domain/ids';
 import { normalizeSubject } from '@/domain/subject';
 import { htmlToText, sanitizeHtml } from '@/domain/sanitize';
-import {
-  computeThreadKey,
-  parseMessageIds,
-  scopedThreadId,
-  threadKeyOf,
-} from '@/domain/threading';
-import type { MailProvider, RemoteMessage } from '@/providers/types';
+import { computeThreadKey, parseMessageIds, scopedThreadId, threadKeyOf } from '@/domain/threading';
+import type { MailProvider, RemoteAttachment, RemoteMessage } from '@/providers/types';
+
+/** Provider attachment metadata → local rows with stable ids. */
+export function toLocalAttachments(messageId: string, remote: RemoteAttachment[]): Attachment[] {
+  return remote.map((attachment, index) => ({
+    id: `att_${deterministicId(messageId, String(index), attachment.filename)}`,
+    messageId,
+    filename: attachment.filename,
+    mimeType: attachment.mimeType,
+    sizeBytes: attachment.sizeBytes,
+    remotePartId: attachment.remotePartId,
+    localPath: attachment.contentUri ?? null,
+    downloadState: attachment.contentUri ? 'downloaded' : 'remote',
+  }));
+}
 
 export interface SyncResult {
   added: Message[];
@@ -234,16 +243,7 @@ export class SyncEngine {
     const isNew = (await getMessage(this.db, message.id)) === null;
     await upsertMessage(this.db, message);
     if (remote.attachments) {
-      const attachments: Attachment[] = remote.attachments.map((attachment, index) => ({
-        id: `att_${deterministicId(message.id, String(index), attachment.filename)}`,
-        messageId: message.id,
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        sizeBytes: attachment.sizeBytes,
-        remotePartId: attachment.remotePartId,
-        localPath: attachment.contentUri ?? null,
-        downloadState: attachment.contentUri ? 'downloaded' : 'remote',
-      }));
+      const attachments = toLocalAttachments(message.id, remote.attachments);
       await replaceMessageAttachments(this.db, message.id, attachments);
     }
     await recomputeThreadAggregates(this.db, threadId);

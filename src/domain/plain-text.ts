@@ -3,7 +3,8 @@
  * hard-wrap at ~76 columns and decorate with `*bold*` and `text <url>` pairs.
  */
 
-const DUPLICATED_TARGET = /([\w.+-]+@[\w-]+(?:\.[\w-]+)+|https?:\/\/[^\s<>*]+)(\*?)\s*<(?:mailto:)?\1>/gi;
+const DUPLICATED_TARGET =
+  /([\w.+-]+@[\w-]+(?:\.[\w-]+)+|https?:\/\/[^\s<>*]+)(\*?)\s*<(?:mailto:)?\1>/gi;
 
 /**
  * - drops the `<target>` repeat after an address or URL;

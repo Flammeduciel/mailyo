@@ -129,7 +129,8 @@ const TAB_CATEGORIES: Record<Exclude<ConversationTab, 'favoris'>, MailCategory[]
 const FROM_OTHER = `lower(m.sender_address) <> COALESCE(
    (SELECT lower(a.email_address) FROM accounts a WHERE a.id = t.account_id), '')`;
 
-const IS_STARRED ='EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.is_starred = 1)';
+const IS_STARRED =
+  'EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.is_starred = 1)';
 
 export interface ListThreadSummariesOptions {
   accountId?: string;

@@ -81,7 +81,9 @@ function detailsOf(person: PeoplePerson, saved: boolean): ContactDetails {
       .filter(Boolean),
     organization: organization?.name ?? null,
     jobTitle: organization?.title ?? null,
-    addresses: (person.addresses ?? []).map((address) => address.formattedValue ?? '').filter(Boolean),
+    addresses: (person.addresses ?? [])
+      .map((address) => address.formattedValue ?? '')
+      .filter(Boolean),
     birthday: birthdayOf(person),
     saved,
   };

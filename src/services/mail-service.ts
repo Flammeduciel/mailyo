@@ -18,6 +18,7 @@ import {
 import {
   getAttachment,
   listAttachmentsByThread,
+  replaceMessageAttachments,
   setAttachmentDownloaded,
   setAttachmentState,
 } from '@/data/repositories/attachments';
@@ -95,7 +96,7 @@ import { fetchGoogleContacts, type ContactDetails } from '@/providers/gmail/goog
 import { createGmailTokenProvider } from '@/providers/gmail/gmail-tokens';
 import { writeAttachmentToCache, type AttachmentWriter } from '@/services/attachment-files';
 import { ProviderRegistry } from '@/providers/registry';
-import { SyncEngine } from '@/sync/sync-engine';
+import { SyncEngine, toLocalAttachments } from '@/sync/sync-engine';
 
 const THREADING_VERSION_KEY = 'threading.version';
 const THREADING_VERSION = '2';
@@ -572,11 +573,41 @@ export class MailService {
 
   /** Attachments of a conversation, grouped by message id. */
   async getThreadAttachments(threadId: string): Promise<Record<string, Attachment[]>> {
+    await this.backfillThreadAttachments(threadId);
     const grouped: Record<string, Attachment[]> = {};
     for (const attachment of await listAttachmentsByThread(this.db, threadId)) {
       (grouped[attachment.messageId] ??= []).push(attachment);
     }
     return grouped;
+  }
+
+  /**
+   * Mails synced before attachments were stored only carry the paperclip flag:
+   * fetch their attachment list once, when the conversation is opened.
+   */
+  private async backfillThreadAttachments(threadId: string): Promise<void> {
+    const known = new Set(
+      (await listAttachmentsByThread(this.db, threadId)).map((a) => a.messageId),
+    );
+    for (const message of await listMessagesByThread(this.db, threadId)) {
+      if (!message.hasAttachments || known.has(message.id) || message.remoteUid === null) {
+        continue;
+      }
+      const provider = this.registry.get(message.accountId);
+      if (!provider?.fetchAttachments) {
+        continue;
+      }
+      try {
+        const remote = await provider.fetchAttachments(message.remoteUid);
+        await replaceMessageAttachments(
+          this.db,
+          message.id,
+          toLocalAttachments(message.id, remote),
+        );
+      } catch {
+        // Offline or message gone: keep the paperclip only, retry next time.
+      }
+    }
   }
 
   /**

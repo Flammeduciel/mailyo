@@ -42,7 +42,8 @@ function AppShell() {
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="archived" options={{ headerShown: false }} />
           <Stack.Screen name="rules/edit" options={{ headerShown: false }} />
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />        </Stack>
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />{' '}
+        </Stack>
       )}
     </ThemeProvider>
   );

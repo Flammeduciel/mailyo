@@ -13,6 +13,7 @@ import type {
   MailProvider,
   OutgoingMessage,
   RemoteFolder,
+  RemoteAttachment,
   RemoteMessage,
   SendResult,
   SendStatus,
@@ -166,6 +167,10 @@ export class MockMailProvider implements MailProvider {
   /** Change UIDVALIDITY (simulates a folder renumbering). */
   setUidValidity(uidValidity: number): void {
     this.uidValidity = uidValidity;
+  }
+
+  async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {
+    return (this.findMessage(remoteUid)?.attachments ?? []).map((a) => ({ ...a }));
   }
 
   private findMessage(remoteUid: number): RemoteMessage | undefined {

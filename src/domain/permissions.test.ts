@@ -3,7 +3,9 @@ import { describePermissions } from '@/domain/permissions';
 describe('describePermissions', () => {
   it('labels granted scopes and flags missing contact access', () => {
     expect(
-      describePermissions('https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email openid'),
+      describePermissions(
+        'https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email openid',
+      ),
     ).toEqual([
       { label: 'Mails : lecture et envoi', granted: true },
       { label: 'Adresse e-mail', granted: true },

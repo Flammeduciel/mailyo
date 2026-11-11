@@ -3,7 +3,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Keyboard,
@@ -23,11 +22,14 @@ import { splitQuotedText } from '@/domain/quote';
 import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
+import { useAttachmentActions } from '@/state/use-attachment-actions';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
+import { formatFileSize } from '@/domain/attachments';
 import {
   AppBar,
   AppText,
   Avatar,
+  ThreadSkeleton,
   ChatComposer,
   ContactSheet,
   EmptyState,
@@ -111,11 +113,10 @@ export default function ThreadScreen() {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [keyboardShown, setKeyboardShown] = useState(false);
-  const [viewed, setViewed] = useState<Attachment | null>(null);
-  const resolveAttachment = useCallback(
-    (attachmentId: string) => service.resolveAttachment(attachmentId),
-    [service],
-  );
+  const [viewedIndex, setViewedIndex] = useState<number | null>(null);
+  const attachmentActions = useAttachmentActions();
+  const resolveAttachment = attachmentActions.resolve;
+  const autoPreviewMaxBytes = service.getSettings().autoPreviewMaxMb * 1024 * 1024;
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardShown(true));
@@ -132,6 +133,20 @@ export default function ThreadScreen() {
     const attachments = await mailService.getThreadAttachments(id);
     return { messages, attachments, selfAddress: account?.emailAddress ?? '', now: Date.now() };
   }, INITIAL);
+
+  // Every attachment of the conversation, oldest first: the viewer swipes through them.
+  const allAttachments = useMemo(
+    () => data.messages.flatMap((message) => data.attachments[message.id] ?? []),
+    [data.messages, data.attachments],
+  );
+  const openAttachment = useCallback(
+    (attachment: Attachment) => {
+      const index = allAttachments.findIndex((item) => item.id === attachment.id);
+      setViewedIndex(index >= 0 ? index : null);
+    },
+    [allAttachments],
+  );
+  const attachmentsSize = allAttachments.reduce((sum, item) => sum + item.sizeBytes, 0);
 
   const self = data.selfAddress.toLowerCase();
   const isOwn = useCallback(
@@ -257,14 +272,14 @@ export default function ThreadScreen() {
   const [contactOpen, setContactOpen] = useState(false);
   const [correspondence, setCorrespondence] = useState<Correspondence>();
 
-  const openContactProfile = useCallback(() => {
+  const openContactProfile = () => {
     if (!correspondentAddress) {
       return;
     }
     Keyboard.dismiss();
     setContactOpen(true);
     void service.getCorrespondence(correspondentAddress).then(setCorrespondence);
-  }, [correspondentAddress, service]);
+  };
 
   const onSend = useCallback(async () => {
     const body = draft.trim();
@@ -467,8 +482,11 @@ export default function ThreadScreen() {
           parentInThread={parents.has(message.id)}
           onQuotePress={jumpTo}
           attachments={data.attachments[message.id]}
-          onOpenAttachment={setViewed}
+          onOpenAttachment={openAttachment}
           resolveAttachment={resolveAttachment}
+          onSaveAttachment={(attachment) => void attachmentActions.save(attachment)}
+          attachmentProgress={attachmentActions.progress}
+          autoPreviewMaxBytes={autoPreviewMaxBytes}
           selected={selected.has(message.id)}
           highlighted={highlighted === message.id}
           onPress={selecting ? () => toggleSelected(message.id) : undefined}
@@ -524,6 +542,28 @@ export default function ThreadScreen() {
         behavior="padding"
         style={[styles.body, { backgroundColor: colors.chatBackground }]}
       >
+        {allAttachments.length > 0 ? (
+          <Pressable
+            onPress={() => router.push({ pathname: '/files/[id]', params: { id } })}
+            style={[
+              styles.filesBar,
+              { backgroundColor: colors.surface, borderBottomColor: colors.border },
+            ]}
+            accessibilityRole="button"
+            testID="thread-files"
+          >
+            <MaterialIcons name="attach-file" size={18} color={colors.primary} />
+            <AppText variant="caption" weight="semibold" style={styles.filesText}>
+              {allAttachments.length} pièce{allAttachments.length > 1 ? 's' : ''} jointe
+              {allAttachments.length > 1 ? 's' : ''} · {formatFileSize(attachmentsSize)}
+            </AppText>
+            <AppText variant="caption" style={{ color: colors.link }}>
+              Voir tout
+            </AppText>
+            <MaterialIcons name="chevron-right" size={18} color={colors.link} />
+          </Pressable>
+        ) : null}
+
         <FlatList
           ref={list}
           inverted
@@ -538,7 +578,7 @@ export default function ThreadScreen() {
         {rows.length === 0 ? (
           <View style={styles.overlay} pointerEvents="none">
             {loading ? (
-              <ActivityIndicator color={colors.primary} size="large" testID="thread-loading" />
+              <ThreadSkeleton />
             ) : (
               <EmptyState title="Conversation vide" description="Aucun message dans ce fil." />
             )}
@@ -584,9 +624,14 @@ export default function ThreadScreen() {
       </KeyboardAvoidingView>
 
       <AttachmentViewer
-        attachment={viewed}
+        attachments={allAttachments}
+        index={viewedIndex}
         resolve={resolveAttachment}
-        onClose={() => setViewed(null)}
+        allowDownload={attachmentActions.allowDownload}
+        onSave={(attachment) => void attachmentActions.save(attachment)}
+        onShare={(attachment) => void attachmentActions.share(attachment)}
+        progress={attachmentActions.progress}
+        onClose={() => setViewedIndex(null)}
       />
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
@@ -642,6 +687,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
     borderRadius: Radius.md,
+  },
+  filesBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  filesText: {
+    flex: 1,
   },
   overlay: {
     ...StyleSheet.absoluteFill,

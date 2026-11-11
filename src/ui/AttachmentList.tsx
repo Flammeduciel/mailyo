@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import {
   attachmentKind,
@@ -13,6 +13,7 @@ import type { Attachment } from '@/domain/models';
 
 import { AppText } from './AppText';
 import { Radius, Spacing, useAppTheme } from './theme';
+import { VideoThumbnail } from './VideoThumbnail';
 
 const KIND_ICON: Record<AttachmentKind, keyof typeof MaterialIcons.glyphMap> = {
   image: 'image',
@@ -24,18 +25,29 @@ const KIND_ICON: Record<AttachmentKind, keyof typeof MaterialIcons.glyphMap> = {
   file: 'insert-drive-file',
 };
 
-/** Images below this size are fetched automatically to show a thumbnail. */
-const AUTO_PREVIEW_MAX_BYTES = 3 * 1024 * 1024;
-
 export interface AttachmentListProps {
   attachments: Attachment[];
   onOpen: (attachment: Attachment) => void;
   /** Downloads (if needed) and returns the attachment with a `localPath`. */
   resolve?: (attachmentId: string) => Promise<Attachment>;
+  /** Images up to this size are fetched automatically for a thumbnail (0 = never). */
+  autoPreviewMaxBytes?: number;
+  /** Save a copy on the device. */
+  onSave?: (attachment: Attachment) => void;
+  /** Attachment being downloaded, with its ratio when known. */
+  progress?: { id: string; ratio: number | null } | null;
   testID?: string;
 }
 
-export function AttachmentList({ attachments, onOpen, resolve, testID }: AttachmentListProps) {
+export function AttachmentList({
+  attachments,
+  onOpen,
+  resolve,
+  autoPreviewMaxBytes = 3 * 1024 * 1024,
+  onSave,
+  progress,
+  testID,
+}: AttachmentListProps) {
   if (attachments.length === 0) {
     return null;
   }
@@ -47,6 +59,9 @@ export function AttachmentList({ attachments, onOpen, resolve, testID }: Attachm
           attachment={attachment}
           onOpen={onOpen}
           resolve={resolve}
+          autoPreviewMaxBytes={autoPreviewMaxBytes}
+          onSave={onSave}
+          progress={progress?.id === attachment.id ? progress : null}
         />
       ))}
     </View>
@@ -57,10 +72,16 @@ function AttachmentTile({
   attachment,
   onOpen,
   resolve,
+  autoPreviewMaxBytes,
+  onSave,
+  progress,
 }: {
   attachment: Attachment;
   onOpen: (attachment: Attachment) => void;
   resolve?: (attachmentId: string) => Promise<Attachment>;
+  autoPreviewMaxBytes: number;
+  onSave?: (attachment: Attachment) => void;
+  progress: { id: string; ratio: number | null } | null;
 }) {
   const colors = useAppTheme();
   const kind = attachmentKind(attachment.mimeType, attachment.filename);
@@ -72,7 +93,7 @@ function AttachmentTile({
       kind !== 'image' ||
       attachment.localPath ||
       !resolve ||
-      attachment.sizeBytes > AUTO_PREVIEW_MAX_BYTES
+      attachment.sizeBytes > autoPreviewMaxBytes
     ) {
       return;
     }
@@ -85,7 +106,14 @@ function AttachmentTile({
     return () => {
       cancelled = true;
     };
-  }, [attachment.id, attachment.localPath, attachment.sizeBytes, kind, resolve]);
+  }, [
+    attachment.id,
+    attachment.localPath,
+    attachment.sizeBytes,
+    autoPreviewMaxBytes,
+    kind,
+    resolve,
+  ]);
 
   const localPath = attachment.localPath ?? (fetched?.id === attachment.id ? fetched.path : null);
 
@@ -103,9 +131,7 @@ function AttachmentTile({
       {showImage ? (
         <Image source={{ uri: localPath }} style={styles.image} contentFit="cover" />
       ) : kind === 'video' ? (
-        <View style={[styles.image, styles.videoBox]}>
-          <MaterialIcons name="play-circle-filled" size={44} color="#FFFFFF" />
-        </View>
+        <VideoThumbnail uri={localPath} style={styles.image} />
       ) : null}
       <View style={styles.info}>
         <View style={[styles.iconBox, { backgroundColor: colors.primaryContainer }]}>
@@ -121,8 +147,30 @@ function AttachmentTile({
           </AppText>
           <AppText variant="caption" color="textMuted">
             {meta}
+            {attachment.localPath && !/^https?:/i.test(attachment.localPath) ? ' · Téléchargé' : ''}
           </AppText>
         </View>
+        {progress ? (
+          <View style={styles.save}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            {progress.ratio !== null ? (
+              <AppText variant="caption" color="textMuted">
+                {Math.round(progress.ratio * 100)} %
+              </AppText>
+            ) : null}
+          </View>
+        ) : onSave ? (
+          <Pressable
+            onPress={() => onSave(attachment)}
+            accessibilityRole="button"
+            accessibilityLabel={`Télécharger ${attachment.filename}`}
+            hitSlop={Spacing.sm}
+            style={styles.save}
+            testID={`attachment-save-${attachment.id}`}
+          >
+            <MaterialIcons name="file-download" size={22} color={colors.primary} />
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -141,10 +189,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 150,
   },
-  videoBox: {
-    backgroundColor: '#1F2933',
+  save: {
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 32,
   },
   info: {
     flexDirection: 'row',

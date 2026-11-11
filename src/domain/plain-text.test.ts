@@ -3,7 +3,9 @@ import { splitEmphasis, tidyPlainText } from '@/domain/plain-text';
 describe('tidyPlainText', () => {
   it('re-joins lines wrapped mid-sentence', () => {
     expect(
-      tidyPlainText('stage chez AKIENI. Finalement au\nmilieu\ndu KO congolais.\nConcernant l’appli'),
+      tidyPlainText(
+        'stage chez AKIENI. Finalement au\nmilieu\ndu KO congolais.\nConcernant l’appli',
+      ),
     ).toBe('stage chez AKIENI. Finalement au milieu du KO congolais.\nConcernant l’appli');
   });
 

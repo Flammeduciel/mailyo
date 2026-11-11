@@ -115,6 +115,8 @@ export interface MailProvider {
   moveToTrash(remoteUid: number): Promise<void>;
   /** Raw bytes (base64) of an attachment, for providers that need a download. */
   downloadAttachment?(remoteUid: number, remotePartId: string): Promise<string>;
+  /** Attachment list of an already synced message (backfill for older mails). */
+  fetchAttachments?(remoteUid: number): Promise<RemoteAttachment[]>;
   /**
    * Subscribe to "new message" hints (IMAP IDLE in production). Returns an
    * unsubscribe function. The mock implementation can be driven manually.

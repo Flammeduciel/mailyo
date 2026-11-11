@@ -32,6 +32,9 @@ export interface MessageBubbleProps {
   attachments?: Attachment[];
   onOpenAttachment?: (attachment: Attachment) => void;
   resolveAttachment?: (attachmentId: string) => Promise<Attachment>;
+  onSaveAttachment?: (attachment: Attachment) => void;
+  attachmentProgress?: { id: string; ratio: number | null } | null;
+  autoPreviewMaxBytes?: number;
   onPress?: () => void;
   onLongPress?: () => void;
   selected?: boolean;
@@ -79,6 +82,9 @@ export function MessageBubble({
   attachments = [],
   onOpenAttachment,
   resolveAttachment,
+  onSaveAttachment,
+  attachmentProgress,
+  autoPreviewMaxBytes,
   onPress,
   onLongPress,
   selected = false,
@@ -99,6 +105,7 @@ export function MessageBubble({
       delayLongPress={300}
       style={[
         styles.container,
+        html && styles.containerWide,
         isOwn ? styles.containerOwn : styles.containerIncoming,
         (selected || highlighted) && { backgroundColor: colors.primaryContainer + 'AA' },
       ]}
@@ -168,6 +175,9 @@ export function MessageBubble({
             attachments={attachments}
             onOpen={(attachment) => onOpenAttachment?.(attachment)}
             resolve={resolveAttachment}
+            onSave={onSaveAttachment}
+            progress={attachmentProgress}
+            autoPreviewMaxBytes={autoPreviewMaxBytes}
             testID={testID ? `${testID}-attachments` : undefined}
           />
         ) : null}
@@ -200,6 +210,10 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: Spacing.md,
     paddingVertical: 2,
+  },
+  // HTML mails use the whole screen width: no side gutter.
+  containerWide: {
+    paddingHorizontal: Spacing.xs,
   },
   containerOwn: {
     alignItems: 'flex-end',
