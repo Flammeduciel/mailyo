@@ -6,6 +6,7 @@ import {
   getMessage,
   getThreadIdByMessageIdHeader,
   listMessages,
+  listCorrespondents,
   listMessagesByThread,
   searchMessages,
   setMessageRead,
@@ -168,5 +169,37 @@ describe('messages repository', () => {
     expect((await searchMessages(db, 'INVOICE')).map((m) => m.id)).toEqual(['m1']);
     expect((await searchMessages(db, 'payment')).map((m) => m.id)).toEqual(['m2']);
     expect((await searchMessages(db, 'billing@example')).map((m) => m.id)).toEqual(['m3']);
+  });
+
+  it('lists correspondents from senders and recipients, most recent first', async () => {
+    await upsertMessage(
+      db,
+      message({ id: 'a', remoteUid: 11, senderAddress: 'bob@example.com', receivedAt: 10 }),
+    );
+    await upsertMessage(
+      db,
+      message({
+        id: 'b',
+        remoteUid: 12,
+        senderName: 'Me',
+        senderAddress: 'me@example.com',
+        to: [{ name: 'Zoé', address: 'zoe@example.com' }],
+        cc: [],
+        receivedAt: 30,
+      }),
+    );
+    await upsertMessage(
+      db,
+      message({ id: 'c', remoteUid: 13, senderAddress: 'BOB@example.com', receivedAt: 20, cc: [] }),
+    );
+    const list = await listCorrespondents(db, ['me@example.com']);
+    expect(list.map((c) => c.address.toLowerCase())).toEqual([
+      'zoe@example.com',
+      'bob@example.com',
+      'alice@example.com',
+      'carol@example.com',
+    ]);
+    expect(list[0]).toMatchObject({ name: 'Zoé', count: 1 });
+    expect(list[1]).toMatchObject({ name: 'Bob', count: 2, lastAt: 20 });
   });
 });

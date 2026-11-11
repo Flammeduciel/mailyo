@@ -39,6 +39,7 @@ import {
   findMessageIdHeaderByRemoteUid,
   getMessage,
   getCorrespondence,
+  listCorrespondents,
   getThreadIdByMessageIdHeader,
   listThreadingRows,
   type Correspondence,
@@ -75,6 +76,7 @@ import type {
   ProviderId,
   ThreadSummary,
 } from '@/domain/models';
+import type { ContactSuggestion } from '@/domain/contacts';
 import { createId, deterministicId } from '@/domain/ids';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
@@ -276,6 +278,31 @@ export class MailService {
   }
 
   /** How much mail was exchanged with an address, across all accounts. */
+  /**
+   * Recipient suggestions: everyone mail was exchanged with (most recent
+   * first), then saved Google contacts never written to. Names prefer the
+   * saved contact name.
+   */
+  async listContacts(): Promise<ContactSuggestion[]> {
+    const accounts = await listAccounts(this.db);
+    const correspondents = await listCorrespondents(
+      this.db,
+      accounts.map((account) => account.emailAddress),
+    );
+    const seen = new Set<string>();
+    const result: ContactSuggestion[] = correspondents.map((c) => {
+      seen.add(c.address.toLowerCase());
+      const saved = this.contactDetails.get(c.address.toLowerCase())?.name;
+      return { name: saved || c.name, address: c.address, count: c.count, lastAt: c.lastAt };
+    });
+    for (const [address, details] of this.contactDetails) {
+      if (!seen.has(address) && details.saved) {
+        result.push({ name: details.name ?? '', address, count: 0, lastAt: null });
+      }
+    }
+    return result;
+  }
+
   async getCorrespondence(emailAddress: string): Promise<Correspondence> {
     return getCorrespondence(this.db, emailAddress);
   }

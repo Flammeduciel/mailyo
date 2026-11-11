@@ -1,10 +1,12 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { formatFileSize } from '@/domain/attachments';
-import type { Draft } from '@/domain/models';
+import type { ContactSuggestion } from '@/domain/contacts';
+import { parseAddressList } from '@/domain/mime';
+import type { Draft, EmailAddress } from '@/domain/models';
 import type { PickedAttachment } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
 import { pickAttachments } from '@/state/pick-attachments';
@@ -15,6 +17,7 @@ import {
   Button,
   Header,
   Radius,
+  RecipientField,
   Screen,
   Spacing,
   TextField,
@@ -29,8 +32,10 @@ export default function ComposeScreen() {
   const colors = useAppTheme();
   // Optional prefill, e.g. "Transférer" from a conversation.
   const params = useLocalSearchParams<{ to?: string; subject?: string; body?: string }>();
-  const [to, setTo] = useState(params.to ?? '');
-  const [ccList, setCcList] = useState<string[]>([]);
+  const [toList, setToList] = useState<EmailAddress[]>(() => parseAddressList(params.to ?? ''));
+  const [ccRecipients, setCcRecipients] = useState<EmailAddress[]>([]);
+  const [ccOpen, setCcOpen] = useState(false);
+  const [picking, setPicking] = useState<'to' | 'cc' | null>(null);
   const [subject, setSubject] = useState(params.subject ?? '');
   const [body, setBody] = useState(params.body ?? '');
   const [sending, setSending] = useState(false);
@@ -51,21 +56,22 @@ export default function ComposeScreen() {
 
   const resumeDraft = (draft: Draft) => {
     setDraftId(draft.id);
-    setTo(draft.to.map((a) => a.address).join(', '));
-    setCcList(draft.cc.map((a) => a.address));
+    setToList(draft.to);
+    setCcRecipients(draft.cc);
+    setCcOpen(draft.cc.length > 0);
     setSubject(draft.subject);
     setBody(draft.body);
   };
 
-  const addCc = useCallback(() => setCcList((prev) => [...prev, '']), []);
-  const updateCc = useCallback((index: number, value: string) => {
-    setCcList((prev) => prev.map((v, i) => (i === index ? value : v)));
-  }, []);
-  const removeCc = useCallback((index: number) => {
-    setCcList((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const to = toList.map((r) => r.address).join(', ');
+  const cc = ccRecipients.map((r) => r.address).join(', ');
 
-  const cc = ccList.filter(Boolean).join(', ');
+  // People already written to, plus saved contacts, for the recipient picker.
+  const { data: contacts } = useServiceQuery<ContactSuggestion[]>(
+    (mailService) => mailService.listContacts(),
+    [],
+  );
+  const photoOf = (address: string) => service.getContactPhoto(address);
 
   // Autosave as a draft (local + Gmail) a moment after the user stops typing.
   const saving = useRef<Promise<string> | null>(null);
@@ -188,111 +194,111 @@ export default function ComposeScreen() {
           />
         ) : null}
 
-        <TextField
-          label="Destinataire"
-          value={to}
-          onChangeText={setTo}
-          placeholder="nom@exemple.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          testID="compose-to"
-        />
-
-        {/* CC fields */}
-        {ccList.map((value, index) => (
-          <View key={index} style={styles.ccRow}>
-            <View style={styles.ccField}>
-              <TextField
-                label={`Copie ${ccList.length > 1 ? index + 1 : ''}`.trim()}
-                value={value}
-                onChangeText={(v) => updateCc(index, v)}
-                placeholder="cc@exemple.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                testID={`compose-cc-${index}`}
-              />
-            </View>
-            <Pressable
-              onPress={() => removeCc(index)}
-              style={[styles.removeBtn, { backgroundColor: colors.surfaceAlt }]}
-              accessibilityLabel="Retirer cette copie"
-            >
-              <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        ))}
-
-        <Button
-          label="+ Ajouter une copie (Cc)"
-          variant="ghost"
-          onPress={addCc}
-          testID="compose-add-cc"
-        />
-
-        <TextField
-          label="Objet"
-          value={subject}
-          onChangeText={setSubject}
-          placeholder="Objet du message"
-          testID="compose-subject"
-        />
-        <TextField
-          label="Message"
-          value={body}
-          onChangeText={setBody}
-          placeholder="Votre message…"
-          multiline
-          testID="compose-body"
-        />
-
-        {picked.map((file, index) => (
-          <View
-            key={`${file.uri}-${index}`}
-            style={[styles.file, { backgroundColor: colors.surfaceAlt }]}
-          >
-            <MaterialIcons name="attach-file" size={18} color={colors.textSecondary} />
-            <AppText variant="caption" style={styles.resumeText} numberOfLines={1}>
-              {file.filename} · {formatFileSize(file.sizeBytes)}
-            </AppText>
-            <Pressable
-              onPress={() => setPicked((previous) => previous.filter((_, i) => i !== index))}
-              accessibilityLabel={`Retirer ${file.filename}`}
-            >
-              <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        ))}
-        <Button
-          label="Joindre un fichier"
-          variant="ghost"
-          onPress={() =>
-            void pickAttachments().then((files) => setPicked((previous) => [...previous, ...files]))
-          }
-          testID="compose-attach"
-        />
-
-        {error ? (
-          <AppText variant="caption" color="danger">
-            {error}
-          </AppText>
-        ) : null}
-
-        <Button
-          label="Envoyer"
-          onPress={onSend}
-          disabled={!canSend}
-          loading={sending}
-          fullWidth
-          testID="compose-send"
-        />
-        {draftId ? (
-          <Button
-            label="Supprimer le brouillon"
-            variant="ghost"
-            onPress={() => void onDiscard()}
-            testID="compose-discard"
+        {picking !== 'cc' ? (
+          <RecipientField
+            label="À"
+            recipients={toList}
+            onChange={setToList}
+            contacts={contacts}
+            photoOf={photoOf}
+            onPickingChange={(open) => setPicking(open ? 'to' : null)}
+            autoFocus={!prefilled && toList.length === 0}
+            testID="compose-to"
           />
         ) : null}
+
+        {(ccOpen || ccRecipients.length > 0) && picking !== 'to' ? (
+          <RecipientField
+            label="Cc"
+            recipients={ccRecipients}
+            onChange={setCcRecipients}
+            contacts={contacts}
+            photoOf={photoOf}
+            onPickingChange={(open) => setPicking(open ? 'cc' : null)}
+            testID="compose-cc"
+          />
+        ) : null}
+
+        {/* While choosing people, the suggestion list takes the screen (messaging-app style). */}
+        {picking ? null : (
+          <>
+            {!ccOpen && ccRecipients.length === 0 ? (
+              <Button
+                label="+ Ajouter une copie (Cc)"
+                variant="ghost"
+                onPress={() => setCcOpen(true)}
+                testID="compose-add-cc"
+              />
+            ) : null}
+
+            <TextField
+              label="Objet"
+              value={subject}
+              onChangeText={setSubject}
+              placeholder="Objet du message"
+              testID="compose-subject"
+            />
+            <TextField
+              label="Message"
+              value={body}
+              onChangeText={setBody}
+              placeholder="Votre message…"
+              multiline
+              testID="compose-body"
+            />
+
+            {picked.map((file, index) => (
+              <View
+                key={`${file.uri}-${index}`}
+                style={[styles.file, { backgroundColor: colors.surfaceAlt }]}
+              >
+                <MaterialIcons name="attach-file" size={18} color={colors.textSecondary} />
+                <AppText variant="caption" style={styles.resumeText} numberOfLines={1}>
+                  {file.filename} · {formatFileSize(file.sizeBytes)}
+                </AppText>
+                <Pressable
+                  onPress={() => setPicked((previous) => previous.filter((_, i) => i !== index))}
+                  accessibilityLabel={`Retirer ${file.filename}`}
+                >
+                  <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ))}
+            <Button
+              label="Joindre un fichier"
+              variant="ghost"
+              onPress={() =>
+                void pickAttachments().then((files) =>
+                  setPicked((previous) => [...previous, ...files]),
+                )
+              }
+              testID="compose-attach"
+            />
+
+            {error ? (
+              <AppText variant="caption" color="danger">
+                {error}
+              </AppText>
+            ) : null}
+
+            <Button
+              label="Envoyer"
+              onPress={onSend}
+              disabled={!canSend}
+              loading={sending}
+              fullWidth
+              testID="compose-send"
+            />
+            {draftId ? (
+              <Button
+                label="Supprimer le brouillon"
+                variant="ghost"
+                onPress={() => void onDiscard()}
+                testID="compose-discard"
+              />
+            ) : null}
+          </>
+        )}
       </ScrollView>
       {undoSend.pending ? (
         <UndoSnackbar
@@ -327,21 +333,5 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     padding: Spacing.sm,
     borderRadius: Radius.md,
-  },
-  ccRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.xs,
-  },
-  ccField: {
-    flex: 1,
-  },
-  removeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
   },
 });

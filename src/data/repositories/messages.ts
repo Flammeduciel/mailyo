@@ -282,6 +282,53 @@ export async function getCorrespondence(db: Database, address: string): Promise<
   };
 }
 
+/** Someone the user has exchanged mail with. */
+export interface Correspondent {
+  name: string;
+  address: string;
+  /** Messages exchanged (both directions). */
+  count: number;
+  lastAt: number;
+}
+
+/**
+ * Everyone the user has written to or received mail from, most recent first.
+ * Senders come from `sender_address`, recipients from the `to`/`cc` JSON.
+ */
+export async function listCorrespondents(
+  db: Database,
+  selfAddresses: string[],
+  limit = 500,
+): Promise<Correspondent[]> {
+  const rows = await db.getAllAsync<{ name: string; address: string; at: number }>(
+    `SELECT sender_name AS name, sender_address AS address, received_at AS at FROM messages
+     UNION ALL
+     SELECT json_extract(r.value, '$.name'), json_extract(r.value, '$.address'), m.received_at
+       FROM messages m, json_each(CASE WHEN json_valid(m.to_json) THEN m.to_json ELSE '[]' END) r
+     UNION ALL
+     SELECT json_extract(r.value, '$.name'), json_extract(r.value, '$.address'), m.received_at
+       FROM messages m, json_each(CASE WHEN json_valid(m.cc_json) THEN m.cc_json ELSE '[]' END) r`,
+  );
+  const self = new Set(selfAddresses.map((address) => address.toLowerCase()));
+  const byAddress = new Map<string, Correspondent>();
+  for (const row of rows) {
+    const address = (row.address ?? '').trim();
+    const key = address.toLowerCase();
+    if (!key.includes('@') || self.has(key)) continue;
+    const name = repairMojibake((row.name ?? '').trim());
+    const current = byAddress.get(key);
+    if (!current) {
+      byAddress.set(key, { name: name === address ? '' : name, address, count: 1, lastAt: row.at });
+      continue;
+    }
+    current.count += 1;
+    if (row.at > current.lastAt) current.lastAt = row.at;
+    // Prefer a real display name over an empty one or the bare address.
+    if (!current.name && name && name !== address) current.name = name;
+  }
+  return [...byAddress.values()].sort((a, b) => b.lastAt - a.lastAt).slice(0, limit);
+}
+
 export interface ThreadingRow {
   id: string;
   threadId: string;

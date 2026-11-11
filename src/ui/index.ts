@@ -64,3 +64,4 @@ export { ThreadSkeleton } from './ThreadSkeleton';
 export { VideoThumbnail, type VideoThumbnailProps } from './VideoThumbnail';
 export { UndoSnackbar, type UndoSnackbarProps } from './UndoSnackbar';
 export { SyncRing, type SyncRingProps } from './SyncRing';
+export { RecipientField, type RecipientFieldProps } from './RecipientField';
