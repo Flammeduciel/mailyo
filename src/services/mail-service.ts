@@ -76,7 +76,7 @@ import type {
   ProviderId,
   ThreadSummary,
 } from '@/domain/models';
-import type { ContactSuggestion } from '@/domain/contacts';
+import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
 import { createId, deterministicId } from '@/domain/ids';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
@@ -290,13 +290,16 @@ export class MailService {
       accounts.map((account) => account.emailAddress),
     );
     const seen = new Set<string>();
-    const result: ContactSuggestion[] = correspondents.map((c) => {
-      seen.add(c.address.toLowerCase());
-      const saved = this.contactDetails.get(c.address.toLowerCase())?.name;
-      return { name: saved || c.name, address: c.address, count: c.count, lastAt: c.lastAt };
-    });
+    // No-reply senders cannot be written to: never suggest them.
+    const result: ContactSuggestion[] = correspondents
+      .filter((c) => !isNoReplyAddress(c.address))
+      .map((c) => {
+        seen.add(c.address.toLowerCase());
+        const saved = this.contactDetails.get(c.address.toLowerCase())?.name;
+        return { name: saved || c.name, address: c.address, count: c.count, lastAt: c.lastAt };
+      });
     for (const [address, details] of this.contactDetails) {
-      if (!seen.has(address) && details.saved) {
+      if (!seen.has(address) && details.saved && !isNoReplyAddress(address)) {
         result.push({ name: details.name ?? '', address, count: 0, lastAt: null });
       }
     }

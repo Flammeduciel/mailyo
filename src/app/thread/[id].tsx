@@ -28,6 +28,7 @@ import { useUndoSend } from '@/state/use-undo-send';
 import type { PickedAttachment, SendMessageInput } from '@/services/mail-service';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
 import { formatFileSize } from '@/domain/attachments';
+import { isNoReplyAddress } from '@/domain/contacts';
 import { hostOf, parseListUnsubscribe } from '@/domain/html-privacy';
 import { openLink } from '@/ui/open-link';
 import {
@@ -49,14 +50,6 @@ import {
   type AppBarAction,
   type QuotedParent,
 } from '@/ui';
-
-/** Returns true if the email address belongs to a no-reply sender. */
-function isNoReplyAddress(email: string): boolean {
-  const local = email.toLowerCase().split('@')[0] ?? '';
-  return /^(no[._-]?reply|do[._-]?not[._-]?reply|noreply|mailer[._-]?daemon|postmaster|bounces?)$/.test(
-    local,
-  );
-}
 
 interface ThreadData {
   messages: Message[];

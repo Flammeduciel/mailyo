@@ -21,6 +21,8 @@ export interface ConversationRowProps {
   selected?: boolean;
   /** Sender's profile photo; initials are shown without one. */
   photoUri?: string;
+  /** Several conversations (subjects) with this person are grouped in the row. */
+  subjectCount?: number;
   testID?: string;
 }
 
@@ -64,6 +66,7 @@ export function ConversationRow({
   isOwnLast = false,
   selected = false,
   photoUri,
+  subjectCount = 1,
   testID,
 }: ConversationRowProps) {
   const colors = useAppTheme();
@@ -110,6 +113,18 @@ export function ConversationRow({
           <AppText weight={isUnread ? 'bold' : 'semibold'} numberOfLines={1} style={styles.name}>
             {senderName}
           </AppText>
+          {subjectCount > 1 ? (
+            <View style={[styles.subjects, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="forum" size={12} color={colors.onPrimaryContainer} />
+              <AppText
+                variant="caption"
+                weight="semibold"
+                style={{ color: colors.onPrimaryContainer }}
+              >
+                {subjectCount} sujets
+              </AppText>
+            </View>
+          ) : null}
           <AppText
             variant="caption"
             weight={isUnread ? 'semibold' : 'regular'}
@@ -184,6 +199,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.md - 1,
     lineHeight: 20,
+  },
+  subjects: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
   },
   subject: {
     fontWeight: '500',

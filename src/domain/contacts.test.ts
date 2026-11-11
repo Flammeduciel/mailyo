@@ -1,4 +1,4 @@
-import { filterContacts, type ContactSuggestion } from '@/domain/contacts';
+import { filterContacts, isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
 
 const people: ContactSuggestion[] = [
   { name: 'Nicolas Clément', address: 'nico@example.com', count: 4, lastAt: 3 },
@@ -23,5 +23,22 @@ describe('filterContacts', () => {
     expect(filterContacts(people, 'Zo').map((c) => c.address)).toEqual(['zoe@example.com']);
     expect(filterContacts(people, 'atelier')).toHaveLength(1);
     expect(filterContacts(people, 'xyz')).toHaveLength(0);
+  });
+});
+
+describe('isNoReplyAddress', () => {
+  it('recognises the usual no-reply forms', () => {
+    for (const address of [
+      'noreply@github.com',
+      'no-reply@accounts.google.com',
+      'do_not_reply@bank.fr',
+      'ne-pas-repondre@impots.gouv.fr',
+      'mailer-daemon@googlemail.com',
+      'no-reply+abc@service.io',
+    ]) {
+      expect(isNoReplyAddress(address)).toBe(true);
+    }
+    expect(isNoReplyAddress('claire@atelier.fr')).toBe(false);
+    expect(isNoReplyAddress('noreen@example.com')).toBe(false);
   });
 });

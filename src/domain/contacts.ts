@@ -11,6 +11,17 @@ export interface ContactSuggestion {
   lastAt: number | null;
 }
 
+/**
+ * Addresses that do not accept replies (no-reply, mailer-daemon…): never
+ * suggested as recipients, and the conversation hides its composer.
+ */
+export function isNoReplyAddress(email: string): boolean {
+  const local = email.toLowerCase().split('@')[0] ?? '';
+  return /^(no[._-]?reply|do[._-]?not[._-]?reply|noreply|ne[._-]?pas[._-]?repondre|mailer[._-]?daemon|postmaster|bounces?|notifications?[._-]?no[._-]?reply)([._+-].*)?$/.test(
+    local,
+  );
+}
+
 export function normalizeForSearch(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }

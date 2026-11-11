@@ -1,7 +1,15 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { formatFileSize } from '@/domain/attachments';
 import type { ContactSuggestion } from '@/domain/contacts';
@@ -13,14 +21,13 @@ import { pickAttachments } from '@/state/pick-attachments';
 import { useServiceQuery } from '@/state/use-service-query';
 import { useUndoSend } from '@/state/use-undo-send';
 import {
+  AppBar,
   AppText,
   Button,
-  Header,
+  ComposeAttachmentCard,
   Radius,
   RecipientField,
-  Screen,
   Spacing,
-  TextField,
   UndoSnackbar,
   useAppTheme,
 } from '@/ui';
@@ -42,17 +49,36 @@ export default function ComposeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<PickedAttachment[]>([]);
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftSaved, setDraftSaved] = useState(false);
   const [dismissedResume, setDismissedResume] = useState(false);
   const undoSend = useUndoSend();
   const prefilled = Boolean(params.to || params.subject || params.body);
 
+  const to = toList.map((r) => r.address).join(', ');
+  const cc = ccRecipients.map((r) => r.address).join(', ');
+  // Nothing typed, chosen or attached yet: it is not a draft.
+  const hasContent =
+    toList.length > 0 ||
+    ccRecipients.length > 0 ||
+    subject.trim().length > 0 ||
+    body.trim().length > 0 ||
+    picked.length > 0;
+
   const { data: accounts } = useServiceQuery((mailService) => mailService.listAccounts(), []);
   const { data: drafts } = useServiceQuery<Draft[]>(async (mailService) => {
     const [account] = await mailService.listAccounts();
-    return account ? mailService.listDrafts(account.id) : [];
+    const all = account ? await mailService.listDrafts(account.id) : [];
+    // Leftover empty drafts are noise: never offered.
+    return all.filter((d) => d.to.length > 0 || d.subject.trim() || d.body.trim());
   }, []);
-  const resumable = !prefilled && !dismissedResume && !draftId ? drafts[0] : undefined;
+  const resumable =
+    !prefilled && !dismissedResume && !draftId && !hasContent ? drafts[0] : undefined;
+
+  // People already written to (no-reply excluded), for the recipient picker.
+  const { data: contacts } = useServiceQuery<ContactSuggestion[]>(
+    (mailService) => mailService.listContacts(),
+    [],
+  );
+  const photoOf = (address: string) => service.getContactPhoto(address);
 
   const resumeDraft = (draft: Draft) => {
     setDraftId(draft.id);
@@ -63,17 +89,8 @@ export default function ComposeScreen() {
     setBody(draft.body);
   };
 
-  const to = toList.map((r) => r.address).join(', ');
-  const cc = ccRecipients.map((r) => r.address).join(', ');
-
-  // People already written to, plus saved contacts, for the recipient picker.
-  const { data: contacts } = useServiceQuery<ContactSuggestion[]>(
-    (mailService) => mailService.listContacts(),
-    [],
-  );
-  const photoOf = (address: string) => service.getContactPhoto(address);
-
-  // Autosave as a draft (local + Gmail) a moment after the user stops typing.
+  // Autosave (local + Gmail) a moment after the user stops typing; emptying
+  // every field removes the draft again.
   const saving = useRef<Promise<string> | null>(null);
   const draftIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -81,11 +98,18 @@ export default function ComposeScreen() {
   }, [draftId]);
   useEffect(() => {
     const account = accounts[0];
-    const empty = !to.trim() && !subject.trim() && !body.trim();
-    if (!account || empty || undoSend.pending) {
+    if (!account || undoSend.pending) {
       return;
     }
     const timer = setTimeout(() => {
+      if (!hasContent) {
+        const existing = draftIdRef.current;
+        if (existing) {
+          void service.discardDraft(existing);
+          setDraftId(null);
+        }
+        return;
+      }
       saving.current = service.saveDraft({
         draftId: draftIdRef.current,
         accountId: account.id,
@@ -94,13 +118,10 @@ export default function ComposeScreen() {
         subject,
         body,
       });
-      void saving.current.then((id) => {
-        setDraftId(id);
-        setDraftSaved(true);
-      });
+      void saving.current.then(setDraftId);
     }, AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [accounts, to, cc, subject, body, service, undoSend.pending]);
+  }, [accounts, to, cc, subject, body, hasContent, service, undoSend.pending]);
 
   const deliver = async () => {
     const account = accounts[0];
@@ -123,25 +144,34 @@ export default function ComposeScreen() {
         router.back();
         return;
       }
-      if (result.status === 'ambiguous') {
-        setError(`Statut d'envoi incertain : vérifiez le dossier « Messages envoyés ».`);
-      } else {
-        setError(result.error ?? `L'envoi a échoué.`);
-      }
+      setError(
+        result.status === 'ambiguous'
+          ? `Statut d'envoi incertain : vérifiez le dossier « Messages envoyés ».`
+          : (result.error ?? `L'envoi a échoué.`),
+      );
     } finally {
       setSending(false);
     }
   };
+
+  const canSend = toList.length > 0 && accounts.length > 0 && !sending && !undoSend.pending;
 
   const onSend = () => {
     if (!accounts[0]) {
       setError('Aucun compte configuré.');
       return;
     }
-    undoSend.schedule(
-      () => void deliver(),
-      () => undefined,
-    );
+    if (canSend) {
+      undoSend.schedule(
+        () => void deliver(),
+        () => undefined,
+      );
+    }
+  };
+
+  const onAttach = async () => {
+    const files = await pickAttachments();
+    if (files.length > 0) setPicked((previous) => [...previous, ...files]);
   };
 
   const onDiscard = async () => {
@@ -149,189 +179,293 @@ export default function ComposeScreen() {
     router.back();
   };
 
-  const canSend = to.trim().length > 0 && accounts.length > 0 && !sending && !undoSend.pending;
+  const totalSize = picked.reduce((sum, file) => sum + file.sizeBytes, 0);
 
   return (
-    <Screen>
-      <Header
+    <SafeAreaView
+      edges={['top', 'bottom']}
+      style={[styles.screen, { backgroundColor: colors.background }]}
+    >
+      <AppBar
         title="Nouveau message"
-        subtitle={draftSaved ? 'Brouillon enregistré' : undefined}
+        subtitle={hasContent && draftId ? 'Brouillon enregistré' : undefined}
         onBack={() => {
           undoSend.flush();
           router.back();
         }}
+        actions={
+          hasContent && !picking
+            ? [
+                {
+                  icon: 'delete-outline',
+                  label: 'Supprimer le brouillon',
+                  onPress: () => void onDiscard(),
+                  testID: 'compose-discard',
+                },
+              ]
+            : []
+        }
       />
 
-      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        {resumable ? (
-          <View style={[styles.resume, { backgroundColor: colors.primaryContainer }]}>
-            <MaterialIcons name="edit-note" size={20} color={colors.primary} />
-            <AppText variant="caption" style={styles.resumeText} numberOfLines={2}>
-              Brouillon : {resumable.subject || '(Sans objet)'}
-            </AppText>
-            <Button label="Reprendre" variant="ghost" onPress={() => resumeDraft(resumable)} />
-            <Pressable onPress={() => setDismissedResume(true)} accessibilityLabel="Ignorer">
-              <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        ) : null}
-
-        {accounts.length > 0 ? (
-          <AppText variant="caption" color="textSecondary">
-            Depuis : {accounts[0].emailAddress}
-          </AppText>
-        ) : (
-          <AppText variant="caption" color="danger">
-            Aucun compte configuré.
-          </AppText>
-        )}
-
-        {accounts.length === 0 ? (
-          <Button
-            label="Ajouter un compte"
-            variant="secondary"
-            onPress={() => router.push('/login')}
-          />
-        ) : null}
-
-        {picking !== 'cc' ? (
-          <RecipientField
-            label="À"
-            recipients={toList}
-            onChange={setToList}
-            contacts={contacts}
-            photoOf={photoOf}
-            onPickingChange={(open) => setPicking(open ? 'to' : null)}
-            autoFocus={!prefilled && toList.length === 0}
-            testID="compose-to"
-          />
-        ) : null}
-
-        {(ccOpen || ccRecipients.length > 0) && picking !== 'to' ? (
-          <RecipientField
-            label="Cc"
-            recipients={ccRecipients}
-            onChange={setCcRecipients}
-            contacts={contacts}
-            photoOf={photoOf}
-            onPickingChange={(open) => setPicking(open ? 'cc' : null)}
-            testID="compose-cc"
-          />
-        ) : null}
-
-        {/* While choosing people, the suggestion list takes the screen (messaging-app style). */}
-        {picking ? null : (
-          <>
-            {!ccOpen && ccRecipients.length === 0 ? (
-              <Button
-                label="+ Ajouter une copie (Cc)"
-                variant="ghost"
-                onPress={() => setCcOpen(true)}
-                testID="compose-add-cc"
-              />
-            ) : null}
-
-            <TextField
-              label="Objet"
-              value={subject}
-              onChangeText={setSubject}
-              placeholder="Objet du message"
-              testID="compose-subject"
-            />
-            <TextField
-              label="Message"
-              value={body}
-              onChangeText={setBody}
-              placeholder="Votre message…"
-              multiline
-              testID="compose-body"
-            />
-
-            {picked.map((file, index) => (
-              <View
-                key={`${file.uri}-${index}`}
-                style={[styles.file, { backgroundColor: colors.surfaceAlt }]}
-              >
-                <MaterialIcons name="attach-file" size={18} color={colors.textSecondary} />
-                <AppText variant="caption" style={styles.resumeText} numberOfLines={1}>
-                  {file.filename} · {formatFileSize(file.sizeBytes)}
-                </AppText>
-                <Pressable
-                  onPress={() => setPicked((previous) => previous.filter((_, i) => i !== index))}
-                  accessibilityLabel={`Retirer ${file.filename}`}
-                >
-                  <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            ))}
-            <Button
-              label="Joindre un fichier"
-              variant="ghost"
-              onPress={() =>
-                void pickAttachments().then((files) =>
-                  setPicked((previous) => [...previous, ...files]),
-                )
-              }
-              testID="compose-attach"
-            />
-
-            {error ? (
-              <AppText variant="caption" color="danger">
-                {error}
+      <KeyboardAvoidingView behavior="padding" style={styles.screen}>
+        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+          {resumable ? (
+            <View style={[styles.resume, { backgroundColor: colors.primaryContainer }]}>
+              <MaterialIcons name="edit-note" size={20} color={colors.primary} />
+              <AppText variant="caption" style={styles.flex} numberOfLines={2}>
+                Brouillon : {resumable.subject || '(Sans objet)'}
               </AppText>
-            ) : null}
+              <Button label="Reprendre" variant="ghost" onPress={() => resumeDraft(resumable)} />
+              <Pressable onPress={() => setDismissedResume(true)} accessibilityLabel="Ignorer">
+                <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
 
-            <Button
-              label="Envoyer"
+          {picking ? null : (
+            <View style={[styles.line, { borderBottomColor: colors.border }]}>
+              <AppText variant="body" color="textSecondary" style={styles.label}>
+                De
+              </AppText>
+              <AppText variant="body" numberOfLines={1} style={styles.flex}>
+                {accounts[0]?.emailAddress ?? 'Aucun compte configuré'}
+              </AppText>
+            </View>
+          )}
+
+          {picking !== 'cc' ? (
+            <View style={styles.recipientRow}>
+              <View style={styles.flex}>
+                <RecipientField
+                  label="À"
+                  recipients={toList}
+                  onChange={setToList}
+                  contacts={contacts}
+                  photoOf={photoOf}
+                  onPickingChange={(open) => setPicking(open ? 'to' : null)}
+                  autoFocus={!prefilled && toList.length === 0}
+                  testID="compose-to"
+                />
+              </View>
+              {!picking && !ccOpen && ccRecipients.length === 0 ? (
+                <Pressable
+                  onPress={() => setCcOpen(true)}
+                  hitSlop={Spacing.sm}
+                  style={styles.ccToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ajouter une copie (Cc)"
+                  testID="compose-add-cc"
+                >
+                  <AppText variant="body" weight="semibold" style={{ color: colors.primary }}>
+                    Cc
+                  </AppText>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          {(ccOpen || ccRecipients.length > 0) && picking !== 'to' ? (
+            <RecipientField
+              label="Cc"
+              recipients={ccRecipients}
+              onChange={setCcRecipients}
+              contacts={contacts}
+              photoOf={photoOf}
+              onPickingChange={(open) => setPicking(open ? 'cc' : null)}
+              testID="compose-cc"
+            />
+          ) : null}
+
+          {/* While choosing people, the suggestions take the screen (messaging-app style). */}
+          {picking ? null : (
+            <>
+              <View style={[styles.line, { borderBottomColor: colors.border }]}>
+                <TextInput
+                  value={subject}
+                  onChangeText={setSubject}
+                  placeholder="Objet"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.subject, { color: colors.text }]}
+                  testID="compose-subject"
+                />
+              </View>
+
+              <TextInput
+                value={body}
+                onChangeText={setBody}
+                placeholder="Rédigez votre message"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                textAlignVertical="top"
+                style={[styles.body, { color: colors.text }]}
+                testID="compose-body"
+              />
+
+              {picked.length > 0 ? (
+                <View style={styles.files}>
+                  <AppText variant="caption" weight="semibold" color="textSecondary">
+                    {picked.length} pièce{picked.length > 1 ? 's' : ''} jointe
+                    {picked.length > 1 ? 's' : ''}
+                    {totalSize > 0 ? ` · ${formatFileSize(totalSize)}` : ''}
+                  </AppText>
+                  {picked.map((file, index) => (
+                    <ComposeAttachmentCard
+                      key={`${file.uri}-${index}`}
+                      file={file}
+                      onRename={(filename) =>
+                        setPicked((previous) =>
+                          previous.map((item, i) => (i === index ? { ...item, filename } : item)),
+                        )
+                      }
+                      onRemove={() =>
+                        setPicked((previous) => previous.filter((_, i) => i !== index))
+                      }
+                      testID={`compose-file-${index}`}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {error ? (
+                <AppText variant="caption" color="danger">
+                  {error}
+                </AppText>
+              ) : null}
+
+              {accounts.length === 0 ? (
+                <Button
+                  label="Ajouter un compte"
+                  variant="secondary"
+                  onPress={() => router.push('/login')}
+                />
+              ) : null}
+            </>
+          )}
+        </ScrollView>
+
+        {undoSend.pending ? (
+          <UndoSnackbar
+            message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
+            onUndo={undoSend.cancel}
+            testID="undo-send"
+          />
+        ) : null}
+
+        {picking ? null : (
+          <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
+            <Pressable
+              onPress={() => void onAttach()}
+              style={[styles.tool, { backgroundColor: colors.surfaceAlt }]}
+              accessibilityRole="button"
+              accessibilityLabel="Joindre un fichier"
+              testID="compose-attach"
+            >
+              <MaterialIcons name="attach-file" size={20} color={colors.primary} />
+              <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
+                Joindre
+              </AppText>
+            </Pressable>
+            <View style={styles.flex} />
+            <Pressable
               onPress={onSend}
               disabled={!canSend}
-              loading={sending}
-              fullWidth
+              style={[
+                styles.send,
+                { backgroundColor: colors.primary, opacity: canSend ? 1 : 0.45 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Envoyer"
+              accessibilityState={{ disabled: !canSend }}
               testID="compose-send"
-            />
-            {draftId ? (
-              <Button
-                label="Supprimer le brouillon"
-                variant="ghost"
-                onPress={() => void onDiscard()}
-                testID="compose-discard"
-              />
-            ) : null}
-          </>
+            >
+              <AppText variant="body" weight="semibold" style={{ color: colors.onPrimary }}>
+                {sending ? 'Envoi…' : 'Envoyer'}
+              </AppText>
+              <MaterialIcons name="send" size={18} color={colors.onPrimary} />
+            </Pressable>
+          </View>
         )}
-      </ScrollView>
-      {undoSend.pending ? (
-        <UndoSnackbar
-          message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
-          onUndo={undoSend.cancel}
-          testID="undo-send"
-        />
-      ) : null}
-    </Screen>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   form: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.xs,
   },
   resume: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+    marginTop: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
     borderRadius: Radius.md,
   },
-  resumeText: {
-    flex: 1,
-  },
-  file: {
+  line: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
+    minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
+  },
+  label: {
+    minWidth: 32,
+  },
+  recipientRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  ccToggle: {
+    paddingTop: Spacing.md,
+    paddingLeft: Spacing.sm,
+  },
+  subject: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: Spacing.sm,
+  },
+  body: {
+    minHeight: 220,
+    fontSize: 16,
+    lineHeight: 22,
+    paddingTop: Spacing.md,
+  },
+  files: {
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  tool: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+  },
+  send: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: 24,
   },
 });

@@ -38,11 +38,13 @@ function AppShell() {
           <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
           <Stack.Screen name="compose" options={{ headerShown: false, presentation: 'modal' }} />
           <Stack.Screen name="thread/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="files/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="contact/[address]" options={{ headerShown: false }} />
           <Stack.Screen name="search" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="archived" options={{ headerShown: false }} />
           <Stack.Screen name="rules/edit" options={{ headerShown: false }} />
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />{' '}
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack>
       )}
     </ThemeProvider>

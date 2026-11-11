@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
 import type { ConversationFilter, ConversationTab, ThreadSummary } from '@/domain/models';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
@@ -186,9 +187,29 @@ export function ConversationListScreen({
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
+  // One row per person: a row stands for every conversation with them.
+  const groups = useMemo(() => groupThreadsByContact(data.threads), [data.threads]);
   const selectedThreads = useMemo(
-    () => data.threads.filter((thread) => selected.has(thread.id)),
-    [data.threads, selected],
+    () => groups.filter((group) => selected.has(group.key)).flatMap((group) => group.threads),
+    [groups, selected],
+  );
+
+  const openGroup = useCallback(
+    (group: ContactGroup) => {
+      if (group.threads.length === 1) {
+        router.push(`/thread/${group.lead.id}`);
+        return;
+      }
+      router.push({
+        pathname: '/contact/[address]',
+        params: {
+          address: group.lead.contact.address,
+          tab: tab ?? '',
+          archived: archived ? '1' : '',
+        },
+      });
+    },
+    [tab, archived],
   );
 
   const runOnSelection = useCallback(
@@ -233,7 +254,7 @@ export function ConversationListScreen({
       label: 'Supprimer',
       onPress: () =>
         Alert.alert(
-          `Supprimer ${selected.size} conversation${selected.size > 1 ? 's' : ''} ?`,
+          `Supprimer ${selectedThreads.length} conversation${selectedThreads.length > 1 ? 's' : ''} ?`,
           'Les emails seront placés dans la corbeille.',
           [
             { text: 'Annuler', style: 'cancel' },
@@ -312,11 +333,11 @@ export function ConversationListScreen({
       )}
 
       <FlatList
-        data={data.threads}
-        keyExtractor={(item) => item.id}
+        data={groups}
+        keyExtractor={(item) => item.key}
         ListHeaderComponent={
           <View>
-            {sync && data.threads.length > 0 && !archived ? (
+            {sync && groups.length > 0 && !archived ? (
               <View style={[styles.syncBar, { backgroundColor: colors.primaryContainer }]}>
                 <SyncRing ratio={sync.ratio} size={30} strokeWidth={3} showLabel={false} />
                 <AppText variant="caption" weight="semibold" style={styles.syncText}>
@@ -356,21 +377,27 @@ export function ConversationListScreen({
           </View>
         }
         renderItem={({ item }) => {
+          const lead = item.lead;
           const isOwnLast = data.selfAddresses.includes(
-            item.lastMessage.senderAddress.toLowerCase(),
+            lead.lastMessage.senderAddress.toLowerCase(),
           );
           return (
             <ConversationRow
-              thread={item}
+              thread={{
+                ...lead,
+                unreadCount: item.unreadCount,
+                isPinned: item.isPinned,
+                isStarred: item.isStarred,
+                hasAttachments: item.hasAttachments,
+              }}
+              subjectCount={item.threads.length}
               now={data.now}
               isOwnLast={isOwnLast}
-              selected={selected.has(item.id)}
-              photoUri={service.getContactPhoto(item.contact.address)}
-              onPress={() =>
-                selecting ? toggleSelected(item.id) : router.push(`/thread/${item.id}`)
-              }
-              onLongPress={() => toggleSelected(item.id)}
-              testID={`conversation-${item.id}`}
+              selected={selected.has(item.key)}
+              photoUri={service.getContactPhoto(lead.contact.address)}
+              onPress={() => (selecting ? toggleSelected(item.key) : openGroup(item))}
+              onLongPress={() => toggleSelected(item.key)}
+              testID={`conversation-${lead.id}`}
             />
           );
         }}
