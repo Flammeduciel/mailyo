@@ -223,6 +223,26 @@ export class GmailApiProvider implements MailProvider {
     return ids;
   }
 
+  async saveDraft(draftId: string | null, message: OutgoingMessage): Promise<string> {
+    const body = JSON.stringify({ message: { raw: buildRawMessage(this.emailAddress, message) } });
+    const data = (await this.requestJson(
+      draftId ? `/drafts/${encodeURIComponent(draftId)}` : '/drafts',
+      {
+        method: draftId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      },
+    )) as { id?: string };
+    if (!data.id) {
+      throw new GmailApiError('Brouillon non enregistré', 500);
+    }
+    return data.id;
+  }
+
+  async deleteDraft(draftId: string): Promise<void> {
+    await this.request(`/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
+  }
+
   async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {
     const gmailId = await this.resolveGmailId(remoteUid);
     const message = await this.getMessage(gmailId);

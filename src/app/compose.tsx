@@ -1,11 +1,28 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { formatFileSize } from '@/domain/attachments';
+import type { Draft } from '@/domain/models';
+import type { PickedAttachment } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
+import { pickAttachments } from '@/state/pick-attachments';
 import { useServiceQuery } from '@/state/use-service-query';
-import { AppText, Button, Header, Screen, Spacing, TextField, useAppTheme } from '@/ui';
+import { useUndoSend } from '@/state/use-undo-send';
+import {
+  AppText,
+  Button,
+  Header,
+  Radius,
+  Screen,
+  Spacing,
+  TextField,
+  UndoSnackbar,
+  useAppTheme,
+} from '@/ui';
+
+const AUTOSAVE_DELAY_MS = 1500;
 
 export default function ComposeScreen() {
   const { service, invalidate } = useApp();
@@ -18,8 +35,27 @@ export default function ComposeScreen() {
   const [body, setBody] = useState(params.body ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<PickedAttachment[]>([]);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [dismissedResume, setDismissedResume] = useState(false);
+  const undoSend = useUndoSend();
+  const prefilled = Boolean(params.to || params.subject || params.body);
 
   const { data: accounts } = useServiceQuery((mailService) => mailService.listAccounts(), []);
+  const { data: drafts } = useServiceQuery<Draft[]>(async (mailService) => {
+    const [account] = await mailService.listAccounts();
+    return account ? mailService.listDrafts(account.id) : [];
+  }, []);
+  const resumable = !prefilled && !dismissedResume && !draftId ? drafts[0] : undefined;
+
+  const resumeDraft = (draft: Draft) => {
+    setDraftId(draft.id);
+    setTo(draft.to.map((a) => a.address).join(', '));
+    setCcList(draft.cc.map((a) => a.address));
+    setSubject(draft.subject);
+    setBody(draft.body);
+  };
 
   const addCc = useCallback(() => setCcList((prev) => [...prev, '']), []);
   const updateCc = useCallback((index: number, value: string) => {
@@ -31,12 +67,38 @@ export default function ComposeScreen() {
 
   const cc = ccList.filter(Boolean).join(', ');
 
-  const onSend = useCallback(async () => {
+  // Autosave as a draft (local + Gmail) a moment after the user stops typing.
+  const saving = useRef<Promise<string> | null>(null);
+  const draftIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    draftIdRef.current = draftId;
+  }, [draftId]);
+  useEffect(() => {
     const account = accounts[0];
-    if (!account) {
-      setError('Aucun compte configuré.');
+    const empty = !to.trim() && !subject.trim() && !body.trim();
+    if (!account || empty || undoSend.pending) {
       return;
     }
+    const timer = setTimeout(() => {
+      saving.current = service.saveDraft({
+        draftId: draftIdRef.current,
+        accountId: account.id,
+        to,
+        cc,
+        subject,
+        body,
+      });
+      void saving.current.then((id) => {
+        setDraftId(id);
+        setDraftSaved(true);
+      });
+    }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [accounts, to, cc, subject, body, service, undoSend.pending]);
+
+  const deliver = async () => {
+    const account = accounts[0];
+    if (!account) return;
     setSending(true);
     setError(null);
     try {
@@ -46,8 +108,11 @@ export default function ComposeScreen() {
         cc,
         subject,
         body,
+        attachments: picked,
       });
       if (result.status === 'sent') {
+        const savedId = draftId ?? (saving.current ? await saving.current.catch(() => null) : null);
+        if (savedId) await service.discardDraft(savedId);
         invalidate();
         router.back();
         return;
@@ -60,15 +125,51 @@ export default function ComposeScreen() {
     } finally {
       setSending(false);
     }
-  }, [accounts, to, cc, subject, body, service, invalidate]);
+  };
 
-  const canSend = to.trim().length > 0 && accounts.length > 0 && !sending;
+  const onSend = () => {
+    if (!accounts[0]) {
+      setError('Aucun compte configuré.');
+      return;
+    }
+    undoSend.schedule(
+      () => void deliver(),
+      () => undefined,
+    );
+  };
+
+  const onDiscard = async () => {
+    if (draftId) await service.discardDraft(draftId);
+    router.back();
+  };
+
+  const canSend = to.trim().length > 0 && accounts.length > 0 && !sending && !undoSend.pending;
 
   return (
     <Screen>
-      <Header title="Nouveau message" onBack={() => router.back()} />
+      <Header
+        title="Nouveau message"
+        subtitle={draftSaved ? 'Brouillon enregistré' : undefined}
+        onBack={() => {
+          undoSend.flush();
+          router.back();
+        }}
+      />
 
-      <View style={styles.form}>
+      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        {resumable ? (
+          <View style={[styles.resume, { backgroundColor: colors.primaryContainer }]}>
+            <MaterialIcons name="edit-note" size={20} color={colors.primary} />
+            <AppText variant="caption" style={styles.resumeText} numberOfLines={2}>
+              Brouillon : {resumable.subject || '(Sans objet)'}
+            </AppText>
+            <Button label="Reprendre" variant="ghost" onPress={() => resumeDraft(resumable)} />
+            <Pressable onPress={() => setDismissedResume(true)} accessibilityLabel="Ignorer">
+              <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {accounts.length > 0 ? (
           <AppText variant="caption" color="textSecondary">
             Depuis : {accounts[0].emailAddress}
@@ -144,6 +245,32 @@ export default function ComposeScreen() {
           testID="compose-body"
         />
 
+        {picked.map((file, index) => (
+          <View
+            key={`${file.uri}-${index}`}
+            style={[styles.file, { backgroundColor: colors.surfaceAlt }]}
+          >
+            <MaterialIcons name="attach-file" size={18} color={colors.textSecondary} />
+            <AppText variant="caption" style={styles.resumeText} numberOfLines={1}>
+              {file.filename} · {formatFileSize(file.sizeBytes)}
+            </AppText>
+            <Pressable
+              onPress={() => setPicked((previous) => previous.filter((_, i) => i !== index))}
+              accessibilityLabel={`Retirer ${file.filename}`}
+            >
+              <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ))}
+        <Button
+          label="Joindre un fichier"
+          variant="ghost"
+          onPress={() =>
+            void pickAttachments().then((files) => setPicked((previous) => [...previous, ...files]))
+          }
+          testID="compose-attach"
+        />
+
         {error ? (
           <AppText variant="caption" color="danger">
             {error}
@@ -158,7 +285,22 @@ export default function ComposeScreen() {
           fullWidth
           testID="compose-send"
         />
-      </View>
+        {draftId ? (
+          <Button
+            label="Supprimer le brouillon"
+            variant="ghost"
+            onPress={() => void onDiscard()}
+            testID="compose-discard"
+          />
+        ) : null}
+      </ScrollView>
+      {undoSend.pending ? (
+        <UndoSnackbar
+          message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
+          onUndo={undoSend.cancel}
+          testID="undo-send"
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -167,6 +309,24 @@ const styles = StyleSheet.create({
   form: {
     padding: Spacing.lg,
     gap: Spacing.md,
+  },
+  resume: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.md,
+  },
+  resumeText: {
+    flex: 1,
+  },
+  file: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
   },
   ccRow: {
     flexDirection: 'row',

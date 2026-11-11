@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,6 +10,7 @@ import type { AppSettings } from '@/domain/settings';
 import { DEFAULT_SETTINGS } from '@/domain/settings';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
+import { formatFileSize } from '@/domain/attachments';
 import { AccountRow, AppBar, AppText, Avatar, SettingRow, Spacing, useAppTheme } from '@/ui';
 
 interface SettingsData {
@@ -36,6 +37,18 @@ const THEMES: { value: AppSettings['theme']; label: string }[] = [
   { value: 'system', label: 'Par défaut du système' },
   { value: 'light', label: 'Clair' },
   { value: 'dark', label: 'Sombre' },
+];
+
+const AUTO_PREVIEW: { value: string; label: string }[] = [
+  { value: '0', label: 'Jamais' },
+  { value: '3', label: 'Jusqu’à 3 Mo' },
+  { value: '10', label: 'Jusqu’à 10 Mo' },
+];
+
+const CELLULAR_CONFIRM: { value: string; label: string }[] = [
+  { value: '0', label: 'Ne jamais demander' },
+  { value: '5', label: 'Au-delà de 5 Mo' },
+  { value: '10', label: 'Au-delà de 10 Mo' },
 ];
 
 function labelOf<T extends string>(options: { value: T; label: string }[], value: T): string {
@@ -79,6 +92,13 @@ export default function SettingsScreen() {
     useCallback(() => {
       void reload();
     }, [reload]),
+  );
+
+  const [cacheBytes, setCacheBytes] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      setCacheBytes(service.attachmentCacheSize());
+    }, [service]),
   );
 
   const updateSettings = useCallback(
@@ -243,7 +263,66 @@ export default function SettingsScreen() {
           testID="settings-new-rule"
         />
 
+        <Section title="Pièces jointes" />
+        <SettingRow
+          icon="image"
+          label="Aperçu automatique des images"
+          description={labelOf(AUTO_PREVIEW, String(data.settings.autoPreviewMaxMb))}
+          onPress={() =>
+            choose('Aperçu automatique des images', AUTO_PREVIEW, (value) =>
+              updateSettings({ autoPreviewMaxMb: Number(value) }),
+            )
+          }
+          testID="settings-auto-preview"
+        />
+        <SettingRow
+          icon="signal-cellular-alt"
+          label="Confirmer en données mobiles"
+          description={labelOf(CELLULAR_CONFIRM, String(data.settings.cellularConfirmMb))}
+          onPress={() =>
+            choose('Confirmer en données mobiles', CELLULAR_CONFIRM, (value) =>
+              updateSettings({ cellularConfirmMb: Number(value) }),
+            )
+          }
+          testID="settings-cellular"
+        />
+        <SettingRow
+          icon="offline-pin"
+          label="Favoris disponibles hors ligne"
+          description="Télécharge les pièces jointes des mails marqués d’une étoile"
+          value={data.settings.offlineStarredAttachments}
+          onValueChange={(enabled) => {
+            updateSettings({ offlineStarredAttachments: enabled });
+            if (enabled) void service.downloadStarredAttachments();
+          }}
+          testID="settings-offline"
+        />
+        <SettingRow
+          icon="cleaning-services"
+          label="Vider le cache des pièces jointes"
+          description={`${formatFileSize(cacheBytes)} utilisés sur ce téléphone`}
+          onPress={() =>
+            Alert.alert('Vider le cache ?', 'Les fichiers seront retéléchargés si besoin.', [
+              { text: 'Annuler', style: 'cancel' },
+              {
+                text: 'Vider',
+                style: 'destructive',
+                onPress: () => void service.clearAttachmentCache().then(() => setCacheBytes(0)),
+              },
+            ])
+          }
+          testID="settings-clear-cache"
+        />
+
         <Section title="Confidentialité" />
+        <SettingRow
+          icon="hide-image"
+          label="Bloquer les images distantes"
+          description="Évite les pixels espions ; « Afficher les images » dans chaque mail"
+          value={data.settings.blockRemoteImages}
+          onValueChange={(enabled) => updateSettings({ blockRemoteImages: enabled })}
+          testID="settings-block-images"
+        />
         <SettingRow
           icon="fingerprint"
           label="Verrouillage biométrique"

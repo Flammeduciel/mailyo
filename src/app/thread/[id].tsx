@@ -23,6 +23,9 @@ import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import { useAttachmentActions } from '@/state/use-attachment-actions';
+import { pickAttachments } from '@/state/pick-attachments';
+import { useUndoSend } from '@/state/use-undo-send';
+import type { PickedAttachment, SendMessageInput } from '@/services/mail-service';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
 import { formatFileSize } from '@/domain/attachments';
 import {
@@ -30,6 +33,7 @@ import {
   AppText,
   Avatar,
   ThreadSkeleton,
+  UndoSnackbar,
   ChatComposer,
   ContactSheet,
   EmptyState,
@@ -115,6 +119,7 @@ export default function ThreadScreen() {
   const [keyboardShown, setKeyboardShown] = useState(false);
   const [viewedIndex, setViewedIndex] = useState<number | null>(null);
   const attachmentActions = useAttachmentActions();
+  const undoSend = useUndoSend();
   const resolveAttachment = attachmentActions.resolve;
   const autoPreviewMaxBytes = service.getSettings().autoPreviewMaxMb * 1024 * 1024;
 
@@ -264,10 +269,11 @@ export default function ThreadScreen() {
 
   // ----------------------------------------------------------------- actions
 
-  const goBack = useCallback(() => {
+  const goBack = () => {
+    undoSend.flush();
     invalidate();
     router.back();
-  }, [invalidate]);
+  };
 
   const [contactOpen, setContactOpen] = useState(false);
   const [correspondence, setCorrespondence] = useState<Correspondence>();
@@ -281,39 +287,65 @@ export default function ThreadScreen() {
     void service.getCorrespondence(correspondentAddress).then(setCorrespondence);
   };
 
-  const onSend = useCallback(async () => {
-    const body = draft.trim();
-    const target = replyTo ?? defaultReplyTarget;
-    if (body.length === 0 || !target) {
-      return;
-    }
+  const [picked, setPicked] = useState<PickedAttachment[]>([]);
+
+  const onAttach = async () => {
+    const files = await pickAttachments();
+    if (files.length > 0) setPicked((previous) => [...previous, ...files]);
+  };
+
+  const deliver = async (input: SendMessageInput) => {
     setSending(true);
     try {
-      const result = await service.send({
-        accountId: target.accountId,
-        to: '',
-        subject: '',
-        body,
-        replyToMessageId: target.id,
-        mode: 'reply',
-      });
+      const result = await service.send(input);
       if (result.status === 'sent') {
-        setDraft('');
-        setReplyTo(null);
         await reload();
         invalidate();
       } else {
+        // Give the text back so nothing is lost.
+        setDraft(input.body);
+        setPicked(input.attachments ?? []);
         Alert.alert(
-          result.status === 'ambiguous' ? 'Envoi incertain' : "Echec de l'envoi",
+          result.status === 'ambiguous' ? 'Envoi incertain' : "Échec de l'envoi",
           result.status === 'ambiguous'
-            ? 'Verifiez le dossier Envoyes avant de renvoyer.'
-            : (result.error ?? "Le message n'a pas pu etre envoye."),
+            ? 'Vérifiez le dossier Envoyés avant de renvoyer.'
+            : (result.error ?? "Le message n'a pas pu être envoyé."),
         );
       }
     } finally {
       setSending(false);
     }
-  }, [draft, replyTo, defaultReplyTarget, service, reload, invalidate]);
+  };
+
+  // The message leaves after a short delay, during which "Annuler" takes it back.
+  const onSend = () => {
+    const body = draft.trim();
+    const target = replyTo ?? defaultReplyTarget;
+    if ((body.length === 0 && picked.length === 0) || !target) {
+      return;
+    }
+    const input: SendMessageInput = {
+      accountId: target.accountId,
+      to: '',
+      subject: '',
+      body,
+      replyToMessageId: target.id,
+      mode: 'reply',
+      attachments: picked,
+    };
+    const previousReply = replyTo;
+    setDraft('');
+    setPicked([]);
+    setReplyTo(null);
+    undoSend.schedule(
+      () => void deliver(input),
+      () => {
+        setDraft(input.body);
+        setPicked(input.attachments ?? []);
+        setReplyTo(previousReply);
+      },
+    );
+  };
 
   const selectedMessages = useMemo(
     () => data.messages.filter((message) => selected.has(message.id)),
@@ -585,6 +617,14 @@ export default function ThreadScreen() {
           </View>
         ) : null}
 
+        {undoSend.pending ? (
+          <UndoSnackbar
+            message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
+            onUndo={undoSend.cancel}
+            testID="undo-send"
+          />
+        ) : null}
+
         {noReply ? (
           <View
             style={[
@@ -605,7 +645,12 @@ export default function ThreadScreen() {
           <ChatComposer
             value={draft}
             onChangeText={setDraft}
-            onSend={() => void onSend()}
+            onSend={onSend}
+            attachments={picked}
+            onAttach={() => void onAttach()}
+            onRemoveAttachment={(index) =>
+              setPicked((previous) => previous.filter((_, i) => i !== index))
+            }
             sending={sending}
             replyTo={
               replyTo

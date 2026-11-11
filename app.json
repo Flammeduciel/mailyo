@@ -70,7 +70,15 @@
       "expo-local-authentication",
       "expo-background-task",
       "expo-video",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MailYo accède à vos photos pour les joindre à vos emails.",
+          "cameraPermission": "MailYo utilise l’appareil photo pour joindre une photo à un email.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

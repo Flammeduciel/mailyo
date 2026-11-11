@@ -74,6 +74,13 @@ export interface FetchMessagesResult {
   messages: RemoteMessage[];
 }
 
+/** A file attached to an outgoing message, already read as base64. */
+export interface OutgoingAttachment {
+  filename: string;
+  mimeType: string;
+  base64: string;
+}
+
 export interface OutgoingMessage {
   to: EmailAddress[];
   cc: EmailAddress[];
@@ -83,6 +90,7 @@ export interface OutgoingMessage {
   bodyHtml?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
+  attachments?: OutgoingAttachment[];
 }
 
 /**
@@ -115,6 +123,9 @@ export interface MailProvider {
   moveToTrash(remoteUid: number): Promise<void>;
   /** Raw bytes (base64) of an attachment, for providers that need a download. */
   downloadAttachment?(remoteUid: number, remotePartId: string): Promise<string>;
+  /** Create (no id) or replace a server-side draft; returns its id. */
+  saveDraft?(draftId: string | null, message: OutgoingMessage): Promise<string>;
+  deleteDraft?(draftId: string): Promise<void>;
   /** Attachment list of an already synced message (backfill for older mails). */
   fetchAttachments?(remoteUid: number): Promise<RemoteAttachment[]>;
   /**

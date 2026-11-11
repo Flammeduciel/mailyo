@@ -169,6 +169,18 @@ export class MockMailProvider implements MailProvider {
     this.uidValidity = uidValidity;
   }
 
+  readonly drafts = new Map<string, OutgoingMessage>();
+
+  async saveDraft(draftId: string | null, message: OutgoingMessage): Promise<string> {
+    const id = draftId ?? `draft-${this.drafts.size + 1}`;
+    this.drafts.set(id, message);
+    return id;
+  }
+
+  async deleteDraft(draftId: string): Promise<void> {
+    this.drafts.delete(draftId);
+  }
+
   async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {
     return (this.findMessage(remoteUid)?.attachments ?? []).map((a) => ({ ...a }));
   }

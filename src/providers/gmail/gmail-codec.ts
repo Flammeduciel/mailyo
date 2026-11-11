@@ -359,15 +359,40 @@ export function buildRawMessage(from: string, message: OutgoingMessage): string 
   if (message.references) {
     lines.push(`References: ${message.references}`);
   }
-  lines.push(
-    'MIME-Version: 1.0',
+  const wrap = (base64: string) => base64.match(/.{1,76}/g)?.join('\r\n') ?? '';
+  const body = wrap(bytesToBase64(utf8Encode(message.bodyText.replace(/\r?\n/g, '\r\n'))));
+  const attachments = message.attachments ?? [];
+
+  if (attachments.length === 0) {
+    lines.push(
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+    );
+    return bytesToBase64Url(utf8Encode(`${lines.join('\r\n')}\r\n${body}\r\n`));
+  }
+
+  const boundary = `mailyo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  lines.push('MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${boundary}"`, '');
+  const parts = [
+    `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
-  );
-
-  const body = bytesToBase64(utf8Encode(message.bodyText.replace(/\r?\n/g, '\r\n')));
-  const wrapped = body.match(/.{1,76}/g)?.join('\r\n') ?? '';
-
-  return bytesToBase64Url(utf8Encode(`${lines.join('\r\n')}\r\n${wrapped}\r\n`));
+    body,
+  ];
+  for (const attachment of attachments) {
+    const name = encodeHeaderValue(attachment.filename).replace(/"/g, '');
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.mimeType || 'application/octet-stream'}; name="${name}"`,
+      `Content-Disposition: attachment; filename="${name}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      wrap(attachment.base64.replace(/\s+/g, '')),
+    );
+  }
+  parts.push(`--${boundary}--`, '');
+  return bytesToBase64Url(utf8Encode(`${lines.join('\r\n')}\r\n${parts.join('\r\n')}`));
 }

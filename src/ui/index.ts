@@ -62,3 +62,4 @@ export { AttachmentList, type AttachmentListProps } from './AttachmentList';
 // AttachmentViewer is imported directly (it pulls native video/PDF modules).
 export { ThreadSkeleton } from './ThreadSkeleton';
 export { VideoThumbnail, type VideoThumbnailProps } from './VideoThumbnail';
+export { UndoSnackbar, type UndoSnackbarProps } from './UndoSnackbar';

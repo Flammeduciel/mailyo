@@ -110,3 +110,20 @@ export async function setAttachmentState(
 ): Promise<void> {
   await db.runAsync('UPDATE attachments SET download_state = ? WHERE id = ?', [state, id]);
 }
+
+/** Forget local copies stored in the app cache (remote https: sources are kept). */
+export async function clearDownloadedAttachmentPaths(db: Database): Promise<void> {
+  await db.runAsync(
+    "UPDATE attachments SET local_path = NULL, download_state = 'remote' WHERE local_path LIKE 'file:%' AND remote_part_id IS NOT NULL",
+  );
+}
+
+/** Attachments of starred messages that have no local copy yet. */
+export async function listStarredRemoteAttachments(db: Database): Promise<Attachment[]> {
+  const rows = await db.getAllAsync<AttachmentRow>(
+    `SELECT a.* FROM attachments a
+       JOIN messages m ON m.id = a.message_id
+      WHERE m.is_starred = 1 AND a.local_path IS NULL AND a.remote_part_id IS NOT NULL`,
+  );
+  return rows.map(mapAttachment);
+}

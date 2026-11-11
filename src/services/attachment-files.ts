@@ -104,3 +104,7 @@ export function clearAttachmentCache(): void {
   const directory = new Directory(Paths.cache, 'attachments');
   if (directory.exists) directory.delete();
 }
+
+export async function readFileAsBase64(uri: string): Promise<string> {
+  return new File(uri).base64();
+}

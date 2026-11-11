@@ -16,12 +16,20 @@ import {
   listAccounts,
 } from '@/data/repositories/accounts';
 import {
+  clearDownloadedAttachmentPaths,
   getAttachment,
   listAttachmentsByThread,
+  listStarredRemoteAttachments,
   replaceMessageAttachments,
   setAttachmentDownloaded,
   setAttachmentState,
 } from '@/data/repositories/attachments';
+import {
+  deleteDraft as deleteDraftRow,
+  getDraft,
+  listDrafts as listDraftsRows,
+  upsertDraft,
+} from '@/data/repositories/drafts';
 import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
@@ -59,6 +67,7 @@ import { getAllSettings, setSetting, setSettings } from '@/data/repositories/set
 import type {
   Account,
   Attachment,
+  Draft,
   Message,
   NotificationRule,
   ProviderId,
@@ -94,7 +103,13 @@ import type {
 import { GmailApiProvider } from '@/providers/gmail/gmail-api-provider';
 import { fetchGoogleContacts, type ContactDetails } from '@/providers/gmail/google-contacts';
 import { createGmailTokenProvider } from '@/providers/gmail/gmail-tokens';
-import { writeAttachmentToCache, type AttachmentWriter } from '@/services/attachment-files';
+import {
+  attachmentCacheSize,
+  clearAttachmentCache,
+  readFileAsBase64,
+  writeAttachmentToCache,
+  type AttachmentWriter,
+} from '@/services/attachment-files';
 import { ProviderRegistry } from '@/providers/registry';
 import { SyncEngine, toLocalAttachments } from '@/sync/sync-engine';
 
@@ -114,6 +129,25 @@ export interface SendMessageInput {
   /** Local id of the message being answered; enables reply headers. */
   replyToMessageId?: string;
   mode?: ReplyMode;
+  /** Local files picked in the composer. */
+  attachments?: PickedAttachment[];
+}
+
+export interface SaveDraftInput {
+  draftId?: string | null;
+  accountId: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+}
+
+/** A file chosen on the device, before it is read and sent. */
+export interface PickedAttachment {
+  uri: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export interface ConnectOAuthAccountInput {
@@ -137,6 +171,8 @@ export interface MailServiceOptions {
   fetchLimit?: number;
   /** Stores downloaded attachment bytes; defaults to the app cache directory. */
   attachmentWriter?: AttachmentWriter;
+  /** Reads a picked local file as base64; defaults to expo-file-system. */
+  attachmentReader?: (uri: string) => Promise<string>;
 }
 
 export class MailService {
@@ -149,6 +185,7 @@ export class MailService {
   private readonly now: () => number;
   private readonly fetchLimit: number;
   private readonly attachmentWriter: AttachmentWriter;
+  private readonly attachmentReader: (uri: string) => Promise<string>;
   private settings: AppSettings = DEFAULT_SETTINGS;
   private contactPhotos = new Map<string, string>();
   private contactDetails = new Map<string, ContactDetails>();
@@ -165,6 +202,7 @@ export class MailService {
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
     this.attachmentWriter = options.attachmentWriter ?? writeAttachmentToCache;
+    this.attachmentReader = options.attachmentReader ?? readFileAsBase64;
   }
 
   /**
@@ -562,6 +600,9 @@ export class MailService {
         console.warn(`[MailService] sync failed for ${account.emailAddress}`, error);
       }
     }
+    if (this.settings.offlineStarredAttachments) {
+      await this.downloadStarredAttachments();
+    }
   }
 
   /** Fetch a thread and mark it read as a side effect of opening it. */
@@ -640,6 +681,40 @@ export class MailService {
       await setAttachmentState(this.db, attachment.id, 'failed');
       throw cause;
     }
+  }
+
+  /** Bytes used by downloaded attachments. */
+  attachmentCacheSize(): number {
+    try {
+      return attachmentCacheSize();
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Delete downloaded files and forget their local paths (they are re-fetched on demand). */
+  async clearAttachmentCache(): Promise<void> {
+    clearAttachmentCache();
+    await clearDownloadedAttachmentPaths(this.db);
+  }
+
+  /**
+   * "Favoris hors ligne": download the attachments of starred mails, within
+   * the size limit used for automatic previews (at least 10 Mo).
+   */
+  async downloadStarredAttachments(): Promise<number> {
+    const limit = Math.max(10, this.settings.autoPreviewMaxMb) * 1024 * 1024;
+    let downloaded = 0;
+    for (const attachment of await listStarredRemoteAttachments(this.db)) {
+      if (attachment.sizeBytes > limit) continue;
+      try {
+        await this.resolveAttachment(attachment.id);
+        downloaded += 1;
+      } catch {
+        // Retried on the next sync.
+      }
+    }
+    return downloaded;
   }
 
   async getThreadMessages(threadId: string): Promise<Message[]> {
@@ -727,6 +802,67 @@ export class MailService {
    * from the answered message ({@link buildReplyHeaders}); otherwise the raw
    * fields are used. Sent messages are persisted into the local "sent" folder.
    */
+  /**
+   * Save the compose form as a draft, locally first (never lost), then on the
+   * server when the provider supports drafts. Returns the local draft id.
+   */
+  async saveDraft(input: SaveDraftInput): Promise<string> {
+    const existing = input.draftId ? await getDraft(this.db, input.draftId) : null;
+    const draft: Draft = {
+      id: existing?.id ?? createId('drf'),
+      accountId: input.accountId,
+      remoteDraftId: existing?.remoteDraftId ?? null,
+      to: parseAddressList(input.to),
+      cc: input.cc ? parseAddressList(input.cc) : [],
+      bcc: [],
+      subject: input.subject,
+      body: input.body,
+      updatedAt: this.now(),
+      syncState: 'pending',
+    };
+    await upsertDraft(this.db, draft);
+
+    const provider = this.registry.get(input.accountId);
+    if (provider?.saveDraft) {
+      try {
+        const remoteDraftId = await provider.saveDraft(draft.remoteDraftId, {
+          to: draft.to,
+          cc: draft.cc,
+          bcc: [],
+          subject: draft.subject,
+          bodyText: draft.body,
+        });
+        await upsertDraft(this.db, { ...draft, remoteDraftId, syncState: 'synced' });
+      } catch {
+        // Offline: the local copy stays "pending" and is pushed on the next save.
+      }
+    }
+    return draft.id;
+  }
+
+  async listDrafts(accountId: string): Promise<Draft[]> {
+    return listDraftsRows(this.db, accountId);
+  }
+
+  async getDraft(draftId: string): Promise<Draft | null> {
+    return getDraft(this.db, draftId);
+  }
+
+  /** Remove a draft locally and on the server (after sending or discarding it). */
+  async discardDraft(draftId: string): Promise<void> {
+    const draft = await getDraft(this.db, draftId);
+    if (!draft) return;
+    await deleteDraftRow(this.db, draftId);
+    const provider = this.registry.get(draft.accountId);
+    if (draft.remoteDraftId && provider?.deleteDraft) {
+      try {
+        await provider.deleteDraft(draft.remoteDraftId);
+      } catch {
+        // Already gone on the server.
+      }
+    }
+  }
+
   async send(input: SendMessageInput): Promise<SendResult> {
     const account = await getAccount(this.db, input.accountId);
     if (!account) {
@@ -760,6 +896,23 @@ export class MailService {
       }
     }
 
+    const picked = input.attachments ?? [];
+    let files: OutgoingMessage['attachments'];
+    try {
+      files = await Promise.all(
+        picked.map(async (file) => ({
+          filename: file.filename,
+          mimeType: file.mimeType,
+          base64: await this.attachmentReader(file.uri),
+        })),
+      );
+    } catch (cause) {
+      return {
+        status: 'failed',
+        error: `Pièce jointe illisible : ${cause instanceof Error ? cause.message : String(cause)}`,
+      };
+    }
+
     const outgoing: OutgoingMessage = {
       to,
       cc,
@@ -768,11 +921,12 @@ export class MailService {
       bodyText: input.body,
       inReplyTo,
       references,
+      attachments: files,
     };
 
     const result = await provider.send(outgoing);
     if (result.status === 'sent') {
-      await this.persistSent(account, outgoing, this.now());
+      await this.persistSent(account, outgoing, this.now(), picked);
     }
     return result;
   }
@@ -781,6 +935,7 @@ export class MailService {
     account: Account,
     outgoing: OutgoingMessage,
     now: number,
+    picked: PickedAttachment[] = [],
   ): Promise<void> {
     const sentFolder = await getFolderByRole(this.db, account.id, 'sent');
     if (!sentFolder) {
@@ -812,8 +967,9 @@ export class MailService {
       });
     }
 
+    const sentId = `${account.id}::sent::${deterministicId(messageIdHeader)}`;
     await upsertMessage(this.db, {
-      id: `${account.id}::sent::${deterministicId(messageIdHeader)}`,
+      id: sentId,
       accountId: account.id,
       folderId: sentFolder.id,
       remoteUid: null,
@@ -831,9 +987,26 @@ export class MailService {
       receivedAt: now,
       isRead: true,
       isStarred: false,
-      hasAttachments: false,
+      hasAttachments: picked.length > 0,
       syncState: 'synced',
     });
+    if (picked.length > 0) {
+      // The local files stay viewable in the conversation right away.
+      await replaceMessageAttachments(
+        this.db,
+        sentId,
+        toLocalAttachments(
+          sentId,
+          picked.map((file) => ({
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            remotePartId: null,
+            contentUri: file.uri,
+          })),
+        ),
+      );
+    }
     await recomputeThreadAggregates(this.db, threadId);
   }
 
