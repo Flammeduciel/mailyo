@@ -5,13 +5,19 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mailyo",
+    "scheme": [
+      "mailyo",
+      "com.anonymous.mailyo"
+    ],
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
         "NSFaceIDUsageDescription": "Déverrouillez MailYo pour accéder à vos emails."
       }
     },
@@ -28,8 +34,11 @@
         "ACCESS_NETWORK_STATE",
         "POST_NOTIFICATIONS",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_DATA_SYNC"
-      ]
+        "FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "package": "com.anonymous.mailyo"
     },
     "web": {
       "output": "static",
@@ -64,6 +73,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "gmailClientId": "602522346982-r2e1jie43htj7kmer1k0fpqmosavhj1s.apps.googleusercontent.com",
+      "router": {},
+      "eas": {
+        "projectId": "26b7f90b-6436-4d9b-b8dc-f59276490e5a"
+      }
+    },
+    "owner": "flammeduciel"
   }
 }

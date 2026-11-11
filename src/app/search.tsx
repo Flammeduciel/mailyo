@@ -72,7 +72,11 @@ export default function SearchScreen() {
             ]}
             testID={`search-result-${item.id}`}
           >
-            <Avatar name={item.senderName || item.senderAddress} size={40} />
+            <Avatar
+              name={item.senderName || item.senderAddress}
+              size={40}
+              imageUri={service.getContactPhoto(item.senderAddress)}
+            />
             <View style={styles.content}>
               <AppText variant="body" weight="semibold" numberOfLines={1}>
                 {item.subject || '(Sans objet)'}
@@ -88,10 +92,10 @@ export default function SearchScreen() {
         )}
         ListEmptyComponent={
           trimmed.length > 0 && searched ? (
-            <EmptyState icon="magnifyingglass" title="Aucun résultat" />
+            <EmptyState icon="search" title="Aucun résultat" />
           ) : (
             <EmptyState
-              icon="magnifyingglass"
+              icon="search"
               title="Rechercher dans vos messages"
               description="Objet, expéditeur ou contenu."
             />

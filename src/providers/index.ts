@@ -8,6 +8,7 @@
 export type {
   FetchMessagesInput,
   FetchMessagesResult,
+  FetchOlderMessagesInput,
   MailProvider,
   OAuthAdapter,
   OAuthTokens,

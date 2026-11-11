@@ -73,7 +73,13 @@ export function computeThreadKey(
     }
   }
 
-  const root = parents[0] ?? parseMessageIds(input.messageIdHeader)[0] ?? null;
+  // The first References id is the conversation's original message, so every
+  // reply resolves to the same root whatever order the mail is fetched in.
+  const root =
+    parseMessageIds(input.referencesHeader)[0] ??
+    parseMessageIds(input.inReplyTo)[0] ??
+    parseMessageIds(input.messageIdHeader)[0] ??
+    null;
   if (root) {
     return `msg:${deterministicId(root)}`;
   }
@@ -88,6 +94,15 @@ export function computeThreadKey(
  */
 export function scopedThreadId(accountId: string, threadKey: string): string {
   return `${accountId}::${threadKey}`;
+}
+
+/**
+ * The bare thread key of a stored thread id. Strips every scope prefix, which
+ * also unwraps ids that an earlier bug scoped several times.
+ */
+export function threadKeyOf(threadId: string): string {
+  const separator = threadId.lastIndexOf('::');
+  return separator === -1 ? threadId : threadId.slice(separator + 2);
 }
 
 function dedupe(values: string[]): string[] {

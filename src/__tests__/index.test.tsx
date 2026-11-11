@@ -20,6 +20,6 @@ jest.mock('expo-router', () => {
 describe('entry route', () => {
   it('redirects to the conversation list', () => {
     render(<Index />);
-    expect(screen.getByTestId('redirect')).toHaveTextContent('/(tabs)/inbox');
+    expect(screen.getByTestId('redirect')).toHaveTextContent('/discussions');
   });
 });

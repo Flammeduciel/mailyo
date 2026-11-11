@@ -20,7 +20,7 @@ export function Header({ title, onBack, right, subtitle }: HeaderProps) {
       <View style={styles.side}>
         {onBack ? (
           <IconButton
-            icon="chevron.left"
+            icon="chevron-left"
             accessibilityLabel="Retour"
             onPress={onBack}
             testID="header-back"

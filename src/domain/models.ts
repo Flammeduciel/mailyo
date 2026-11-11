@@ -62,7 +62,21 @@ export interface Message {
   isStarred: boolean;
   hasAttachments: boolean;
   syncState: SyncState;
+  /** Provider category (Gmail tabs); `null`/absent when unknown or for sent mail. */
+  category?: MailCategory | null;
 }
+
+/** Gmail-style inbox categories. */
+export type MailCategory = 'primary' | 'social' | 'promotions' | 'updates' | 'forums';
+
+/**
+ * Conversation list buckets shown as bottom tabs: personal mail, automated
+ * mail (newsletters, promotions, notifications, social), mailing lists, starred.
+ */
+export type ConversationTab = 'discussions' | 'actus' | 'groupes' | 'favoris';
+
+/** Extra filter chip applied on top of a tab. */
+export type ConversationFilter = 'all' | 'unread' | 'attachments';
 
 export interface Thread {
   id: string;
@@ -82,6 +96,10 @@ export interface ThreadSummary extends Thread {
   >;
   messageCount: number;
   hasAttachments: boolean;
+  /** At least one message of the thread is starred. */
+  isStarred: boolean;
+  /** Who the conversation is with: latest other sender, else the user's recipient. */
+  contact: EmailAddress;
 }
 
 export type RuleMatchType = 'sender' | 'domain' | 'subject' | 'vip' | 'all';

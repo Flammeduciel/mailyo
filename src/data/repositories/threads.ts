@@ -4,7 +4,14 @@
  */
 
 import type { Database, SqlValue } from '@/data/db/database';
-import type { Thread, ThreadSummary } from '@/domain/models';
+import type {
+  ConversationFilter,
+  ConversationTab,
+  EmailAddress,
+  MailCategory,
+  Thread,
+  ThreadSummary,
+} from '@/domain/models';
 
 interface ThreadRow {
   id: string;
@@ -31,18 +38,40 @@ function mapThread(row: ThreadRow): Thread {
 interface ThreadSummaryRow extends ThreadRow {
   message_count: number;
   has_attachments: number | null;
+  is_starred: number | null;
   last_sender_name: string | null;
   last_sender_address: string | null;
   last_subject: string | null;
   last_body_text: string | null;
   last_received_at: number | null;
+  other_sender_name: string | null;
+  other_sender_address: string | null;
+  last_to_json: string | null;
+}
+
+/** First recipient of a stored `to_json` value. */
+function firstRecipient(json: string | null): EmailAddress | null {
+  try {
+    const parsed = JSON.parse(json ?? '[]') as EmailAddress[];
+    return parsed[0]?.address ? parsed[0] : null;
+  } catch {
+    return null;
+  }
 }
 
 function mapThreadSummary(row: ThreadSummaryRow): ThreadSummary {
+  const contact: EmailAddress = row.other_sender_address
+    ? { name: row.other_sender_name ?? '', address: row.other_sender_address }
+    : (firstRecipient(row.last_to_json) ?? {
+        name: row.last_sender_name ?? '',
+        address: row.last_sender_address ?? '',
+      });
   return {
+    contact,
     ...mapThread(row),
     messageCount: row.message_count,
     hasAttachments: row.has_attachments !== null && row.has_attachments !== 0,
+    isStarred: row.is_starred !== null && row.is_starred !== 0,
     lastMessage: {
       senderName: row.last_sender_name ?? '',
       senderAddress: row.last_sender_address ?? '',
@@ -82,9 +111,40 @@ export async function getThread(db: Database, id: string): Promise<Thread | null
   return row ? mapThread(row) : null;
 }
 
+/**
+ * A thread's category is the one of its most recent categorised message (sent
+ * mail has none); uncategorised threads (demo, IMAP) count as personal mail.
+ */
+const THREAD_CATEGORY = `COALESCE((SELECT m.category FROM messages m
+   WHERE m.thread_id = t.id AND m.category IS NOT NULL
+   ORDER BY m.received_at DESC LIMIT 1), 'primary')`;
+
+const TAB_CATEGORIES: Record<Exclude<ConversationTab, 'favoris'>, MailCategory[]> = {
+  discussions: ['primary'],
+  actus: ['updates', 'promotions', 'social'],
+  groupes: ['forums'],
+};
+
+/** The message was not sent by the thread's own account. */
+const FROM_OTHER = `lower(m.sender_address) <> COALESCE(
+   (SELECT lower(a.email_address) FROM accounts a WHERE a.id = t.account_id), '')`;
+
+const IS_STARRED ='EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.is_starred = 1)';
+
+export interface ListThreadSummariesOptions {
+  accountId?: string;
+  includeArchived?: boolean;
+  /** Only archived threads. */
+  archivedOnly?: boolean;
+  tab?: ConversationTab;
+  filter?: ConversationFilter;
+  limit?: number;
+  offset?: number;
+}
+
 export async function listThreadSummaries(
   db: Database,
-  options?: { accountId?: string; includeArchived?: boolean; limit?: number },
+  options?: ListThreadSummariesOptions,
 ): Promise<ThreadSummary[]> {
   const conditions: string[] = [];
   const params: SqlValue[] = [];
@@ -93,19 +153,36 @@ export async function listThreadSummaries(
     conditions.push('t.account_id = ?');
     params.push(options.accountId);
   }
-  if (!options?.includeArchived) {
+  if (options?.archivedOnly) {
+    conditions.push('t.is_archived = 1');
+  } else if (!options?.includeArchived) {
     conditions.push('t.is_archived = 0');
+  }
+  if (options?.tab === 'favoris') {
+    conditions.push(IS_STARRED);
+  } else if (options?.tab) {
+    const categories = TAB_CATEGORIES[options.tab];
+    conditions.push(`${THREAD_CATEGORY} IN (${categories.map(() => '?').join(', ')})`);
+    params.push(...categories);
+  }
+  if (options?.filter === 'unread') {
+    conditions.push('t.unread_count > 0');
+  } else if (options?.filter === 'attachments') {
+    conditions.push(
+      'EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.has_attachments = 1)',
+    );
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   // `LIMIT -1` means "no limit" in SQLite, so the optional limit stays positional.
-  params.push(options?.limit ?? -1);
+  params.push(options?.limit ?? -1, options?.offset ?? 0);
 
   const rows = await db.getAllAsync<ThreadSummaryRow>(
     `SELECT
        t.*,
        (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id) AS message_count,
        (SELECT MAX(m.has_attachments) FROM messages m WHERE m.thread_id = t.id) AS has_attachments,
+       ${IS_STARRED} AS is_starred,
        (SELECT m.sender_name FROM messages m
           WHERE m.thread_id = t.id ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS last_sender_name,
        (SELECT m.sender_address FROM messages m
@@ -115,11 +192,19 @@ export async function listThreadSummaries(
        (SELECT m.body_text FROM messages m
           WHERE m.thread_id = t.id ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS last_body_text,
        (SELECT m.received_at FROM messages m
-          WHERE m.thread_id = t.id ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS last_received_at
+          WHERE m.thread_id = t.id ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS last_received_at,
+       (SELECT m.sender_name FROM messages m
+          WHERE m.thread_id = t.id AND ${FROM_OTHER}
+          ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS other_sender_name,
+       (SELECT m.sender_address FROM messages m
+          WHERE m.thread_id = t.id AND ${FROM_OTHER}
+          ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS other_sender_address,
+       (SELECT m.to_json FROM messages m
+          WHERE m.thread_id = t.id ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS last_to_json
      FROM threads t
      ${where}
-     ORDER BY t.last_message_at DESC
-     LIMIT ?`,
+     ORDER BY t.is_pinned DESC, t.last_message_at DESC, t.id DESC
+     LIMIT ? OFFSET ?`,
     params,
   );
 
@@ -136,6 +221,15 @@ export async function setThreadArchived(
   archived: boolean,
 ): Promise<void> {
   await db.runAsync('UPDATE threads SET is_archived = ? WHERE id = ?', [archived ? 1 : 0, id]);
+}
+
+/** Drop an account's conversations that no longer hold any message. */
+export async function deleteEmptyThreads(db: Database, accountId: string): Promise<void> {
+  await db.runAsync(
+    `DELETE FROM threads WHERE account_id = ?
+       AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = threads.id)`,
+    [accountId],
+  );
 }
 
 export async function recomputeThreadAggregates(db: Database, threadId: string): Promise<void> {

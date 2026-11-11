@@ -6,9 +6,9 @@ import type { Message, ThreadSummary } from '@/domain/models';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Chips } from './Chips';
-import { ConversationRow } from './ConversationRow';
+import { ConversationRow, formatThreadTime } from './ConversationRow';
 import { EmptyState } from './EmptyState';
-import { MessageBubble } from './MessageBubble';
+import { MessageBubble, shouldRenderHtml } from './MessageBubble';
 
 const NOW = new Date(2026, 0, 15, 9, 30, 0).getTime();
 
@@ -29,6 +29,8 @@ const thread: ThreadSummary = {
   },
   messageCount: 3,
   hasAttachments: true,
+  isStarred: false,
+  contact: { name: 'Alice Durand', address: 'alice@example.com' },
 };
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
@@ -120,13 +122,31 @@ describe('ConversationRow', () => {
 
     expect(getByText('Alice Durand')).toBeTruthy();
     expect(getByText('Réunion demain')).toBeTruthy();
-    expect(getByText('Bonjour, on se voit demain à 10h ?')).toBeTruthy();
+    expect(getByText(/Bonjour, on se voit demain à 10h \?/)).toBeTruthy();
     expect(getByText('09:30')).toBeTruthy();
     expect(getByTestId('row-badge')).toBeTruthy();
     expect(getByText('2')).toBeTruthy();
 
     fireEvent.press(getByTestId('row'));
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports long presses for multi-selection', () => {
+    const onLongPress = jest.fn();
+    const { getByTestId } = render(
+      <ConversationRow thread={thread} onLongPress={onLongPress} now={NOW} testID="row" selected />,
+    );
+
+    fireEvent(getByTestId('row'), 'longPress');
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('formats times like a messaging app', () => {
+    const at = (day: number, hour = 8) => new Date(2026, 0, day, hour, 5).getTime();
+    expect(formatThreadTime(at(15), NOW)).toBe('08:05');
+    expect(formatThreadTime(at(14), NOW)).toBe('Hier');
+    expect(formatThreadTime(at(12), NOW)).toBe('lundi');
+    expect(formatThreadTime(at(2), NOW)).toBe('02/01/2026');
   });
 
   it('hides the badge on read threads', () => {
@@ -140,6 +160,42 @@ describe('ConversationRow', () => {
 });
 
 describe('MessageBubble', () => {
+  it('shows the replied-to message as a tappable quote', () => {
+    const onQuotePress = jest.fn();
+    const { getByText, getByTestId } = render(
+      <MessageBubble
+        message={makeMessage()}
+        isOwn={false}
+        quoted={{ id: 'parent', senderName: 'Alice', snippet: 'On se voit ?', isOwn: true }}
+        onQuotePress={onQuotePress}
+        testID="bubble"
+      />,
+    );
+
+    expect(getByText('Vous')).toBeTruthy();
+    expect(getByText('On se voit ?')).toBeTruthy();
+    fireEvent.press(getByTestId('bubble-quote'));
+    expect(onQuotePress).toHaveBeenCalledWith('parent');
+  });
+
+  it('folds quoted history behind a toggle', () => {
+    const message = makeMessage({ bodyText: 'Oui !\n\nOn Tue, Bob wrote:\n> ok ?' });
+    const { getByText, queryByText } = render(<MessageBubble message={message} isOwn={false} />);
+
+    expect(getByText('Oui !')).toBeTruthy();
+    expect(queryByText(/> ok \?/)).toBeNull();
+    fireEvent.press(getByText('••• Historique'));
+    expect(getByText(/> ok \?/)).toBeTruthy();
+  });
+
+  it('renders layout-heavy HTML in a web view and simple mail as text', () => {
+    const table = '<table><tr><td>x</td></tr></table>';
+    expect(shouldRenderHtml({ bodyHtmlSanitized: table, bodyText: 'x' })).toBe(true);
+    expect(shouldRenderHtml({ bodyHtmlSanitized: '<p>Salut</p>', bodyText: 'Salut' })).toBe(false);
+    expect(shouldRenderHtml({ bodyHtmlSanitized: '<p>Salut</p>', bodyText: '' })).toBe(true);
+    expect(shouldRenderHtml({ bodyHtmlSanitized: null, bodyText: 'Salut' })).toBe(false);
+  });
+
   it('shows the body text', () => {
     const { getByText } = render(
       <MessageBubble message={makeMessage()} isOwn={false} testID="bubble" />,
@@ -176,13 +232,17 @@ describe('EmptyState', () => {
 });
 
 describe('Avatar', () => {
-  it('derives two initials from a full name', () => {
-    const { getByText } = render(<Avatar name="Alice Durand" />);
-    expect(getByText('AD')).toBeTruthy();
+  it('shows the Google image when one is provided', () => {
+    const { getByLabelText, queryByTestId } = render(
+      <Avatar name="Alice Durand" imageUri="https://lh3.googleusercontent.com/a" />,
+    );
+    expect(getByLabelText('Alice Durand')).toBeTruthy();
+    expect(queryByTestId('avatar-placeholder')).toBeNull();
   });
 
-  it('falls back to the first letter of an email address', () => {
-    const { getByText } = render(<Avatar name="bob@example.com" />);
-    expect(getByText('B')).toBeTruthy();
+  it('draws no initials without an image, only a neutral placeholder', () => {
+    const { getByTestId, queryByText } = render(<Avatar name="Alice Durand" />);
+    expect(getByTestId('avatar-placeholder')).toBeTruthy();
+    expect(queryByText('AD')).toBeNull();
   });
 });

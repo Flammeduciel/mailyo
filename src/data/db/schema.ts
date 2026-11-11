@@ -8,7 +8,7 @@
 
 import type { Database } from '@/data/db/database';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const MIGRATION_1 = `
 CREATE TABLE IF NOT EXISTS accounts (
@@ -188,7 +188,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 `;
 
-const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
+/**
+ * Provider category per message (Gmail tabs), used by the conversation tabs.
+ * Sync cursors are reset so the latest messages are fetched again and
+ * back-filled with their category (upserts are idempotent).
+ */
+const MIGRATION_4 = `
+ALTER TABLE messages ADD COLUMN category TEXT;
+CREATE INDEX IF NOT EXISTS idx_messages_thread_received ON messages (thread_id, received_at);
+UPDATE folders SET last_synced_uid = NULL;
+`;
+
+const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
 
 /** Apply every pending migration. Resumable and idempotent. */
 export async function migrate(db: Database): Promise<void> {

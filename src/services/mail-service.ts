@@ -19,8 +19,13 @@ import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
   deleteMessage,
+  findMessageIdHeaderByRemoteUid,
   getMessage,
+  getCorrespondence,
   getThreadIdByMessageIdHeader,
+  listThreadingRows,
+  type Correspondence,
+  setMessageThreadId,
   listMessagesByThread,
   searchMessages,
   setMessageRead,
@@ -34,13 +39,16 @@ import {
   upsertRule,
 } from '@/data/repositories/rules';
 import {
+  deleteEmptyThreads,
   getThread,
   listThreadSummaries,
   recomputeThreadAggregates,
   setThreadArchived as setThreadArchivedRow,
+  setThreadPinned as setThreadPinnedRow,
+  type ListThreadSummariesOptions,
   upsertThread,
 } from '@/data/repositories/threads';
-import { getAllSettings, setSettings } from '@/data/repositories/settings';
+import { getAllSettings, setSetting, setSettings } from '@/data/repositories/settings';
 import type {
   Account,
   Message,
@@ -57,6 +65,7 @@ import {
   formatMessageId,
   parseMessageIds,
   scopedThreadId,
+  threadKeyOf,
 } from '@/domain/threading';
 import type { Notifier } from '@/notifications/notifier';
 import { resolveNotification } from '@/notifications/resolve';
@@ -74,8 +83,17 @@ import type {
   SendResult,
   TokenStore,
 } from '@/providers/types';
+import { GmailApiProvider } from '@/providers/gmail/gmail-api-provider';
+import { fetchGoogleContacts, type ContactDetails } from '@/providers/gmail/google-contacts';
+import { createGmailTokenProvider } from '@/providers/gmail/gmail-tokens';
 import { ProviderRegistry } from '@/providers/registry';
 import { SyncEngine } from '@/sync/sync-engine';
+
+const THREADING_VERSION_KEY = 'threading.version';
+const THREADING_VERSION = '2';
+// v3 holds Google's letter avatars and contact details; older caches are ignored.
+const CONTACT_PHOTOS_KEY = 'contacts.photos.v3';
+const CONTACT_PHOTOS_TTL_MS = 12 * 60 * 60 * 1000;
 
 export interface SendMessageInput {
   accountId: string;
@@ -102,6 +120,10 @@ export interface MailServiceOptions {
   notifier?: Notifier;
   /** Secure storage for OAuth tokens; omit in tests that do not connect accounts. */
   tokenStore?: TokenStore;
+  /** Google OAuth client id, needed to refresh Gmail access tokens. */
+  gmailClientId?: string;
+  /** HTTP client for provider APIs; defaults to the global `fetch` (tests inject one). */
+  fetchImpl?: typeof fetch;
   now?: () => number;
   fetchLimit?: number;
 }
@@ -111,15 +133,23 @@ export class MailService {
   private readonly registry: ProviderRegistry;
   private readonly notifier: Notifier | null;
   private readonly tokenStore: TokenStore | null;
+  private readonly gmailClientId: string;
+  private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly fetchLimit: number;
   private settings: AppSettings = DEFAULT_SETTINGS;
+  private contactPhotos = new Map<string, string>();
+  private contactDetails = new Map<string, ContactDetails>();
+  private contactPhotosFetchedAt = 0;
+  private connectQueue: Promise<unknown> = Promise.resolve();
 
   constructor(options: MailServiceOptions) {
     this.db = options.db;
     this.registry = options.registry ?? new ProviderRegistry();
     this.notifier = options.notifier ?? null;
     this.tokenStore = options.tokenStore ?? null;
+    this.gmailClientId = options.gmailClientId ?? '';
+    this.fetchImpl = options.fetchImpl;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
   }
@@ -130,7 +160,20 @@ export class MailService {
    * Does not create any account: that is the onboarding screen's job.
    */
   async initialize(): Promise<void> {
-    this.settings = parseAppSettings(await getAllSettings(this.db));
+    await this.loadState();
+    await this.syncAll();
+  }
+
+  /** Load persisted preferences and register providers, without touching the network. */
+  async loadState(): Promise<void> {
+    const rawSettings = await getAllSettings(this.db);
+    this.settings = parseAppSettings(rawSettings);
+    this.loadContactPhotoCache(rawSettings[CONTACT_PHOTOS_KEY]);
+    await this.removeDuplicateAccounts();
+    if (rawSettings[THREADING_VERSION_KEY] !== THREADING_VERSION) {
+      await this.rethreadStoredMail();
+      await setSetting(this.db, THREADING_VERSION_KEY, THREADING_VERSION);
+    }
 
     const accounts = await listAccounts(this.db);
     for (const account of accounts) {
@@ -142,8 +185,6 @@ export class MailService {
         this.registry.register(account.id, provider);
       }
     }
-
-    await this.syncAll();
   }
 
   /** Create the built-in demo account, then load and synchronise it. */
@@ -169,6 +210,99 @@ export class MailService {
     return this.settings;
   }
 
+  /** Cached Google image for an address (real photo or Google's letter avatar). */
+  getContactPhoto(emailAddress: string | null | undefined): string | undefined {
+    return emailAddress ? this.contactPhotos.get(emailAddress.toLowerCase()) : undefined;
+  }
+
+  /** What Google knows about an address, if it is among the user's contacts. */
+  getContactDetails(emailAddress: string): ContactDetails | undefined {
+    return this.contactDetails.get(emailAddress.toLowerCase());
+  }
+
+  /** How much mail was exchanged with an address, across all accounts. */
+  async getCorrespondence(emailAddress: string): Promise<Correspondence> {
+    return getCorrespondence(this.db, emailAddress);
+  }
+
+  private loadContactPhotoCache(raw: string | undefined): void {
+    if (!raw) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        fetchedAt?: number;
+        photos?: Record<string, string>;
+        details?: Record<string, ContactDetails>;
+      };
+      this.contactPhotos = new Map(Object.entries(parsed.photos ?? {}));
+      this.contactDetails = new Map(Object.entries(parsed.details ?? {}));
+      this.contactPhotosFetchedAt = parsed.fetchedAt ?? 0;
+    } catch {
+      this.contactPhotos = new Map();
+      this.contactDetails = new Map();
+    }
+  }
+
+  /**
+   * Refresh contact photos from Google for every Gmail account. Resolves true when
+   * the cache changed. Failures (e.g. account authorised before the contacts
+   * scopes were added) keep the current cache.
+   */
+  async refreshContactPhotos(force = false): Promise<boolean> {
+    const fresh =
+      this.contactPhotos.size > 0 &&
+      this.now() - this.contactPhotosFetchedAt < CONTACT_PHOTOS_TTL_MS;
+    if (!force && fresh) {
+      return false;
+    }
+    if (!this.tokenStore || !this.gmailClientId) {
+      return false;
+    }
+    const accounts = (await listAccounts(this.db)).filter(
+      (account) => account.provider === 'gmail' && account.authType === 'oauth',
+    );
+    const merged = new Map<string, string>();
+    const mergedDetails = new Map<string, ContactDetails>();
+    let succeeded = false;
+    for (const account of accounts) {
+      try {
+        const { photos, details } = await fetchGoogleContacts(
+          account.emailAddress,
+          createGmailTokenProvider({
+            accountId: account.id,
+            clientId: this.gmailClientId,
+            tokenStore: this.tokenStore,
+            now: this.now,
+            fetchImpl: this.fetchImpl,
+          }),
+          this.fetchImpl,
+        );
+        photos.forEach((url, email) => merged.set(email, url));
+        details.forEach((detail, email) => mergedDetails.set(email, detail));
+        succeeded = true;
+      } catch (cause) {
+        console.warn(`[MailService] contact photos failed for ${account.emailAddress}`, cause);
+      }
+    }
+    if (!succeeded) {
+      return false;
+    }
+    this.contactPhotos = merged;
+    this.contactDetails = mergedDetails;
+    this.contactPhotosFetchedAt = this.now();
+    await setSetting(
+      this.db,
+      CONTACT_PHOTOS_KEY,
+      JSON.stringify({
+        fetchedAt: this.contactPhotosFetchedAt,
+        photos: Object.fromEntries(merged),
+        details: Object.fromEntries(mergedDetails),
+      }),
+    );
+    return true;
+  }
+
   /** Merge a patch into the persisted preferences and keep the in-memory copy in sync. */
   async updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
     const next: AppSettings = { ...this.settings, ...patch };
@@ -183,10 +317,110 @@ export class MailService {
    * work, so the account exists and is manageable, but no provider is registered
    * yet and synchronisation simply skips it.
    */
-  async connectOAuthAccount(input: ConnectOAuthAccountInput): Promise<Account> {
+  connectOAuthAccount(input: ConnectOAuthAccountInput): Promise<Account> {
+    // Serialised: two overlapping authorisations would both miss the existing
+    // account and insert duplicates.
+    const run = this.connectQueue.then(() => this.connectOAuthAccountNow(input));
+    this.connectQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  /**
+   * Keep a single account per provider + address, preferring one whose tokens
+   * are still stored. Duplicates (and their copied mail) are deleted.
+   */
+  private async removeDuplicateAccounts(): Promise<void> {
+    const groups = new Map<string, Account[]>();
+    for (const account of await listAccounts(this.db)) {
+      const key = `${account.provider}:${account.emailAddress.toLowerCase()}`;
+      groups.set(key, [...(groups.get(key) ?? []), account]);
+    }
+    for (const accounts of groups.values()) {
+      if (accounts.length < 2) {
+        continue;
+      }
+      let keep = accounts[0];
+      if (this.tokenStore) {
+        for (const candidate of accounts) {
+          if (await this.tokenStore.load(candidate.id)) {
+            keep = candidate;
+            break;
+          }
+        }
+      }
+      for (const duplicate of accounts) {
+        if (duplicate.id !== keep.id) {
+          await this.deleteAccountData(duplicate.id);
+        }
+      }
+    }
+  }
+
+  /**
+   * Recompute every stored message's conversation with the current threading
+   * rules, merging conversations that an older version split apart.
+   */
+  async rethreadStoredMail(): Promise<void> {
+    for (const account of await listAccounts(this.db)) {
+      const rows = await listThreadingRows(this.db, account.id);
+      const known = new Map<string, string>();
+      const touched = new Set<string>();
+      for (const row of rows) {
+        const key = computeThreadKey(row, known);
+        const threadId = scopedThreadId(account.id, key);
+        for (const id of parseMessageIds(row.messageIdHeader)) {
+          known.set(id, key);
+        }
+        if (threadId === row.threadId) {
+          continue;
+        }
+        if (!(await getThread(this.db, threadId))) {
+          const previous = await getThread(this.db, row.threadId);
+          await upsertThread(this.db, {
+            id: threadId,
+            accountId: account.id,
+            normalizedSubject: normalizeSubject(row.subject),
+            lastMessageAt: 0,
+            unreadCount: 0,
+            isPinned: previous?.isPinned ?? false,
+            isArchived: previous?.isArchived ?? false,
+          });
+        }
+        await setMessageThreadId(this.db, row.id, threadId);
+        touched.add(threadId);
+      }
+      for (const threadId of touched) {
+        await recomputeThreadAggregates(this.db, threadId);
+      }
+      await deleteEmptyThreads(this.db, account.id);
+    }
+  }
+
+  private async connectOAuthAccountNow(input: ConnectOAuthAccountInput): Promise<Account> {
+    const provider = input.provider ?? 'gmail';
+    // Re-authorising an address already connected refreshes its tokens instead
+    // of creating a duplicate account.
+    const existing = (await listAccounts(this.db)).find(
+      (candidate) =>
+        candidate.provider === provider &&
+        candidate.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
+    );
+    if (existing) {
+      if (this.tokenStore) {
+        await this.tokenStore.save(existing.id, input.tokens);
+      }
+      if (!this.registry.get(existing.id)) {
+        const restored = this.createProviderFor(existing);
+        if (restored) {
+          this.registry.register(existing.id, restored);
+        }
+      }
+      return existing;
+    }
+
     const account: Account = {
       id: createId('account'),
-      provider: input.provider ?? 'gmail',
+      provider,
       emailAddress: input.emailAddress,
       displayName: input.displayName ?? input.emailAddress,
       authType: 'oauth',
@@ -199,29 +433,86 @@ export class MailService {
     if (this.tokenStore) {
       await this.tokenStore.save(account.id, input.tokens);
     }
-    const provider = this.createProviderFor(account);
-    if (provider) {
-      this.registry.register(account.id, provider);
+    const mailProvider = this.createProviderFor(account);
+    if (mailProvider) {
+      this.registry.register(account.id, mailProvider);
     }
     return account;
   }
 
   /**
-   * Rebuild the in-memory provider for a known account. Only the demo account
-   * has one until the native IMAP/SMTP adapter lands; other accounts return
-   * `null` so synchronisation skips them rather than pretending to work.
+   * Rebuild the in-memory provider for a known account: the demo data set, or
+   * the Gmail REST API for OAuth Gmail accounts. Anything else (e.g. password
+   * IMAP, still unimplemented) returns `null` so synchronisation skips it.
    */
   private createProviderFor(account: Account): MailProvider | null {
     if (account.id === DEMO_ACCOUNT_ID) {
       return createDemoProvider(this.now()).provider;
     }
+    if (
+      account.provider === 'gmail' &&
+      account.authType === 'oauth' &&
+      this.tokenStore &&
+      this.gmailClientId
+    ) {
+      return new GmailApiProvider({
+        emailAddress: account.emailAddress,
+        getAccessToken: createGmailTokenProvider({
+          accountId: account.id,
+          clientId: this.gmailClientId,
+          tokenStore: this.tokenStore,
+          now: this.now,
+          fetchImpl: this.fetchImpl,
+        }),
+        lookupMessageIdHeader: (remoteUid) =>
+          findMessageIdHeaderByRemoteUid(this.db, account.id, remoteUid),
+        fetchImpl: this.fetchImpl,
+      });
+    }
     return null;
   }
 
-  async listConversations(options?: { includeArchived?: boolean }): Promise<ThreadSummary[]> {
-    return listThreadSummaries(this.db, {
-      includeArchived: options?.includeArchived ?? false,
-    });
+  async listConversations(options?: ListThreadSummariesOptions): Promise<ThreadSummary[]> {
+    return listThreadSummaries(this.db, { includeArchived: false, ...options });
+  }
+
+  /**
+   * Infinite scroll: fetch one more page of older inbox mail for every account
+   * whose provider can page backwards. Resolves `false` once nothing older
+   * exists anywhere, so the list can stop asking.
+   */
+  async loadOlderConversations(pageSize = 30): Promise<boolean> {
+    let fetched = 0;
+    for (const account of await listAccounts(this.db)) {
+      const provider = this.registry.get(account.id);
+      if (!provider?.fetchOlderMessages) {
+        continue;
+      }
+      const inbox = await getFolderByRole(this.db, account.id, 'inbox');
+      if (!inbox) {
+        continue;
+      }
+      const engine = new SyncEngine({ db: this.db, provider, now: this.now });
+      try {
+        fetched += await engine.loadOlder(account, inbox, pageSize);
+      } catch (error) {
+        console.warn(`[MailService] loading older mail failed for ${account.emailAddress}`, error);
+      }
+    }
+    return fetched > 0;
+  }
+
+  async setThreadPinned(threadId: string, pinned: boolean): Promise<void> {
+    await setThreadPinnedRow(this.db, threadId, pinned);
+  }
+
+  /** Star or unstar every message of a thread (the list's "Favori" action). */
+  async setThreadStarred(threadId: string, starred: boolean): Promise<void> {
+    for (const message of await listMessagesByThread(this.db, threadId)) {
+      if (message.isStarred !== starred) {
+        await this.toggleStar(message.id, starred);
+      }
+    }
   }
 
   async getAccountById(accountId: string): Promise<Account | null> {
@@ -249,8 +540,14 @@ export class MailService {
         now: this.now,
         fetchLimit: this.fetchLimit,
       });
-      const result = await engine.syncAccount(account);
-      await this.notifyIncoming(account, result.added);
+      try {
+        const result = await engine.syncAccount(account);
+        await this.notifyIncoming(account, result.added);
+      } catch (error) {
+        // One unreachable account (offline, expired token) must not block the
+        // others nor app start-up; the engine already flagged it `error`.
+        console.warn(`[MailService] sync failed for ${account.emailAddress}`, error);
+      }
     }
   }
 
@@ -269,6 +566,14 @@ export class MailService {
     const messages = await listMessagesByThread(this.db, threadId);
     for (const message of messages) {
       if (message.isRead !== isRead) {
+        const provider = this.registry.get(message.accountId);
+        if (provider && message.remoteUid !== null) {
+          try {
+            await provider.setRead(message.remoteUid, isRead);
+          } catch {
+            // Best-effort; the local flag still reflects the user's intent.
+          }
+        }
         await setMessageRead(this.db, message.id, isRead);
       }
     }
@@ -453,7 +758,7 @@ export class MailService {
     const known = new Map<string, string>();
     for (const [header, threadId] of raw) {
       for (const id of parseMessageIds(header)) {
-        known.set(id, threadId);
+        known.set(id, threadKeyOf(threadId));
       }
     }
     return known;
@@ -513,6 +818,32 @@ export class MailService {
   }
 
   /** Wipe all local data for an account (settings screen), including its tokens. */
+  /** The OAuth scopes granted to an account, as stored with its tokens. */
+  async getAccountScope(accountId: string): Promise<string | null> {
+    const tokens = await this.tokenStore?.load(accountId);
+    return tokens?.scope ?? null;
+  }
+
+  /**
+   * Revoke the account's Google authorisation (best effort: offline must not
+   * block signing out), then delete it and its local mail.
+   */
+  async signOutAccount(accountId: string): Promise<void> {
+    const tokens = await this.tokenStore?.load(accountId);
+    const token = tokens?.refreshToken ?? tokens?.accessToken;
+    if (token) {
+      try {
+        await (this.fetchImpl ?? fetch)(
+          `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+        );
+      } catch (cause) {
+        console.warn('[MailService] token revocation failed', cause);
+      }
+    }
+    await this.deleteAccountData(accountId);
+  }
+
   async deleteAccountData(accountId: string): Promise<void> {
     this.registry.remove(accountId);
     await this.tokenStore?.remove(accountId);

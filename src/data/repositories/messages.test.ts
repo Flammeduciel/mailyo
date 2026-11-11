@@ -38,6 +38,7 @@ function message(overrides: Partial<Message> = {}): Message {
     isStarred: false,
     hasAttachments: false,
     syncState: 'synced',
+    category: 'updates',
     ...overrides,
   };
 }

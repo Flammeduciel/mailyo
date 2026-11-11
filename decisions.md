@@ -289,6 +289,61 @@ src/notifications/ résolution des règles + publication système
   d'une constante littérale.
 - **Justification :** une valeur affichée doit refléter le build, pas dériver.
 
+### D-039 — Gmail via l'API REST plutôt qu'IMAP/SMTP natif
+
+- **Contexte :** l'OAuth Gmail fonctionnait sur appareil, mais aucun transport
+  n'existait : les comptes Gmail restaient vides (D-035). Aucune bibliothèque
+  IMAP ne tourne en React Native sans module natif.
+- **Décision :** `GmailApiProvider` (`src/providers/gmail/`) implémente
+  `MailProvider` sur l'API REST Gmail (HTTPS + jeton OAuth) : libellés `INBOX`
+  et `SENT`, lecture `format=full`, envoi `messages.send` (MIME brut encodé),
+  lu/étoile/archive via `modify`, corbeille via `trash`. `remoteUid` =
+  `internalDate` (ms) : entier sûr, croissant, identique dans tous les
+  libellés ; l'id Gmail est mis en cache, puis retrouvé après redémarrage via
+  `rfc822msgid:`. Le jeton d'accès est renouvelé par la grant `refresh_token`
+  (client natif, sans secret) et réécrit dans le stockage sécurisé. Une erreur
+  de synchro d'un compte n'interrompt plus les autres ni le démarrage.
+- **Justification :** fonctionne immédiatement, en JavaScript pur, sans
+  recompiler. L'interface `MailProvider` est inchangée : un adaptateur IMAP
+  natif reste branchable plus tard.
+- **Limites connues :** pas de temps réel (pas d'IDLE ; le push Gmail exige
+  Pub/Sub côté serveur), les nouveaux mails arrivent à la relève périodique ou
+  au rafraîchissement. Seuls les nouveaux messages sont synchronisés : un
+  changement lu/non-lu fait ailleurs n'est pas répercuté. Un message envoyé
+  depuis MailYo peut apparaître deux fois (copie locale + copie `SENT`). Le
+  scope `https://mail.google.com/` est « restreint » : publication hors mode
+  Test = validation Google + audit CASA.
+
+### D-040 — Interface de messagerie Android (onglets par catégorie, bulles, HTML)
+
+- **Contexte :** demande d'une interface calquée sur les conventions d'une
+  messagerie Android (barre du haut, barre d'onglets, bouton flottant, appui
+  long, réponses citées, paramètres en liste), mails mal formatés, champ de
+  saisie masqué par la barre de navigation.
+- **Décision :**
+  - Onglets `Discussions · Actus · Groupes · Favoris` d'après les catégories
+    Gmail (`CATEGORY_*` → colonne `messages.category`, migration 4) ;
+    Paramètres et Archivées passent dans le menu ⋮. Couleur : bleu MailYo,
+    sans marque ni logo tiers.
+  - Liste : recherche en pilule, filtres (Toutes / Non lus / Pièces jointes),
+    épinglage, sélection multiple par appui long, défilement infini (pages
+    locales puis `MailProvider.fetchOlderMessages`, Gmail `before:`).
+  - Conversation : liste inversée avec séparateurs de jour, citation du
+    message parent (`In-Reply-To`) cliquable, swipe pour répondre, sélection
+    (répondre, favori, copier, transférer, supprimer), historique cité replié
+    (`splitQuotedText`), liens cliquables (`linkify`), HTML riche dans une
+    WebView (`react-native-webview`) à hauteur auto, mise à l'échelle des mails
+    larges, liens ouverts hors de la WebView. Saisie dans un
+    `KeyboardAvoidingView behavior="padding"` + marge de la barre de
+    navigation (Android edge-to-edge, guide Expo « keyboard handling »).
+  - Le sanitiseur garde désormais les styles en ligne filtrés (`sanitizeCss` :
+    ni `expression()`, ni `javascript:`, ni `url()` hors http(s)/data:image,
+    ni `position`/`z-index`) et `class`/`id` (repli de `gmail_quote`) : sans
+    eux la mise en page des mails était perdue.
+- **Limites :** les images distantes se chargent à l'ouverture (pas encore
+  d'option « bloquer les images ») ; pas de sélecteur d'emoji ni de pièces
+  jointes dans la saisie.
+
 ---
 
 ## 4. À trancher plus tard (Phase 0, sur appareil réel)

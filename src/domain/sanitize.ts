@@ -64,6 +64,34 @@ const ALLOWED = new Set([
   'small',
   'sub',
   'sup',
+  // Common email-layout tags.
+  'font',
+  'center',
+  's',
+  'strike',
+  'del',
+  'ins',
+  'mark',
+  'big',
+  'tt',
+  'caption',
+  'colgroup',
+  'col',
+  'section',
+  'article',
+  'header',
+  'footer',
+  'main',
+  'figure',
+  'figcaption',
+  'address',
+  'cite',
+  'q',
+  'abbr',
+  'dl',
+  'dt',
+  'dd',
+  'picture',
 ]);
 
 /** Elements that have no closing tag. */
@@ -83,13 +111,68 @@ const VOID = new Set([
   'wbr',
 ]);
 
-/** Per-tag attribute allow-list. Tags not listed keep no attributes. */
+/** Per-tag attribute allow-list, on top of {@link GLOBAL_ATTRS}. */
 const TAG_ATTRS: Record<string, Set<string>> = {
   a: new Set(['href', 'title']),
-  img: new Set(['src', 'alt', 'width', 'height']),
-  td: new Set(['colspan', 'rowspan']),
-  th: new Set(['colspan', 'rowspan']),
+  img: new Set(['src', 'alt', 'width', 'height', 'border']),
+  table: new Set(['width', 'height', 'border', 'cellpadding', 'cellspacing', 'bgcolor']),
+  td: new Set(['colspan', 'rowspan', 'width', 'height', 'bgcolor', 'nowrap']),
+  th: new Set(['colspan', 'rowspan', 'width', 'height', 'bgcolor', 'nowrap']),
+  tr: new Set(['bgcolor', 'height']),
+  col: new Set(['width', 'span']),
+  colgroup: new Set(['width', 'span']),
+  font: new Set(['color', 'face', 'size']),
+  blockquote: new Set(['type', 'cite']),
+  ol: new Set(['start', 'type']),
 };
+
+/**
+ * Presentational attributes kept on every allowed tag. Email layout depends on
+ * inline styles; `class`/`id` let the viewer recognise quoted history
+ * (`gmail_quote`, Outlook's `divRplyFwdMsg`) to fold it.
+ */
+const GLOBAL_ATTRS = new Set(['style', 'class', 'id', 'align', 'valign', 'dir', 'lang']);
+
+/** CSS properties that are never kept (overlays, legacy script hooks). */
+const BLOCKED_CSS_PROPERTIES = new Set(['behavior', '-moz-binding', 'position', 'z-index']);
+
+/**
+ * Keep only harmless inline declarations: no script-like values, no imports,
+ * `url()` restricted to http(s) and inline images, no positioning that could
+ * draw over the app (phishing overlays). Returns '' when nothing survives.
+ */
+export function sanitizeCss(style: string): string {
+  const kept: string[] = [];
+  for (const declaration of style.split(';')) {
+    const colon = declaration.indexOf(':');
+    if (colon <= 0) {
+      continue;
+    }
+    const property = declaration.slice(0, colon).trim().toLowerCase();
+    const value = declaration.slice(colon + 1).trim();
+    if (!/^-?[a-z][a-z-]*$/.test(property) || value.length === 0) {
+      continue;
+    }
+    if (BLOCKED_CSS_PROPERTIES.has(property)) {
+      continue;
+    }
+    const compact = value.replace(/\\/g, '').replace(/\s+/g, '').toLowerCase();
+    if (/expression\(|javascript:|vbscript:|@import|-moz-binding/.test(compact)) {
+      continue;
+    }
+    const urls = compact.match(/url\(([^)]*)\)/g) ?? [];
+    if (urls.some((url) => !/^url\(['"]?(https?:|data:image\/)/.test(url))) {
+      continue;
+    }
+    kept.push(`${property}: ${value}`);
+  }
+  return kept.join('; ');
+}
+
+/** Class names / ids reduced to safe identifier characters. */
+function sanitizeIdentifiers(value: string): string {
+  return value.replace(/[^\w\s-]/g, '').trim();
+}
 
 /** Attributes whose value is a URL and must be scheme-checked. */
 const URL_ATTRS = new Set(['href', 'src', 'action']);
@@ -180,15 +263,19 @@ function renderAttributes(name: string, attrs: string): string {
     if (attr.startsWith('on')) {
       continue; // event handler
     }
-    if (!allowed || !allowed.has(attr)) {
+    if (!GLOBAL_ATTRS.has(attr) && (!allowed || !allowed.has(attr))) {
       continue;
     }
     let value = match[2] ?? match[3] ?? match[4] ?? '';
     if (URL_ATTRS.has(attr)) {
       value = sanitizeUrl(value);
-      if (value === '') {
-        continue;
-      }
+    } else if (attr === 'style') {
+      value = sanitizeCss(value);
+    } else if (attr === 'class' || attr === 'id') {
+      value = sanitizeIdentifiers(value);
+    }
+    if (value === '' && attr !== 'nowrap') {
+      continue;
     }
     result += ` ${attr}="${escapeHtml(value)}"`;
   }

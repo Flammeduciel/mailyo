@@ -11,7 +11,9 @@
  */
 
 import { AuthRequest, ResponseType, exchangeCodeAsync, makeRedirectUri } from 'expo-auth-session';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
 import type { OAuthAdapter, OAuthTokens } from '@/providers/types';
 
@@ -41,8 +43,19 @@ export interface GmailOAuthConfig {
   scopes: string[];
 }
 
-/** App scheme declared in `app.json` (`expo.scheme`). */
-const APP_SCHEME = 'mailyo';
+/**
+ * Google's Android/iOS OAuth clients only accept a redirect URI whose scheme is
+ * the app id (`com.example.app:/path`, single slash). Any other scheme
+ * (e.g. `mailyo://`) is rejected with `400: invalid_request`. The app id must
+ * also be registered as a URL scheme in `app.json` (`expo.scheme`).
+ */
+function nativeRedirectUri(): string | undefined {
+  const appId =
+    Platform.OS === 'android'
+      ? Constants.expoConfig?.android?.package
+      : Constants.expoConfig?.ios?.bundleIdentifier;
+  return appId ? `${appId}:/oauthredirect` : undefined;
+}
 
 /** Minimum discovery document needed for code exchange (Google endpoints). */
 const GOOGLE_DISCOVERY = {
@@ -57,7 +70,7 @@ export function createGmailOAuthAdapter(config: GmailOAuthConfig): OAuthAdapter 
       WebBrowser.maybeCompleteAuthSession();
 
       const redirectUri =
-        config.redirectUri.trim() || makeRedirectUri({ scheme: APP_SCHEME, path: 'oauthredirect' });
+        config.redirectUri.trim() || makeRedirectUri({ native: nativeRedirectUri() });
 
       const request = new AuthRequest({
         clientId: config.clientId,
@@ -72,7 +85,7 @@ export function createGmailOAuthAdapter(config: GmailOAuthConfig): OAuthAdapter 
       const result = await request.promptAsync(GOOGLE_DISCOVERY);
       if (result.type === 'error') {
         throw new Error(
-          `Autorisation Gmail refusée : ${result.error?.message ?? 'erreur inconnue'}`,
+          `Autorisation Gmail refusée : ${result.error?.message ?? result.params?.error_description ?? result.params?.error ?? 'erreur inconnue'}`,
         );
       }
       if (result.type !== 'success') {

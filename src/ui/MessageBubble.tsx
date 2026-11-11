@@ -1,14 +1,38 @@
-import { StyleSheet, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { Message } from '@/domain/models';
+import { tidyPlainText } from '@/domain/plain-text';
+import { splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
+import { HtmlMessageView } from './HtmlMessageView';
+import { RichText } from './RichText';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
+
+/** The message a bubble answers, shown as a quote block on top of it. */
+export interface QuotedParent {
+  id: string;
+  senderName: string;
+  snippet: string;
+  isOwn: boolean;
+}
 
 export interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
   showSender?: boolean;
+  /** Parent message this one replies to. */
+  quoted?: QuotedParent | null;
+  /** The replied-to message is in the conversation, so the quoted history is redundant. */
+  parentInThread?: boolean;
+  onQuotePress?: (parentId: string) => void;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  selected?: boolean;
+  /** Briefly highlighted after jumping to it from a quote. */
+  highlighted?: boolean;
   testID?: string;
 }
 
@@ -21,70 +45,144 @@ function formatTimestamp(timestamp: number): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function MessageBubble({ message, isOwn, showSender = false, testID }: MessageBubbleProps) {
+/**
+ * HTML is rendered when it carries real layout (images, tables) or is the only
+ * body; otherwise the plain-text part reads better in a chat bubble.
+ */
+export function shouldRenderHtml(
+  message: Pick<Message, 'bodyHtmlSanitized' | 'bodyText'>,
+): boolean {
+  const html = message.bodyHtmlSanitized;
+  if (!html) {
+    return false;
+  }
+  return /<(img|table)\b/i.test(html) || message.bodyText.trim().length === 0;
+}
+
+/** First lines of a message's own text, for quote blocks and reply previews. */
+export function messageSnippet(message: Pick<Message, 'bodyText' | 'subject'>): string {
+  const body = splitQuotedText(message.bodyText).body.replace(/\s+/g, ' ').trim();
+  return body || message.subject || '(Message vide)';
+}
+
+export function MessageBubble({
+  message,
+  isOwn,
+  showSender = false,
+  quoted,
+  parentInThread = Boolean(quoted),
+  onQuotePress,
+  onPress,
+  onLongPress,
+  selected = false,
+  highlighted = false,
+  testID,
+}: MessageBubbleProps) {
   const colors = useAppTheme();
+  const [showHistory, setShowHistory] = useState(false);
+  const html = shouldRenderHtml(message);
+  const split = useMemo(() => splitQuotedText(message.bodyText), [message.bodyText]);
+  const textColor = isOwn ? colors.bubbleOutgoingText : colors.bubbleIncomingText;
 
   return (
-    <View
+    <Pressable
       testID={testID}
-      style={[styles.container, isOwn ? styles.containerOwn : styles.containerIncoming]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
+      style={[
+        styles.container,
+        isOwn ? styles.containerOwn : styles.containerIncoming,
+        (selected || highlighted) && { backgroundColor: colors.primaryContainer + 'AA' },
+      ]}
     >
       <View
         style={[
           styles.bubble,
+          html && styles.bubbleWide,
+          quoted && !html ? styles.bubbleQuoting : null,
           isOwn
-            ? {
-                backgroundColor: colors.bubbleOutgoing,
-                borderTopRightRadius: Radius.sm,
-              }
-            : {
-                backgroundColor: colors.bubbleIncoming,
-                borderTopLeftRadius: Radius.sm,
-              },
+            ? { backgroundColor: colors.bubbleOutgoing, borderTopRightRadius: Radius.sm / 2 }
+            : { backgroundColor: colors.bubbleIncoming, borderTopLeftRadius: Radius.sm / 2 },
         ]}
       >
-        {showSender ? (
-          <AppText
-            variant="caption"
-            weight="semibold"
-            style={[
-              styles.sender,
-              { color: isOwn ? colors.bubbleOutgoingText : colors.bubbleIncomingText },
-            ]}
-          >
+        {showSender && !isOwn ? (
+          <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
             {message.senderName || message.senderAddress}
           </AppText>
         ) : null}
 
-        <AppText
-          variant="body"
-          style={[
-            styles.body,
-            { color: isOwn ? colors.bubbleOutgoingText : colors.bubbleIncomingText },
-          ]}
-        >
-          {message.bodyText}
-        </AppText>
+        {quoted ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Message cité de ${quoted.senderName}`}
+            onPress={() => onQuotePress?.(quoted.id)}
+            style={[styles.quote, { backgroundColor: colors.quoteBackground }]}
+            testID={testID ? `${testID}-quote` : undefined}
+          >
+            <View style={[styles.quoteBar, { backgroundColor: colors.primary }]} />
+            <View style={styles.quoteContent}>
+              <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
+                {quoted.isOwn ? 'Vous' : quoted.senderName}
+              </AppText>
+              <AppText variant="caption" color="textSecondary" numberOfLines={3}>
+                {quoted.snippet}
+              </AppText>
+            </View>
+          </Pressable>
+        ) : null}
 
-        <AppText
-          variant="caption"
-          style={[
-            styles.timestamp,
-            { color: isOwn ? colors.bubbleOutgoingText : colors.textMuted },
-          ]}
-        >
-          {formatTimestamp(message.receivedAt)}
-        </AppText>
+        {html && message.bodyHtmlSanitized ? (
+          <HtmlMessageView html={message.bodyHtmlSanitized} allowHistory={!parentInThread} />
+        ) : (
+          <>
+            <RichText style={{ color: textColor }}>{tidyPlainText(split.body)}</RichText>
+            {/* The parent is already in the conversation: no need to unfold it again. */}
+            {split.quoted && !parentInThread ? (
+              <>
+                <Pressable onPress={() => setShowHistory((value) => !value)} hitSlop={Spacing.sm}>
+                  <AppText variant="caption" weight="semibold" style={{ color: colors.link }}>
+                    {showHistory ? 'Masquer l’historique' : '••• Historique'}
+                  </AppText>
+                </Pressable>
+                {showHistory ? (
+                  <RichText style={[styles.history, { color: colors.textSecondary }]}>
+                    {tidyPlainText(split.quoted)}
+                  </RichText>
+                ) : null}
+              </>
+            ) : null}
+          </>
+        )}
+
+        <View style={styles.footer}>
+          {message.isStarred ? (
+            <MaterialIcons name="star" size={12} color={colors.textMuted} />
+          ) : null}
+          {message.hasAttachments ? (
+            <MaterialIcons name="attach-file" size={12} color={colors.textMuted} />
+          ) : null}
+          <AppText variant="caption" style={[styles.timestamp, { color: colors.textMuted }]}>
+            {formatTimestamp(message.receivedAt)}
+          </AppText>
+          {isOwn ? (
+            <MaterialIcons
+              name={message.syncState === 'pending' ? 'schedule' : 'done-all'}
+              size={15}
+              color={colors.primary}
+            />
+          ) : null}
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 2,
   },
   containerOwn: {
     alignItems: 'flex-end',
@@ -93,20 +191,52 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bubble: {
-    maxWidth: '80%',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.lg,
+    maxWidth: '82%',
+    paddingTop: Spacing.xs + 2,
+    paddingBottom: Spacing.xs,
+    paddingHorizontal: Spacing.sm + 2,
+    borderRadius: Radius.md,
     gap: Spacing.xs,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
   },
-  sender: {
-    fontSize: FontSize.xs,
+  // HTML mails take the whole row, Slack-style, so their layout is never cut.
+  bubbleWide: {
+    width: '100%',
+    maxWidth: '100%',
+    paddingHorizontal: Spacing.xs,
   },
-  body: {
-    flexShrink: 1,
+  // A short reply must not squeeze the quoted message into an unreadable sliver.
+  bubbleQuoting: {
+    minWidth: '62%',
+  },
+  quote: {
+    flexDirection: 'row',
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+  },
+  quoteBar: {
+    width: 4,
+  },
+  quoteContent: {
+    flex: 1,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+  },
+  history: {
+    fontSize: FontSize.sm,
+    lineHeight: 18,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 3,
   },
   timestamp: {
     fontSize: FontSize.xs,
-    alignSelf: 'flex-end',
   },
 });

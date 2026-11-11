@@ -8,7 +8,7 @@
  * (Phase 0) implement the same contracts.
  */
 
-import type { EmailAddress, FolderRole, ProviderId } from '@/domain/models';
+import type { EmailAddress, FolderRole, MailCategory, ProviderId } from '@/domain/models';
 
 export interface RemoteFolder {
   remoteFolderId: string;
@@ -34,6 +34,15 @@ export interface RemoteMessage {
   isRead: boolean;
   isStarred: boolean;
   hasAttachments: boolean;
+  /** Provider category (Gmail tabs), when the provider has one. */
+  category?: MailCategory | null;
+}
+
+export interface FetchOlderMessagesInput {
+  folderRemoteId: string;
+  /** Oldest UID stored locally: only strictly older messages are returned. */
+  beforeUid: number;
+  limit?: number;
 }
 
 export interface FetchMessagesInput {
@@ -79,6 +88,11 @@ export interface MailProvider {
   readonly emailAddress: string;
   listFolders(): Promise<RemoteFolder[]>;
   fetchMessages(input: FetchMessagesInput): Promise<FetchMessagesResult>;
+  /**
+   * Page backwards through history (infinite scroll), newest first. Optional:
+   * providers without it simply have no "load more".
+   */
+  fetchOlderMessages?(input: FetchOlderMessagesInput): Promise<RemoteMessage[]>;
   send(message: OutgoingMessage): Promise<SendResult>;
   setRead(remoteUid: number, isRead: boolean): Promise<void>;
   star(remoteUid: number, isStarred: boolean): Promise<void>;

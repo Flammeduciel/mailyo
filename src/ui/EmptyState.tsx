@@ -1,4 +1,4 @@
-import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
+import { MaterialIcons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -14,21 +14,12 @@ export interface EmptyStateProps {
   testID?: string;
 }
 
-export function EmptyState({ icon = 'tray', title, description, action, testID }: EmptyStateProps) {
+export function EmptyState({ icon = 'inbox', title, description, action, testID }: EmptyStateProps) {
   const colors = useAppTheme();
 
   return (
     <View style={styles.container} testID={testID}>
-      <SymbolView
-        name={{
-          ios: icon as SFSymbol,
-          android: 'inbox' as AndroidSymbol,
-          web: 'inbox' as AndroidSymbol,
-        }}
-        size={FontSize.xxl}
-        tintColor={colors.textMuted}
-        fallback={<View style={{ height: FontSize.xxl }} />}
-      />
+      <MaterialIcons name={icon as any} size={FontSize.xxl} color={colors.textMuted} />
       <AppText variant="subtitle" weight="semibold" style={styles.title}>
         {title}
       </AppText>

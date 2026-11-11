@@ -3,6 +3,7 @@ import {
   formatMessageId,
   parseMessageIds,
   scopedThreadId,
+  threadKeyOf,
 } from '@/domain/threading';
 
 describe('threading', () => {
@@ -44,6 +45,28 @@ describe('threading', () => {
       known,
     );
     expect(key).toBe('msg:root');
+  });
+
+  it('gives a reply fetched before its parents the same key as the original', () => {
+    const original = computeThreadKey({
+      messageIdHeader: '<root@x.com>',
+      inReplyTo: null,
+      referencesHeader: null,
+      subject: 'Demande',
+    });
+    const secondReply = computeThreadKey({
+      messageIdHeader: '<reply2@x.com>',
+      inReplyTo: '<reply1@x.com>',
+      referencesHeader: '<root@x.com> <reply1@x.com>',
+      subject: 'Re: Demande',
+    });
+    expect(secondReply).toBe(original);
+  });
+
+  it('unwraps thread ids scoped more than once', () => {
+    expect(threadKeyOf('acc::msg:abc')).toBe('msg:abc');
+    expect(threadKeyOf('acc::acc::acc::msg:abc')).toBe('msg:abc');
+    expect(threadKeyOf('msg:abc')).toBe('msg:abc');
   });
 
   it('creates a new key from the own message id when nothing is known', () => {

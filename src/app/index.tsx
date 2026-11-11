@@ -9,5 +9,5 @@ import { Redirect } from 'expo-router';
  * keeps first-run onboarding in one place.
  */
 export default function Index() {
-  return <Redirect href="/(tabs)/inbox" />;
+  return <Redirect href="/discussions" />;
 }

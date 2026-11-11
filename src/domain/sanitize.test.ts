@@ -1,4 +1,4 @@
-import { buildPreview, escapeHtml, htmlToText, sanitizeHtml } from '@/domain/sanitize';
+import { buildPreview, escapeHtml, htmlToText, sanitizeCss, sanitizeHtml } from '@/domain/sanitize';
 
 describe('sanitizeHtml', () => {
   it('removes script elements and their content', () => {
@@ -83,12 +83,25 @@ describe('sanitizeHtml', () => {
     );
   });
 
-  it('keeps only src/alt/width/height on images', () => {
+  it('keeps presentational image attributes, drops handlers and invalid styles', () => {
     expect(
       sanitizeHtml(
         '<img src="x.png" alt="y" width="10" height="20" class="c" style="z" onload="e()">',
       ),
-    ).toBe('<img src="x.png" alt="y" width="10" height="20">');
+    ).toBe('<img src="x.png" alt="y" width="10" height="20" class="c">');
+  });
+
+  it('keeps safe inline styles and layout attributes used by email templates', () => {
+    expect(
+      sanitizeHtml(
+        '<table width="600" bgcolor="#fff" onclick="x()"><tr><td align="center" style="color: #333; padding: 8px">Hi</td></tr></table>',
+      ),
+    ).toBe(
+      '<table width="600" bgcolor="#fff"><tr><td align="center" style="color: #333; padding: 8px">Hi</td></tr></table>',
+    );
+    expect(sanitizeHtml('<div class="gmail_quote">old</div>')).toBe(
+      '<div class="gmail_quote">old</div>',
+    );
   });
 
   it('removes HTML comments and handles empty input', () => {
@@ -166,5 +179,17 @@ describe('escapeHtml', () => {
 
   it('leaves plain text untouched', () => {
     expect(escapeHtml('Hello, world!')).toBe('Hello, world!');
+  });
+});
+
+describe('sanitizeCss', () => {
+  it('drops script-like values, foreign urls and overlay positioning', () => {
+    expect(sanitizeCss('color: red; width: expression(alert(1))')).toBe('color: red');
+    expect(sanitizeCss('background: url(javascript:alert(1)); margin: 0')).toBe('margin: 0');
+    expect(sanitizeCss("background-image: url('https://cdn.example/a.png')")).toBe(
+      "background-image: url('https://cdn.example/a.png')",
+    );
+    expect(sanitizeCss('position: fixed; top: 0; z-index: 9999')).toBe('top: 0');
+    expect(sanitizeCss('behavior: url(x.htc); -moz-binding: url(x)')).toBe('');
   });
 });

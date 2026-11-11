@@ -1,18 +1,26 @@
-import { SymbolView, type AndroidSymbol } from 'expo-symbols';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ThreadSummary } from '@/domain/models';
+import { splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
 import { Avatar } from './Avatar';
 import { Badge } from './Badge';
-import { FontSize, Radius, Spacing, useAppTheme } from './theme';
+import { FontSize, Spacing, useAppTheme } from './theme';
 
 export interface ConversationRowProps {
   thread: ThreadSummary;
   onPress?: () => void;
+  onLongPress?: () => void;
   /** Reference timestamp for the "today" check. Kept explicit to stay pure. */
   now: number;
+  /** The last message was sent by the user (shows a "sent" tick). */
+  isOwnLast?: boolean;
+  /** Multi-selection mode highlight. */
+  selected?: boolean;
+  /** Sender's profile photo; initials are shown without one. */
+  photoUri?: string;
   testID?: string;
 }
 
@@ -20,82 +28,121 @@ function pad(value: number): string {
   return value < 10 ? `0${value}` : `${value}`;
 }
 
-/** HH:MM when the message is from today, otherwise DD/MM. */
-export function formatThreadTime(timestamp: number, now: number): string {
-  const date = new Date(timestamp);
-  const reference = new Date(now);
-  const sameDay =
-    date.getFullYear() === reference.getFullYear() &&
-    date.getMonth() === reference.getMonth() &&
-    date.getDate() === reference.getDate();
+const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
-  if (sameDay) {
-    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
+function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-export function ConversationRow({ thread, onPress, now, testID }: ConversationRowProps) {
+/** HH:MM today, "Hier", the weekday within a week, otherwise DD/MM/YYYY. */
+export function formatThreadTime(timestamp: number, now: number): string {
+  const date = new Date(timestamp);
+  const days = Math.round((startOfDay(now) - startOfDay(timestamp)) / 86_400_000);
+  if (days <= 0) {
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+  if (days === 1) {
+    return 'Hier';
+  }
+  if (days < 7) {
+    return WEEKDAYS[date.getDay()];
+  }
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+/** One-line preview: the new text of the last message, quoted history removed. */
+export function previewText(bodyText: string): string {
+  return splitQuotedText(bodyText).body.replace(/\s+/g, ' ').trim();
+}
+
+export function ConversationRow({
+  thread,
+  onPress,
+  onLongPress,
+  now,
+  isOwnLast = false,
+  selected = false,
+  photoUri,
+  testID,
+}: ConversationRowProps) {
   const colors = useAppTheme();
   const isUnread = thread.unreadCount > 0;
   const { lastMessage } = thread;
-  const senderName = lastMessage.senderName || lastMessage.senderAddress;
+  const senderName = thread.contact.name || thread.contact.address;
+  const preview = previewText(lastMessage.bodyText);
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ selected }}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
       testID={testID}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: pressed ? colors.surfaceAlt : colors.background },
+        {
+          backgroundColor: selected
+            ? colors.primaryContainer
+            : pressed
+              ? colors.surfaceAlt
+              : colors.background,
+        },
       ]}
     >
-      <View style={styles.dotColumn}>
-        {isUnread ? <View style={[styles.dot, { backgroundColor: colors.primary }]} /> : null}
+      <View>
+        <Avatar name={senderName} size={52} imageUri={photoUri} />
+        {selected ? (
+          <View
+            style={[
+              styles.check,
+              { backgroundColor: colors.primary, borderColor: colors.background },
+            ]}
+          >
+            <MaterialIcons name="check" size={14} color={colors.onPrimary} />
+          </View>
+        ) : null}
       </View>
-
-      <Avatar name={senderName} size={44} />
 
       <View style={styles.content}>
-        <AppText
-          variant="body"
-          weight={isUnread ? 'bold' : 'medium'}
-          numberOfLines={1}
-          color="text"
-        >
-          {senderName}
-        </AppText>
-        <AppText
-          variant="body"
-          weight={isUnread ? 'semibold' : 'regular'}
-          numberOfLines={1}
-          color="text"
-        >
-          {lastMessage.subject || '(Sans objet)'}
-        </AppText>
-        <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-          {lastMessage.bodyText}
-        </AppText>
-      </View>
+        <View style={styles.line}>
+          <AppText weight={isUnread ? 'bold' : 'semibold'} numberOfLines={1} style={styles.name}>
+            {senderName}
+          </AppText>
+          <AppText
+            variant="caption"
+            weight={isUnread ? 'semibold' : 'regular'}
+            style={{ color: isUnread ? colors.primary : colors.textMuted }}
+          >
+            {formatThreadTime(lastMessage.receivedAt, now)}
+          </AppText>
+        </View>
 
-      <View style={styles.meta}>
-        <AppText variant="caption" color="textMuted">
-          {formatThreadTime(lastMessage.receivedAt, now)}
-        </AppText>
-        {thread.hasAttachments ? (
-          <SymbolView
-            name={{
-              ios: 'paperclip',
-              android: 'attach_file' as AndroidSymbol,
-              web: 'attach_file' as AndroidSymbol,
-            }}
-            size={FontSize.sm}
-            tintColor={colors.textMuted}
-            fallback={<View style={{ height: FontSize.sm }} />}
-          />
-        ) : null}
-        <Badge count={thread.unreadCount} testID={testID ? `${testID}-badge` : undefined} />
+        <View style={styles.line}>
+          {isOwnLast ? <MaterialIcons name="done-all" size={16} color={colors.primary} /> : null}
+          {thread.hasAttachments ? (
+            <MaterialIcons name="attach-file" size={15} color={colors.textMuted} />
+          ) : null}
+          <Text
+            numberOfLines={1}
+            style={[styles.preview, { color: isUnread ? colors.text : colors.textSecondary }]}
+          >
+            <Text style={isUnread ? styles.subjectUnread : styles.subject}>
+              {lastMessage.subject || '(Sans objet)'}
+            </Text>
+            {preview ? ` · ${preview}` : ''}
+          </Text>
+          <View style={styles.icons}>
+            {thread.isPinned ? (
+              <MaterialIcons name="push-pin" size={16} color={colors.textMuted} />
+            ) : null}
+            {thread.isStarred ? (
+              <MaterialIcons name="star" size={16} color={colors.textMuted} />
+            ) : null}
+            <Badge count={thread.unreadCount} testID={testID ? `${testID}-badge` : undefined} />
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -106,24 +153,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Spacing.md,
-    paddingRight: Spacing.lg,
-    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.lg,
   },
-  dotColumn: {
-    width: Spacing.md,
+  check: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
     alignItems: 'center',
-  },
-  dot: {
-    width: Spacing.sm,
-    height: Spacing.sm,
-    borderRadius: Radius.pill,
+    justifyContent: 'center',
   },
   content: {
     flex: 1,
+    gap: 2,
+  },
+  line: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.xs,
   },
-  meta: {
-    alignItems: 'flex-end',
+  name: {
+    flex: 1,
+    fontSize: FontSize.md + 2,
+  },
+  preview: {
+    flex: 1,
+    fontSize: FontSize.md - 1,
+    lineHeight: 20,
+  },
+  subject: {
+    fontWeight: '500',
+  },
+  subjectUnread: {
+    fontWeight: '700',
+  },
+  icons: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.xs,
   },
 });

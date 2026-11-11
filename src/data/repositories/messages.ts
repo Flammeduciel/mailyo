@@ -6,7 +6,7 @@
  */
 
 import type { Database, SqlValue } from '@/data/db/database';
-import type { EmailAddress, Message, SyncState } from '@/domain/models';
+import type { EmailAddress, MailCategory, Message, SyncState } from '@/domain/models';
 import { buildFtsQuery } from '@/domain/search';
 
 interface MessageRow {
@@ -30,6 +30,7 @@ interface MessageRow {
   is_starred: number;
   has_attachments: number;
   sync_state: string;
+  category?: string | null;
 }
 
 function parseAddresses(value: string): EmailAddress[] {
@@ -63,6 +64,7 @@ function mapMessage(row: MessageRow): Message {
     isStarred: row.is_starred !== 0,
     hasAttachments: row.has_attachments !== 0,
     syncState: row.sync_state as SyncState,
+    category: (row.category ?? null) as MailCategory | null,
   };
 }
 
@@ -71,8 +73,9 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
     `INSERT INTO messages
        (id, account_id, folder_id, remote_uid, message_id_header, in_reply_to, references_header,
         thread_id, sender_name, sender_address, to_json, cc_json, subject, body_text,
-        body_html_sanitized, received_at, is_read, is_starred, has_attachments, sync_state)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        body_html_sanitized, received_at, is_read, is_starred, has_attachments, sync_state,
+        category)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id = excluded.account_id,
        folder_id = excluded.folder_id,
@@ -92,7 +95,9 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        is_read = excluded.is_read,
        is_starred = excluded.is_starred,
        has_attachments = excluded.has_attachments,
-       sync_state = excluded.sync_state`,
+       sync_state = excluded.sync_state,
+       -- The same mail seen in SENT carries no category: keep the inbox one.
+       category = COALESCE(excluded.category, messages.category)`,
     [
       message.id,
       message.accountId,
@@ -114,8 +119,18 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
       message.isStarred ? 1 : 0,
       message.hasAttachments ? 1 : 0,
       message.syncState,
+      message.category ?? null,
     ],
   );
+}
+
+/** Oldest provider UID stored for a folder, the cursor for loading older mail. */
+export async function getOldestRemoteUid(db: Database, folderId: string): Promise<number | null> {
+  const row = await db.getFirstAsync<{ oldest: number | null }>(
+    'SELECT MIN(remote_uid) AS oldest FROM messages WHERE folder_id = ? AND remote_uid IS NOT NULL',
+    [folderId],
+  );
+  return row?.oldest ?? null;
 }
 
 export async function getMessage(db: Database, id: string): Promise<Message | null> {
@@ -134,6 +149,19 @@ export async function findMessageByRemoteUid(
     [accountId, folderId, remoteUid],
   );
   return row ? mapMessage(row) : null;
+}
+
+/** Message-ID header of an account's message with this provider UID, in any folder. */
+export async function findMessageIdHeaderByRemoteUid(
+  db: Database,
+  accountId: string,
+  remoteUid: number,
+): Promise<string | null> {
+  const row = await db.getFirstAsync<{ message_id_header: string | null }>(
+    'SELECT message_id_header FROM messages WHERE account_id = ? AND remote_uid = ? LIMIT 1',
+    [accountId, remoteUid],
+  );
+  return row?.message_id_header ?? null;
 }
 
 export async function listMessagesByThread(db: Database, threadId: string): Promise<Message[]> {
@@ -211,6 +239,83 @@ export async function getThreadIdByMessageIdHeader(
     map.set(row.message_id_header, row.thread_id);
   }
   return map;
+}
+
+export interface Correspondence {
+  /** Messages from the address. */
+  received: number;
+  /** Messages to (or copying) the address. */
+  sent: number;
+  firstAt: number | null;
+  lastAt: number | null;
+}
+
+/** Mail exchanged with one address (sender, or among the `to`/`cc` recipients). */
+export async function getCorrespondence(db: Database, address: string): Promise<Correspondence> {
+  const needle = address.toLowerCase();
+  const pattern = `%"address":"${needle.replace(/[%_]/g, '')}"%`;
+  const row = await db.getFirstAsync<{
+    received: number;
+    sent: number;
+    first_at: number | null;
+    last_at: number | null;
+  }>(
+    `SELECT
+       SUM(CASE WHEN lower(sender_address) = ? THEN 1 ELSE 0 END) AS received,
+       SUM(CASE WHEN lower(sender_address) <> ? THEN 1 ELSE 0 END) AS sent,
+       MIN(received_at) AS first_at,
+       MAX(received_at) AS last_at
+     FROM messages
+     WHERE lower(sender_address) = ? OR lower(to_json) LIKE ? OR lower(cc_json) LIKE ?`,
+    [needle, needle, needle, pattern, pattern],
+  );
+  return {
+    received: row?.received ?? 0,
+    sent: row?.sent ?? 0,
+    firstAt: row?.first_at ?? null,
+    lastAt: row?.last_at ?? null,
+  };
+}
+
+export interface ThreadingRow {
+  id: string;
+  threadId: string;
+  messageIdHeader: string | null;
+  inReplyTo: string | null;
+  referencesHeader: string | null;
+  subject: string;
+}
+
+/** Threading headers of an account's mail, oldest first. */
+export async function listThreadingRows(db: Database, accountId: string): Promise<ThreadingRow[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    thread_id: string;
+    message_id_header: string | null;
+    in_reply_to: string | null;
+    references_header: string | null;
+    subject: string;
+  }>(
+    `SELECT id, thread_id, message_id_header, in_reply_to, references_header, subject
+     FROM messages WHERE account_id = ? ORDER BY received_at ASC, id ASC`,
+    [accountId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    threadId: row.thread_id,
+    messageIdHeader: row.message_id_header,
+    inReplyTo: row.in_reply_to,
+    referencesHeader: row.references_header,
+    subject: row.subject,
+  }));
+}
+
+export async function setMessageThreadId(
+  db: Database,
+  id: string,
+  threadId: string,
+): Promise<void> {
+  await db.runAsync('UPDATE messages SET thread_id = ? WHERE id = ?', [threadId, id]);
 }
 
 export async function listMessages(

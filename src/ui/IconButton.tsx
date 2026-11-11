@@ -1,5 +1,5 @@
-import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Pressable, StyleSheet } from 'react-native';
 
 import { Radius, Spacing, useAppTheme } from './theme';
 
@@ -32,12 +32,7 @@ export function IconButton({
       testID={testID}
       style={({ pressed }) => [styles.base, pressed && styles.pressed]}
     >
-      <SymbolView
-        name={{ ios: icon as SFSymbol, android: icon as AndroidSymbol, web: icon as AndroidSymbol }}
-        size={size}
-        tintColor={color ?? colors.text}
-        fallback={<View style={{ width: size, height: size }} />}
-      />
+      <MaterialIcons name={icon as any} size={size} color={color ?? colors.text} />
     </Pressable>
   );
 }

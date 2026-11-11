@@ -1,39 +1,42 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { createGmailOAuthAdapter, fetchGmailAddress, DEMO_ACCOUNT_ID } from '@/providers';
+import { createGmailOAuthAdapter, fetchGmailAddress } from '@/providers';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
-import { AppText, Button, Card, Header, Screen, SectionTitle, Spacing } from '@/ui';
+import { AppText, Avatar, Button, Header, Screen, Spacing, useAppTheme } from '@/ui';
 
 /** Configured through `expo.extra.gmailClientId`; empty when the build has none. */
 const GMAIL_CLIENT_ID = (Constants.expoConfig?.extra?.gmailClientId as string | undefined) ?? '';
 
-const GMAIL_SCOPES = ['https://mail.google.com/', 'https://www.googleapis.com/auth/userinfo.email'];
+const GMAIL_SCOPES = [
+  'https://mail.google.com/',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/contacts.readonly',
+  'https://www.googleapis.com/auth/contacts.other.readonly',
+];
+
+interface Provider {
+  id: string;
+  name: string;
+  subtitle: string;
+  icon: string;
+  iconColor: string;
+  iconBg: string;
+  available: boolean;
+}
 
 export default function LoginScreen() {
-  const { service, invalidate } = useApp();
+  const colors = useAppTheme();
+  const { service, refresh } = useApp();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageType, setMessageType] = useState<'info' | 'error'>('info');
 
   const { data: accounts } = useServiceQuery((mailService) => mailService.listAccounts(), []);
-  const hasDemo = accounts.some((account) => account.id === DEMO_ACCOUNT_ID);
-
-  const connectDemo = useCallback(async () => {
-    setBusy(true);
-    setMessage(null);
-    try {
-      await service.connectDemo();
-      invalidate();
-      router.replace('/(tabs)/inbox');
-    } catch (cause: unknown) {
-      setMessage(cause instanceof Error ? cause.message : 'Échec de la connexion');
-    } finally {
-      setBusy(false);
-    }
-  }, [service, invalidate]);
 
   const connectGmail = useCallback(async () => {
     setBusy(true);
@@ -47,84 +50,172 @@ export default function LoginScreen() {
       const tokens = await adapter.authorize();
       const email = await fetchGmailAddress(tokens.accessToken);
       await service.connectOAuthAccount({ emailAddress: email, tokens });
-      invalidate();
-      setMessage(
-        `Compte ${email} autorisé. La synchronisation IMAP native sera activée dans un prochain build.`,
-      );
+      setMessageType('info');
+      setMessage(`Compte ${email} ajouté — récupération des emails…`);
+      await service.refreshContactPhotos(true);
+      await refresh();
+      router.replace('/discussions');
     } catch (cause: unknown) {
+      setMessageType('error');
       setMessage(cause instanceof Error ? cause.message : 'Autorisation refusée');
     } finally {
       setBusy(false);
     }
-  }, [service, invalidate]);
+  }, [service, refresh]);
+
+  const providers: Provider[] = [
+    {
+      id: 'gmail',
+      name: 'Gmail',
+      subtitle: 'Google Workspace ou compte personnel',
+      icon: 'mail',
+      iconColor: '#fff',
+      iconBg: '#EA4335',
+      available: GMAIL_CLIENT_ID.length > 0,
+    },
+    {
+      id: 'outlook',
+      name: 'Outlook / Microsoft 365',
+      subtitle: 'Bientôt disponible',
+      icon: 'mail-outline',
+      iconColor: '#fff',
+      iconBg: '#0078D4',
+      available: false,
+    },
+    {
+      id: 'yahoo',
+      name: 'Yahoo Mail',
+      subtitle: 'Bientôt disponible',
+      icon: 'mail-outline',
+      iconColor: '#fff',
+      iconBg: '#6001D2',
+      available: false,
+    },
+    {
+      id: 'imap',
+      name: 'IMAP générique',
+      subtitle: 'Bientôt disponible',
+      icon: 'dns',
+      iconColor: '#fff',
+      iconBg: '#607D8B',
+      available: false,
+    },
+  ];
 
   return (
     <Screen>
       <Header title="Ajouter un compte" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
-        <SectionTitle title="Démo" />
-        <Card style={styles.card}>
-          <AppText variant="body" weight="medium">
-            Compte de démonstration
-          </AppText>
-          <AppText variant="caption" color="textSecondary">
-            Quelques conversations d’exemple pour découvrir MailYo sans identifiants.
-          </AppText>
-          <View style={styles.cardAction}>
-            <Button
-              label={
-                hasDemo ? 'Ouvrir la boîte de réception' : 'Utiliser le compte de démonstration'
-              }
-              onPress={hasDemo ? () => router.replace('/(tabs)/inbox') : () => void connectDemo()}
-              loading={busy}
-              disabled={busy}
-              testID="connect-demo"
-            />
-          </View>
-        </Card>
 
-        <SectionTitle title="Gmail (OAuth 2.0)" />
-        <Card style={styles.card}>
-          <AppText variant="body" weight="medium">
-            Connexion Google
-          </AppText>
-          <AppText variant="caption" color="textSecondary">
-            {GMAIL_CLIENT_ID.length > 0
-              ? 'Autorise MailYo à lire et envoyer depuis votre adresse Gmail.'
-              : 'Aucun identifiant client Google n’est configuré dans ce build (expo.extra.gmailClientId).'}
-          </AppText>
-          <View style={styles.cardAction}>
-            <Button
-              label="Connecter Gmail"
-              variant="secondary"
-              onPress={() => void connectGmail()}
-              disabled={busy || GMAIL_CLIENT_ID.length === 0}
-              testID="connect-gmail"
-            />
-          </View>
-        </Card>
+        {/* Intro */}
+        <AppText variant="body" color="textSecondary" style={styles.intro}>
+          Choisissez votre fournisseur de messagerie pour connecter votre boîte mail.
+        </AppText>
 
-        {accounts.length > 0 ? (
-          <>
-            <SectionTitle title="Comptes" />
-            <Card style={styles.card}>
-              {accounts.map((account) => (
-                <View key={account.id} style={styles.accountRow}>
-                  <AppText variant="body">{account.emailAddress}</AppText>
-                  <AppText variant="caption" color="textSecondary">
-                    {account.provider}
+        {/* Provider list */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {providers.map((provider, index) => (
+            <View key={provider.id}>
+              {index > 0 ? (
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              ) : null}
+              <View
+                style={[
+                  styles.providerRow,
+                  !provider.available && styles.providerRowDisabled,
+                ]}
+              >
+                {/* Icon */}
+                <View style={[styles.providerIcon, { backgroundColor: provider.iconBg }]}>
+                  <MaterialIcons
+                    name={provider.icon as never}
+                    size={22}
+                    color={provider.iconColor}
+                  />
+                </View>
+
+                {/* Text */}
+                <View style={styles.providerText}>
+                  <AppText
+                    variant="body"
+                    weight="semibold"
+                    style={!provider.available ? { color: colors.textMuted } : undefined}
+                  >
+                    {provider.name}
+                  </AppText>
+                  <AppText variant="caption" color="textMuted">
+                    {provider.subtitle}
                   </AppText>
                 </View>
+
+                {/* Action */}
+                {provider.id === 'gmail' ? (
+                  <Button
+                    label={busy ? 'Connexion…' : 'Connecter'}
+                    variant="primary"
+                    onPress={() => void connectGmail()}
+                    disabled={busy || !provider.available}
+                    testID="connect-gmail"
+                  />
+                ) : (
+                  <View style={[styles.badge, { backgroundColor: colors.surfaceAlt }]}>
+                    <AppText variant="caption" color="textMuted">
+                      Bientôt
+                    </AppText>
+                  </View>
+                )}
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Connected accounts */}
+        {accounts.length > 0 ? (
+          <>
+            <AppText variant="caption" weight="semibold" color="textSecondary" style={styles.sectionLabel}>
+              COMPTES CONNECTÉS
+            </AppText>
+            <View
+              style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              {accounts.map((account, index) => (
+                <View key={account.id}>
+                  {index > 0 ? (
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  ) : null}
+                  <View style={styles.accountRow}>
+                    <Avatar
+                      name={account.emailAddress}
+                      size={36}
+                      imageUri={service.getContactPhoto(account.emailAddress)}
+                    />
+                    <View style={styles.providerText}>
+                      <AppText variant="body" weight="medium" numberOfLines={1}>
+                        {account.emailAddress}
+                      </AppText>
+                      <AppText variant="caption" color="textMuted">
+                        {account.provider}
+                      </AppText>
+                    </View>
+                    <MaterialIcons name="check-circle" size={20} color={colors.primary} />
+                  </View>
+                </View>
               ))}
-            </Card>
+            </View>
           </>
         ) : null}
 
+        {/* Feedback message */}
         {message ? (
-          <AppText variant="caption" color="textSecondary" style={styles.message}>
+          <AppText
+            variant="caption"
+            color={messageType === 'error' ? 'danger' : 'textSecondary'}
+            style={styles.feedback}
+          >
             {message}
           </AppText>
         ) : null}
+
       </ScrollView>
     </Screen>
   );
@@ -136,16 +227,57 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     paddingBottom: Spacing.xxl,
   },
-  card: {
-    gap: Spacing.xs,
+  intro: {
+    marginBottom: Spacing.xs,
   },
-  cardAction: {
-    marginTop: Spacing.md,
+  sectionLabel: {
+    marginTop: Spacing.sm,
+    letterSpacing: 0.5,
+  },
+  card: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 68,
+  },
+  providerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  providerRowDisabled: {
+    opacity: 0.6,
+  },
+  providerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerText: {
+    flex: 1,
+    gap: 2,
+  },
+  badge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   accountRow: {
-    paddingVertical: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
-  message: {
-    marginTop: Spacing.md,
+  feedback: {
+    textAlign: 'center',
+    marginTop: Spacing.xs,
   },
 });

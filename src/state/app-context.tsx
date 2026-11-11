@@ -7,6 +7,7 @@
  * without a heavy state library.
  */
 
+import Constants from 'expo-constants';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   createContext,
@@ -69,20 +70,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
         db,
         notifier: new Notifier(createExpoNotificationApi()),
         tokenStore: new SecureTokenStore(),
+        gmailClientId: (Constants.expoConfig?.extra?.gmailClientId as string | undefined) ?? '',
       });
       if (cancelled) {
         return;
       }
-      setService(created);
-      await created.ensureNotificationsConfigured();
-      await created.initialize();
+      // Preferences come from the local database only, so the persisted theme and
+      // lock apply even when the network sync below is slow or fails.
+      await created.loadState();
       const available = await authenticator.isAvailable();
       if (cancelled) {
         return;
       }
+      setThemePreference(created.getSettings().theme);
       setBiometricsAvailable(available);
       setLocked(available && created.getSettings().biometricLock);
-      setThemePreference(created.getSettings().theme);
+      setService(created);
+      void created
+        .refreshContactPhotos()
+        .then((changed) => {
+          if (changed && !cancelled) {
+            setRevision((value) => value + 1);
+          }
+        })
+        .catch(() => undefined);
+      await created.ensureNotificationsConfigured();
+      await created.syncAll();
+      setRevision((value) => value + 1);
       await registerBackgroundSync();
     })()
       .catch((cause: unknown) => {

@@ -10,6 +10,7 @@
 import {
   deleteMessagesInFolder,
   getMessage,
+  getOldestRemoteUid,
   getThread,
   getThreadIdByMessageIdHeader,
   listFolders,
@@ -25,7 +26,12 @@ import type { Account, Folder, Message, Thread } from '@/domain/models';
 import { deterministicId } from '@/domain/ids';
 import { normalizeSubject } from '@/domain/subject';
 import { htmlToText, sanitizeHtml } from '@/domain/sanitize';
-import { computeThreadKey, parseMessageIds, scopedThreadId } from '@/domain/threading';
+import {
+  computeThreadKey,
+  parseMessageIds,
+  scopedThreadId,
+  threadKeyOf,
+} from '@/domain/threading';
 import type { MailProvider, RemoteMessage } from '@/providers/types';
 
 export interface SyncResult {
@@ -139,6 +145,32 @@ export class SyncEngine {
     return { added, fetchedCount: fetch.messages.length, uidValidityReset };
   }
 
+  /**
+   * Load one page of mail older than what is stored for this folder (infinite
+   * scroll). Returns how many messages were fetched: 0 means history is
+   * exhausted or the provider cannot page backwards. Never notifies.
+   */
+  async loadOlder(account: Account, folder: Folder, limit: number): Promise<number> {
+    if (!this.provider.fetchOlderMessages) {
+      return 0;
+    }
+    const oldest = await getOldestRemoteUid(this.db, folder.id);
+    if (oldest === null) {
+      return 0;
+    }
+    const remotes = await this.provider.fetchOlderMessages({
+      folderRemoteId: folder.remoteFolderId,
+      beforeUid: oldest,
+      limit,
+    });
+    const knownThreads = await this.buildKnownThreadMap(account.id);
+    // Oldest first, so replies thread onto parents fetched in the same page.
+    for (const remote of [...remotes].sort((a, b) => a.remoteUid - b.remoteUid)) {
+      await this.persistMessage(account, folder, remote, knownThreads);
+    }
+    return remotes.length;
+  }
+
   private async persistMessage(
     account: Account,
     folder: Folder,
@@ -195,6 +227,7 @@ export class SyncEngine {
       isStarred: remote.isStarred,
       hasAttachments: remote.hasAttachments,
       syncState: 'synced',
+      category: remote.category ?? null,
     };
 
     const isNew = (await getMessage(this.db, message.id)) === null;
@@ -225,9 +258,10 @@ export class SyncEngine {
   private async buildKnownThreadMap(accountId: string): Promise<Map<string, string>> {
     const stored = await getThreadIdByMessageIdHeader(this.db, accountId);
     const normalized = new Map<string, string>();
+    // Values must be bare keys: `persistMessage` scopes whatever key it gets.
     for (const [header, threadId] of stored) {
       for (const id of parseMessageIds(header)) {
-        normalized.set(id, threadId);
+        normalized.set(id, threadKeyOf(threadId));
       }
     }
     return normalized;

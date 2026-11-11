@@ -1,46 +1,52 @@
-import { Tabs } from 'expo-router';
-import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { View } from 'react-native';
+import { Tabs, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 
-import { FontSize, useAppTheme } from '@/ui';
+import { useServiceQuery } from '@/state/use-service-query';
+import { BottomTabBar, type TabMeta } from '@/ui';
 
-function TabIcon({ icon, color }: { icon: string; color: string }) {
-  return (
-    <SymbolView
-      name={{ ios: icon as SFSymbol, android: icon as AndroidSymbol, web: icon as AndroidSymbol }}
-      size={FontSize.lg}
-      tintColor={color}
-      fallback={<View style={{ width: FontSize.lg, height: FontSize.lg }} />}
-    />
-  );
+interface TabBadges {
+  discussions: number;
+  actus: number;
+  groupes: number;
 }
 
+const NO_BADGES: TabBadges = { discussions: 0, actus: 0, groupes: 0 };
+
 export default function TabsLayout() {
-  const colors = useAppTheme();
+  // Unread conversation count per tab, refreshed after every app mutation.
+  const { data: badges, reload } = useServiceQuery<TabBadges>(async (service) => {
+    const count = async (tab: 'discussions' | 'actus' | 'groupes') =>
+      (await service.listConversations({ tab, filter: 'unread' })).length;
+    const [discussions, actus, groupes] = await Promise.all([
+      count('discussions'),
+      count('actus'),
+      count('groupes'),
+    ]);
+    return { discussions, actus, groupes };
+  }, NO_BADGES);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
+  );
+
+  const meta: Record<string, TabMeta> = {
+    discussions: { icon: 'chat-bubble-outline', activeIcon: 'chat', badge: badges.discussions },
+    actus: { icon: 'campaign', badge: badges.actus },
+    groupes: { icon: 'groups', badge: badges.groupes },
+    favoris: { icon: 'star-border', activeIcon: 'star' },
+  };
 
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
-      }}
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <BottomTabBar {...props} meta={meta} />}
     >
-      <Tabs.Screen
-        name="inbox"
-        options={{
-          title: 'Réception',
-          tabBarIcon: ({ color }) => <TabIcon icon="tray.fill" color={color as string} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Paramètres',
-          tabBarIcon: ({ color }) => <TabIcon icon="gearshape.fill" color={color as string} />,
-        }}
-      />
+      <Tabs.Screen name="discussions" options={{ title: 'Discussions' }} />
+      <Tabs.Screen name="actus" options={{ title: 'Actus' }} />
+      <Tabs.Screen name="groupes" options={{ title: 'Groupes' }} />
+      <Tabs.Screen name="favoris" options={{ title: 'Favoris' }} />
     </Tabs>
   );
 }

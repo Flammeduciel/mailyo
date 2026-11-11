@@ -1,4 +1,4 @@
-import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText } from './AppText';
@@ -10,10 +10,13 @@ export interface SettingRowProps {
   value?: boolean;
   onValueChange?: (value: boolean) => void;
   onPress?: () => void;
-  /** Optional leading SF Symbol name. */
+  /** Optional leading Material icon name. */
   icon?: string;
+  destructive?: boolean;
+  testID?: string;
 }
 
+/** Settings list row: leading icon, title, muted description, optional switch. */
 export function SettingRow({
   label,
   description,
@@ -21,37 +24,35 @@ export function SettingRow({
   onValueChange,
   onPress,
   icon,
+  destructive = false,
+  testID,
 }: SettingRowProps) {
   const colors = useAppTheme();
-  const hasSwitch = typeof value === 'boolean' && typeof onValueChange === 'function';
+  const hasSwitch = typeof value === 'boolean';
 
   return (
     <Pressable
-      accessibilityRole={onPress ? 'button' : undefined}
-      onPress={onPress}
-      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : hasSwitch ? 'switch' : undefined}
+      onPress={onPress ?? (hasSwitch && onValueChange ? () => onValueChange(!value) : undefined)}
+      disabled={!onPress && !(hasSwitch && onValueChange)}
+      testID={testID}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: pressed && onPress ? colors.surfaceAlt : colors.background },
+        { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' },
       ]}
     >
-      {icon ? (
-        <SymbolView
-          name={{
-            ios: icon as SFSymbol,
-            android: icon as AndroidSymbol,
-            web: icon as AndroidSymbol,
-          }}
-          size={FontSize.lg}
-          tintColor={colors.textSecondary}
-          fallback={<View style={{ width: FontSize.lg, height: FontSize.lg }} />}
-        />
-      ) : null}
+      <View style={styles.iconSlot}>
+        {icon ? (
+          <MaterialIcons
+            name={icon as never}
+            size={24}
+            color={destructive ? colors.danger : colors.textSecondary}
+          />
+        ) : null}
+      </View>
 
       <View style={styles.content}>
-        <AppText variant="body" weight="medium">
-          {label}
-        </AppText>
+        <AppText style={[styles.label, destructive && { color: colors.danger }]}>{label}</AppText>
         {description ? (
           <AppText variant="caption" color="textSecondary">
             {description}
@@ -63,19 +64,9 @@ export function SettingRow({
         <Switch
           value={value}
           onValueChange={onValueChange}
+          disabled={!onValueChange}
           trackColor={{ false: colors.border, true: colors.primary }}
           thumbColor={colors.surface}
-        />
-      ) : onPress ? (
-        <SymbolView
-          name={{
-            ios: 'chevron.right',
-            android: 'chevron_right' as AndroidSymbol,
-            web: 'chevron_right' as AndroidSymbol,
-          }}
-          size={FontSize.md}
-          tintColor={colors.textMuted}
-          fallback={<View style={{ width: FontSize.md, height: FontSize.md }} />}
         />
       ) : null}
     </Pressable>
@@ -86,12 +77,19 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 64,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
+    paddingRight: Spacing.lg,
+  },
+  iconSlot: {
+    width: 64,
+    alignItems: 'center',
   },
   content: {
     flex: 1,
-    gap: Spacing.xs,
+    gap: 2,
+  },
+  label: {
+    fontSize: FontSize.md + 1,
   },
 });

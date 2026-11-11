@@ -1,67 +1,44 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 
 import { useAppTheme } from './theme';
 
-/**
- * A small set of sober, desaturated avatar colours. The colour is picked
- * deterministically from a hash of the display name so a contact keeps the
- * same colour across renders and sessions.
- */
-const AVATAR_PALETTE = [
-  '#2563EB',
-  '#0F766E',
-  '#7C3AED',
-  '#B45309',
-  '#BE123C',
-  '#4338CA',
-  '#047857',
-  '#9D174D',
-] as const;
-
 export interface AvatarProps {
-  /** Display name; may also be a raw email address. */
+  /** Display name; used as the accessibility label. */
   name: string;
   size?: number;
-  backgroundColor?: string;
+  /** Photo from Google: the person's own, or the letter avatar Google generates. */
+  imageUri?: string;
 }
 
-/** Derive 1–2 uppercase initials from a name, falling back to an email letter. */
-export function getInitials(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return '?';
-  }
-
-  const parts = trimmed.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-
-  return parts[0][0].toUpperCase();
-}
-
-function hashName(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash + name.charCodeAt(i)) % AVATAR_PALETTE.length;
-  }
-  return hash;
-}
-
-export function Avatar({ name, size = 40, backgroundColor }: AvatarProps) {
+/**
+ * Shows the image Google provides. The app draws no avatar of its own: a sender
+ * Google knows nothing about gets a neutral silhouette.
+ */
+export function Avatar({ name, size = 40, imageUri }: AvatarProps) {
   const colors = useAppTheme();
-  const background = backgroundColor ?? AVATAR_PALETTE[hashName(name)];
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const shape = { width: size, height: size, borderRadius: size / 2 };
+
+  if (imageUri && imageUri !== failedUri) {
+    return (
+      <Image
+        source={{ uri: imageUri }}
+        style={[styles.avatar, shape]}
+        accessibilityLabel={name}
+        onError={() => setFailedUri(imageUri)}
+      />
+    );
+  }
 
   return (
     <View
-      style={[
-        styles.avatar,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: background },
-      ]}
+      accessibilityLabel={name}
+      testID="avatar-placeholder"
+      style={[styles.avatar, shape, { backgroundColor: colors.surfaceAlt }]}
     >
-      <Text style={[styles.initials, { fontSize: size * 0.4, color: colors.onPrimary }]}>
-        {getInitials(name)}
-      </Text>
+      <MaterialIcons name="person" size={size * 0.62} color={colors.textMuted} />
     </View>
   );
 }
@@ -70,8 +47,6 @@ const styles = StyleSheet.create({
   avatar: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  initials: {
-    fontWeight: '600',
+    overflow: 'hidden',
   },
 });
