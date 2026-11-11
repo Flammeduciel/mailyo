@@ -1,5 +1,5 @@
 /**
- * Lets the user pick files to attach: gallery, camera or any document.
+ * Picks files to attach from the gallery, the camera or any document.
  */
 
 import * as DocumentPicker from 'expo-document-picker';
@@ -56,23 +56,15 @@ async function pickDocuments(): Promise<PickedAttachment[]> {
   }));
 }
 
-/** Asks where to pick from, then returns the chosen files (empty when cancelled). */
-export function pickAttachments(): Promise<PickedAttachment[]> {
-  return new Promise((resolve) => {
-    const run = (picker: () => Promise<PickedAttachment[]>) => () => {
-      picker()
-        .then(resolve)
-        .catch(() => resolve([]));
-    };
-    Alert.alert(
-      'Joindre',
-      undefined,
-      [
-        { text: 'Fichier', onPress: run(pickDocuments) },
-        { text: 'Appareil photo', onPress: run(pickFromCamera) },
-        { text: 'Photos et vidéos', onPress: run(pickFromGallery) },
-      ],
-      { cancelable: true, onDismiss: () => resolve([]) },
-    );
-  });
+export type AttachmentSource = 'gallery' | 'camera' | 'document';
+
+/** Picks from the chosen source (empty when cancelled or on failure). */
+export async function pickFrom(source: AttachmentSource): Promise<PickedAttachment[]> {
+  try {
+    if (source === 'camera') return await pickFromCamera();
+    if (source === 'document') return await pickDocuments();
+    return await pickFromGallery();
+  } catch {
+    return [];
+  }
 }

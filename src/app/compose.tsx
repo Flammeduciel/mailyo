@@ -17,12 +17,13 @@ import { parseAddressList } from '@/domain/mime';
 import type { Draft, EmailAddress } from '@/domain/models';
 import type { PickedAttachment } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
-import { pickAttachments } from '@/state/pick-attachments';
+import { pickFrom, type AttachmentSource } from '@/state/pick-attachments';
 import { useServiceQuery } from '@/state/use-service-query';
 import { useUndoSend } from '@/state/use-undo-send';
 import {
   AppBar,
   AppText,
+  AttachmentPickerSheet,
   Button,
   ComposeAttachmentCard,
   Radius,
@@ -169,8 +170,11 @@ export default function ComposeScreen() {
     }
   };
 
-  const onAttach = async () => {
-    const files = await pickAttachments();
+  const [attachOpen, setAttachOpen] = useState(false);
+
+  const onAttachPick = async (source: AttachmentSource) => {
+    setAttachOpen(false);
+    const files = await pickFrom(source);
     if (files.length > 0) setPicked((previous) => [...previous, ...files]);
   };
 
@@ -354,7 +358,7 @@ export default function ComposeScreen() {
         {picking ? null : (
           <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
             <Pressable
-              onPress={() => void onAttach()}
+              onPress={() => setAttachOpen(true)}
               style={[styles.tool, { backgroundColor: colors.surfaceAlt }]}
               accessibilityRole="button"
               accessibilityLabel="Joindre un fichier"
@@ -386,6 +390,11 @@ export default function ComposeScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+      <AttachmentPickerSheet
+        visible={attachOpen}
+        onPick={(source) => void onAttachPick(source)}
+        onClose={() => setAttachOpen(false)}
+      />
     </SafeAreaView>
   );
 }

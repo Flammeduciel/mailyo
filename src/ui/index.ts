@@ -72,3 +72,8 @@ export {
 } from './ComposeAttachmentCard';
 export { CopyAvatars, type CopyAvatarsProps } from './CopyAvatars';
 export { PeopleSheet, type PeopleSheetProps } from './PeopleSheet';
+export {
+  AttachmentPickerSheet,
+  type AttachmentPickerSheetProps,
+  type AttachmentSource,
+} from './AttachmentPickerSheet';

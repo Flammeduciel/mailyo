@@ -24,7 +24,7 @@ import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import { useAttachmentActions } from '@/state/use-attachment-actions';
-import { pickAttachments } from '@/state/pick-attachments';
+import { pickFrom, type AttachmentSource } from '@/state/pick-attachments';
 import { useUndoSend } from '@/state/use-undo-send';
 import type { PickedAttachment, SendMessageInput } from '@/services/mail-service';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
@@ -36,6 +36,7 @@ import {
   AppBar,
   AppText,
   Avatar,
+  AttachmentPickerSheet,
   PeopleSheet,
   ThreadSkeleton,
   UndoSnackbar,
@@ -339,8 +340,11 @@ export default function ThreadScreen() {
 
   const [picked, setPicked] = useState<PickedAttachment[]>([]);
 
-  const onAttach = async () => {
-    const files = await pickAttachments();
+  const [attachOpen, setAttachOpen] = useState(false);
+
+  const onAttachPick = async (source: AttachmentSource) => {
+    setAttachOpen(false);
+    const files = await pickFrom(source);
     if (files.length > 0) setPicked((previous) => [...previous, ...files]);
   };
 
@@ -808,7 +812,7 @@ export default function ThreadScreen() {
             onChangeText={setDraft}
             onSend={onSend}
             attachments={picked}
-            onAttach={() => void onAttach()}
+            onAttach={() => setAttachOpen(true)}
             onRemoveAttachment={(index) =>
               setPicked((previous) => previous.filter((_, i) => i !== index))
             }
@@ -838,6 +842,12 @@ export default function ThreadScreen() {
         onShare={(attachment) => void attachmentActions.share(attachment)}
         progress={attachmentActions.progress}
         onClose={() => setViewedIndex(null)}
+      />
+
+      <AttachmentPickerSheet
+        visible={attachOpen}
+        onPick={(source) => void onAttachPick(source)}
+        onClose={() => setAttachOpen(false)}
       />
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
