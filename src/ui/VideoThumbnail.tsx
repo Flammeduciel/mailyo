@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useVideoPlayer, type VideoThumbnail as NativeThumbnail } from 'expo-video';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 export interface VideoThumbnailProps {
   /** Video URI; without one the tile shows a play icon on a dark background. */
@@ -14,7 +14,7 @@ export interface VideoThumbnailProps {
 export function VideoThumbnail({ uri, style }: VideoThumbnailProps) {
   return (
     <View style={[styles.box, style]}>
-      {uri ? <Frame uri={uri} /> : null}
+      {uri && Platform.OS !== 'web' ? <Frame uri={uri} /> : null}
       <MaterialIcons name="play-circle-filled" size={48} color="#FFFFFF" style={styles.icon} />
     </View>
   );
@@ -28,12 +28,16 @@ function Frame({ uri }: { uri: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    player
-      .generateThumbnailsAsync(1)
-      .then((frames) => {
+    // Some platforms/sources throw synchronously instead of rejecting: a missing
+    // thumbnail must never break the conversation, only show the plain tile.
+    void (async () => {
+      try {
+        const frames = await player.generateThumbnailsAsync(1);
         if (!cancelled && frames[0]) setThumbnail(frames[0]);
-      })
-      .catch(() => undefined);
+      } catch {
+        // Keep the dark tile with the play icon.
+      }
+    })();
     return () => {
       cancelled = true;
     };

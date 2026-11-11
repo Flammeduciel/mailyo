@@ -23,6 +23,8 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      // A horizontal ScrollView grows by default: keep the row at its own height.
+      style={styles.scroll}
       contentContainerStyle={styles.row}
     >
       {options.map((option) => {
@@ -54,6 +56,9 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 0,
+  },
   row: {
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,

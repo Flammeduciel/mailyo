@@ -51,6 +51,8 @@ export function AttachmentViewer({
   onClose,
 }: AttachmentViewerProps) {
   const { width } = useWindowDimensions();
+  // A horizontal list does not give its pages a height: measure the area.
+  const [pageHeight, setPageHeight] = useState(0);
   const [current, setCurrent] = useState(index ?? 0);
   const [zoomed, setZoomed] = useState(false);
   const [openedAt, setOpenedAt] = useState(index);
@@ -117,34 +119,36 @@ export function AttachmentViewer({
         </View>
 
         {index !== null ? (
-          <FlatList
-            data={attachments}
-            keyExtractor={(item) => item.id}
-            horizontal
-            pagingEnabled
-            scrollEnabled={!zoomed}
-            initialScrollIndex={index}
-            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(event) => {
-              const page = Math.round(event.nativeEvent.contentOffset.x / width);
-              if (page !== current) {
-                setCurrent(page);
-                setZoomed(false);
-              }
-            }}
-            renderItem={({ item, index: i }) => (
-              <View style={{ width }}>
-                <Page
-                  attachment={item}
-                  active={i === current}
-                  resolve={resolve}
-                  allowDownload={allowDownload}
-                  onZoomChange={setZoomed}
-                />
-              </View>
-            )}
-          />
+          <View style={styles.pager} onLayout={(e) => setPageHeight(e.nativeEvent.layout.height)}>
+            <FlatList
+              data={attachments}
+              keyExtractor={(item) => item.id}
+              horizontal
+              pagingEnabled
+              scrollEnabled={!zoomed}
+              initialScrollIndex={index}
+              getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(event) => {
+                const page = Math.round(event.nativeEvent.contentOffset.x / width);
+                if (page !== current) {
+                  setCurrent(page);
+                  setZoomed(false);
+                }
+              }}
+              renderItem={({ item, index: i }) => (
+                <View style={{ width, height: pageHeight }}>
+                  <Page
+                    attachment={item}
+                    active={i === current}
+                    resolve={resolve}
+                    allowDownload={allowDownload}
+                    onZoomChange={setZoomed}
+                  />
+                </View>
+              )}
+            />
+          </View>
         ) : null}
       </SafeAreaView>
     </Modal>
@@ -258,6 +262,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   title: { flex: 1 },
+  pager: { flex: 1 },
   white: { color: '#FFFFFF' },
   muted: { color: '#B0B8BF' },
   progress: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
