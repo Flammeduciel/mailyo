@@ -344,6 +344,8 @@ export default function ThreadScreen() {
 
   const onAttachPick = async (source: AttachmentSource) => {
     setAttachOpen(false);
+    // Let the sheet finish closing: a picker opened during the animation can be dropped (iOS).
+    await new Promise((resolve) => setTimeout(resolve, 300));
     const files = await pickFrom(source);
     if (files.length > 0) setPicked((previous) => [...previous, ...files]);
   };
