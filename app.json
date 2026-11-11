@@ -78,7 +78,8 @@
           "cameraPermission": "MailYo utilise l’appareil photo pour joindre une photo à un email.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "./modules/mailyo-imap/plugin/with-mail-packaging.js"
     ],
     "experiments": {
       "typedRoutes": true,

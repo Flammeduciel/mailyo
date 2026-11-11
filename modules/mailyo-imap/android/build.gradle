@@ -12,11 +12,6 @@ android {
     versionCode 1
     versionName '1.0.0'
   }
-  packagingOptions {
-    resources {
-      excludes += ['META-INF/LICENSE.md', 'META-INF/NOTICE.md', 'META-INF/mailcap', 'META-INF/javamail.*']
-    }
-  }
 }
 
 dependencies {
