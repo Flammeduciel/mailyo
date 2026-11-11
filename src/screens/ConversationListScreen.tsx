@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
+import { firstToOpen, groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
 import type { ConversationCounts } from '@/data/repositories/threads';
 import type { ConversationFilter, ConversationTab, ThreadSummary } from '@/domain/models';
 import { useApp } from '@/state/app-context';
@@ -206,8 +206,10 @@ export function ConversationListScreen({
 
   const openGroup = useCallback(
     (group: ContactGroup) => {
-      if (group.threads.length === 1) {
-        router.push(`/thread/${group.lead.id}`);
+      // Something unread, or a single subject: straight into that conversation.
+      // The subject list only shows when everything has been read.
+      if (group.threads.length === 1 || group.unreadCount > 0) {
+        router.push(`/thread/${firstToOpen(group).id}`);
         return;
       }
       router.push({
@@ -313,13 +315,19 @@ export function ConversationListScreen({
 
   const chips: FilterChipOption<ConversationFilter>[] = [
     { value: 'all', label: 'Toutes', count: data.counts.all || undefined },
-    { value: 'unread', label: 'Non lus', count: data.counts.unread || undefined },
+    {
+      value: 'unread',
+      label: 'Non lus',
+      icon: 'mark-email-unread',
+      count: data.counts.unread || undefined,
+    },
     {
       value: 'attachments',
       label: 'Pièces jointes',
+      icon: 'attach-file',
       count: data.counts.attachments || undefined,
     },
-    { value: 'spam', label: 'Spam', count: data.counts.spam || undefined },
+    { value: 'spam', label: 'Spam', icon: 'report', count: data.counts.spam || undefined },
   ];
 
   const empty = EMPTY_COPY[archived ? 'archived' : (tab ?? 'discussions')];

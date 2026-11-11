@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ConversationTab, ThreadSummary } from '@/domain/models';
@@ -15,6 +15,7 @@ import {
   Divider,
   EmptyState,
   formatThreadTime,
+  IconButton,
   previewText,
   Spacing,
   useAppTheme,
@@ -36,7 +37,7 @@ export default function ContactSubjectsScreen() {
     archived?: string;
   }>();
   const colors = useAppTheme();
-  const { service } = useApp();
+  const { service, invalidate } = useApp();
   const key = (address ?? '').toLowerCase();
 
   const { data, reload } = useServiceQuery<Data>(
@@ -60,6 +61,27 @@ export default function ContactSubjectsScreen() {
   );
 
   const name = data.threads[0]?.contact.name || address || '';
+
+  // Delete one subject without opening it; leave when none is left.
+  const confirmDelete = (thread: ThreadSummary) =>
+    Alert.alert(
+      'Supprimer la conversation ?',
+      `« ${thread.lastMessage.subject || '(Sans objet)'} » ira dans la corbeille.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () =>
+            void (async () => {
+              await service.deleteThread(thread.id);
+              invalidate();
+              if (data.threads.length <= 1) router.back();
+              else await reload();
+            })(),
+        },
+      ],
+    );
   const unread = data.threads.filter((t) => t.unreadCount > 0).length;
 
   return (
@@ -80,6 +102,7 @@ export default function ContactSubjectsScreen() {
           return (
             <Pressable
               onPress={() => router.push(`/thread/${item.id}`)}
+              onLongPress={() => confirmDelete(item)}
               style={({ pressed }) => [
                 styles.row,
                 { backgroundColor: pressed ? colors.surfaceAlt : colors.background },
@@ -130,6 +153,14 @@ export default function ContactSubjectsScreen() {
                   <Badge count={item.unreadCount} />
                 </View>
               </View>
+              <IconButton
+                icon="delete-outline"
+                accessibilityLabel={`Supprimer « ${item.lastMessage.subject || '(Sans objet)'} »`}
+                onPress={() => confirmDelete(item)}
+                size={22}
+                color={colors.textMuted}
+                testID={`subject-delete-${item.id}`}
+              />
             </Pressable>
           );
         }}
@@ -145,7 +176,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.xs,
     paddingVertical: Spacing.md,
   },
   icon: {
