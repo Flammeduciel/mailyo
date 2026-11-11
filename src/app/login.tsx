@@ -31,7 +31,7 @@ interface Provider {
 
 export default function LoginScreen() {
   const colors = useAppTheme();
-  const { service, refresh } = useApp();
+  const { service, refresh, invalidate } = useApp();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<'info' | 'error'>('info');
@@ -50,18 +50,18 @@ export default function LoginScreen() {
       const tokens = await adapter.authorize();
       const email = await fetchGmailAddress(tokens.accessToken);
       await service.connectOAuthAccount({ emailAddress: email, tokens });
-      setMessageType('info');
-      setMessage(`Compte ${email} ajouté — récupération des emails…`);
-      await service.refreshContactPhotos(true);
-      await refresh();
+      // Back to the inbox right away: the progress ring there shows the first
+      // sync, and conversations appear as they are stored.
       router.replace('/discussions');
+      void refresh();
+      void service.refreshContactPhotos(true).then(() => invalidate());
     } catch (cause: unknown) {
       setMessageType('error');
       setMessage(cause instanceof Error ? cause.message : 'Autorisation refusée');
     } finally {
       setBusy(false);
     }
-  }, [service, refresh]);
+  }, [service, refresh, invalidate]);
 
   const providers: Provider[] = [
     {

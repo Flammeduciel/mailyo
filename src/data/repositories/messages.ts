@@ -7,6 +7,7 @@
 
 import type { Database, SqlValue } from '@/data/db/database';
 import type { EmailAddress, MailCategory, Message, SyncState } from '@/domain/models';
+import { repairMojibake } from '@/domain/mojibake';
 import { buildFtsQuery } from '@/domain/search';
 
 interface MessageRow {
@@ -53,11 +54,11 @@ function mapMessage(row: MessageRow): Message {
     inReplyTo: row.in_reply_to,
     referencesHeader: row.references_header,
     threadId: row.thread_id,
-    senderName: row.sender_name,
+    senderName: repairMojibake(row.sender_name),
     senderAddress: row.sender_address,
     to: parseAddresses(row.to_json),
     cc: parseAddresses(row.cc_json),
-    subject: row.subject,
+    subject: repairMojibake(row.subject),
     bodyText: row.body_text,
     bodyHtmlSanitized: row.body_html_sanitized,
     receivedAt: row.received_at,

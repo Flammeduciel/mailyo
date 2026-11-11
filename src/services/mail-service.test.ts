@@ -166,6 +166,28 @@ describe('MailService', () => {
     expect(hits.map((h) => h.attachment.filename)).toEqual(['salle-de-reunion.jpg']);
   });
 
+  it('reports sync progress and shares one run between callers', async () => {
+    const db = await createMigratedDatabase();
+    const service = new MailService({ db, now: () => NOW });
+    await service.connectDemo();
+    await db.runAsync('UPDATE folders SET last_synced_uid = NULL');
+    await db.runAsync('DELETE FROM messages');
+
+    const ratios: number[] = [];
+    const stored: number[] = [];
+    const first = service.syncAll((p) => {
+      ratios.push(p.ratio);
+      stored.push(p.stored);
+    });
+    const second = service.syncAll();
+    expect(second).toBe(first);
+    await first;
+
+    expect(ratios[ratios.length - 1]).toBe(1);
+    expect([...ratios].sort((a, b) => a - b)).toEqual(ratios);
+    expect(Math.max(...stored)).toBeGreaterThan(0);
+  });
+
   it('finds messages with the FTS index', async () => {
     const { service } = await bootstrap();
 

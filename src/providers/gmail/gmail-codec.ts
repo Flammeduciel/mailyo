@@ -9,7 +9,10 @@
 
 import type { EmailAddress, MailCategory } from '@/domain/models';
 import { parseAddress, parseAddressList } from '@/domain/mime';
+import { repairMojibake } from '@/domain/mojibake';
 import type { OutgoingMessage, RemoteAttachment, RemoteMessage } from '@/providers/types';
+
+export { repairMojibake };
 
 // ---------------------------------------------------------------------------
 // Byte codecs
@@ -179,7 +182,7 @@ export interface GmailHeader {
 
 function header(headers: GmailHeader[] | undefined, name: string): string | null {
   const found = headers?.find((entry) => entry.name.toLowerCase() === name.toLowerCase());
-  return found ? decodeEncodedWords(found.value) : null;
+  return found ? repairMojibake(decodeEncodedWords(found.value)) : null;
 }
 
 function charsetOf(contentType: string | null): string | null {
@@ -228,7 +231,7 @@ function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
   if (isAttachment) {
     acc.hasAttachments = true;
     acc.attachments.push({
-      filename: part.filename || 'Pièce jointe',
+      filename: repairMojibake(part.filename || 'Pièce jointe'),
       mimeType: part.mimeType || 'application/octet-stream',
       sizeBytes: part.body?.size ?? 0,
       remotePartId: part.body?.attachmentId ?? null,

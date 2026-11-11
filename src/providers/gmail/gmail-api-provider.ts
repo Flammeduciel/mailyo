@@ -122,6 +122,7 @@ export class GmailApiProvider implements MailProvider {
         this.gmailIds.set(remote.remoteUid, message.id);
         messages.push(remote);
       }
+      input.onProgress?.(Math.min(i + FETCH_CONCURRENCY, ids.length), Math.min(ids.length, limit));
     }
 
     messages.sort((a, b) => a.remoteUid - b.remoteUid);

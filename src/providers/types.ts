@@ -68,6 +68,8 @@ export interface FetchMessagesInput {
   /** Last UID already stored locally, or null for the initial sync. */
   lastSyncedUid: number | null;
   limit?: number;
+  /** Download progress, for providers that fetch messages one by one. */
+  onProgress?: (fetched: number, total: number) => void;
 }
 
 export interface FetchMessagesResult {

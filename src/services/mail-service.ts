@@ -113,7 +113,7 @@ import {
   type AttachmentWriter,
 } from '@/services/attachment-files';
 import { ProviderRegistry } from '@/providers/registry';
-import { SyncEngine, toLocalAttachments } from '@/sync/sync-engine';
+import { SyncEngine, toLocalAttachments, type SyncProgress } from '@/sync/sync-engine';
 
 const THREADING_VERSION_KEY = 'threading.version';
 const THREADING_VERSION = '2';
@@ -579,9 +579,33 @@ export class MailService {
   }
 
   /** Sync every account, present notifications for genuinely new messages. */
-  async syncAll(): Promise<void> {
-    const accounts = await listAccounts(this.db);
-    for (const account of accounts) {
+  /**
+   * Synchronise every account. `onProgress` receives the overall ratio (0..1)
+   * and the number of messages stored so far, so screens can show a progress
+   * ring and refresh the list while the first sync is still running.
+   */
+  syncAll(onProgress?: (progress: SyncProgress) => void): Promise<void> {
+    // One run at a time: a second caller joins the run in progress and also
+    // receives its progress.
+    if (onProgress) this.syncListeners.add(onProgress);
+    if (!this.syncRun) {
+      this.syncRun = this.runSyncAll((progress) => {
+        for (const listener of this.syncListeners) listener(progress);
+      }).finally(() => {
+        this.syncRun = null;
+        this.syncListeners.clear();
+      });
+    }
+    return this.syncRun;
+  }
+
+  private syncRun: Promise<void> | null = null;
+  private readonly syncListeners = new Set<(progress: SyncProgress) => void>();
+
+  private async runSyncAll(onProgress: (progress: SyncProgress) => void): Promise<void> {
+    const accounts = (await listAccounts(this.db)).filter((a) => a.syncEnabled);
+    let storedBefore = 0;
+    for (const [index, account] of accounts.entries()) {
       if (!account.syncEnabled) {
         continue;
       }
@@ -594,9 +618,15 @@ export class MailService {
         provider,
         now: this.now,
         fetchLimit: this.fetchLimit,
+        onProgress: (progress) =>
+          onProgress({
+            ratio: (index + progress.ratio) / accounts.length,
+            stored: storedBefore + progress.stored,
+          }),
       });
       try {
         const result = await engine.syncAccount(account);
+        storedBefore += result.fetchedCount;
         await this.notifyIncoming(account, result.added);
       } catch (error) {
         // One unreachable account (offline, expired token) must not block the

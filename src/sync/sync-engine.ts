@@ -56,19 +56,32 @@ export interface SyncEngineOptions {
   now?: () => number;
   /** Max messages fetched per folder per run (initial sync is bounded). */
   fetchLimit?: number;
+  /** Progress of `syncAccount`, from 0 to 1, plus how many messages are stored so far. */
+  onProgress?: (progress: SyncProgress) => void;
 }
+
+export interface SyncProgress {
+  ratio: number;
+  stored: number;
+}
+
+/** Share of a folder's progress spent downloading (the rest is storing). */
+const FETCH_WEIGHT = 0.8;
 
 export class SyncEngine {
   private readonly db: Database;
   private readonly provider: MailProvider;
   private readonly now: () => number;
   private readonly fetchLimit: number;
+  private readonly onProgress?: (progress: SyncProgress) => void;
+  private stored = 0;
 
   constructor(options: SyncEngineOptions) {
     this.db = options.db;
     this.provider = options.provider;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
+    this.onProgress = options.onProgress;
   }
 
   /** Synchronise every folder of an account that is enabled for sync. */
@@ -83,13 +96,20 @@ export class SyncEngine {
 
     try {
       const folders = await this.ensureFolders(account);
-      for (const folder of folders) {
-        const folderResult = await this.syncFolder(account, folder);
+      this.stored = 0;
+      for (const [index, folder] of folders.entries()) {
+        const report = (share: number) =>
+          this.onProgress?.({
+            ratio: Math.min(1, (index + share) / Math.max(1, folders.length)),
+            stored: this.stored,
+          });
+        const folderResult = await this.syncFolder(account, folder, report);
         result.added.push(...folderResult.added);
         result.fetchedCount += folderResult.fetchedCount;
         result.uidValidityReset = result.uidValidityReset || folderResult.uidValidityReset;
       }
       await updateAccountSyncStatus(this.db, account.id, 'idle', this.now());
+      this.onProgress?.({ ratio: 1, stored: this.stored });
     } catch (error) {
       await updateAccountSyncStatus(this.db, account.id, 'error', account.lastSyncAt);
       throw error;
@@ -123,13 +143,20 @@ export class SyncEngine {
     return folders;
   }
 
-  async syncFolder(account: Account, folder: Folder): Promise<SyncResult> {
+  async syncFolder(
+    account: Account,
+    folder: Folder,
+    report?: (share: number) => void,
+  ): Promise<SyncResult> {
+    report?.(0);
     const fetch = await this.provider.fetchMessages({
       folderRemoteId: folder.remoteFolderId,
       knownUidValidity: folder.lastUidValidity,
       lastSyncedUid: folder.lastSyncedUid,
       limit: this.fetchLimit,
+      onProgress: (fetched, total) => report?.(FETCH_WEIGHT * (total > 0 ? fetched / total : 1)),
     });
+    report?.(FETCH_WEIGHT);
 
     const uidValidityReset =
       folder.lastUidValidity !== null && folder.lastUidValidity !== fetch.uidValidity;
@@ -142,12 +169,14 @@ export class SyncEngine {
     const added: Message[] = [];
     let maxUid = folder.lastSyncedUid ?? -1;
 
-    for (const remote of fetch.messages) {
+    for (const [index, remote] of fetch.messages.entries()) {
       const persisted = await this.persistMessage(account, folder, remote, knownThreads);
       if (persisted.isNew) {
         added.push(persisted.message);
       }
       maxUid = Math.max(maxUid, remote.remoteUid);
+      this.stored += 1;
+      report?.(FETCH_WEIGHT + (1 - FETCH_WEIGHT) * ((index + 1) / fetch.messages.length));
     }
 
     await updateFolderSyncCursor(this.db, folder.id, fetch.uidValidity, maxUid);

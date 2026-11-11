@@ -4,6 +4,7 @@
 
 import type { Database } from '@/data/db/database';
 import type { Attachment } from '@/domain/models';
+import { repairMojibake } from '@/domain/mojibake';
 
 interface AttachmentRow {
   id: string;
@@ -20,7 +21,7 @@ function mapAttachment(row: AttachmentRow): Attachment {
   return {
     id: row.id,
     messageId: row.message_id,
-    filename: row.filename,
+    filename: repairMojibake(row.filename),
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
     remotePartId: row.remote_part_id,

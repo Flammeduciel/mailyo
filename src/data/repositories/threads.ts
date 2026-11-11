@@ -3,6 +3,7 @@
  * list needs (`ThreadSummary`).
  */
 
+import { repairMojibake } from '@/domain/mojibake';
 import type { Database, SqlValue } from '@/data/db/database';
 import type {
   ConversationFilter,
@@ -27,7 +28,7 @@ function mapThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     accountId: row.account_id,
-    normalizedSubject: row.normalized_subject,
+    normalizedSubject: repairMojibake(row.normalized_subject),
     lastMessageAt: row.last_message_at,
     unreadCount: row.unread_count,
     isPinned: row.is_pinned !== 0,
@@ -61,7 +62,7 @@ function firstRecipient(json: string | null): EmailAddress | null {
 
 function mapThreadSummary(row: ThreadSummaryRow): ThreadSummary {
   const contact: EmailAddress = row.other_sender_address
-    ? { name: row.other_sender_name ?? '', address: row.other_sender_address }
+    ? { name: repairMojibake(row.other_sender_name ?? ''), address: row.other_sender_address }
     : (firstRecipient(row.last_to_json) ?? {
         name: row.last_sender_name ?? '',
         address: row.last_sender_address ?? '',
@@ -73,9 +74,9 @@ function mapThreadSummary(row: ThreadSummaryRow): ThreadSummary {
     hasAttachments: row.has_attachments !== null && row.has_attachments !== 0,
     isStarred: row.is_starred !== null && row.is_starred !== 0,
     lastMessage: {
-      senderName: row.last_sender_name ?? '',
+      senderName: repairMojibake(row.last_sender_name ?? ''),
       senderAddress: row.last_sender_address ?? '',
-      subject: row.last_subject ?? '',
+      subject: repairMojibake(row.last_subject ?? ''),
       bodyText: row.last_body_text ?? '',
       receivedAt: row.last_received_at ?? row.last_message_at,
     },

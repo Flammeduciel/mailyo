@@ -1,6 +1,7 @@
 import {
   base64ToBytes,
   buildRawMessage,
+  repairMojibake,
   bytesToBase64Url,
   decodeCharset,
   decodeEncodedWords,
@@ -143,5 +144,13 @@ describe('gmailCategory', () => {
     expect(decoded).toContain('Content-Disposition: attachment; filename=');
     expect(decoded).toContain('JVBERi0xLjQ=');
     expect(decoded.trim().endsWith('--')).toBe(true);
+  });
+
+  it('repairs UTF-8 text mislabelled as Latin-1, and leaves real text alone', () => {
+    expect(repairMojibake('Livrables S22 Â· Fullstack A')).toBe('Livrables S22 · Fullstack A');
+    expect(repairMojibake('RÃ©union demain')).toBe('Réunion demain');
+    expect(repairMojibake('Itâ€™s ok')).toBe('It’s ok');
+    expect(repairMojibake('Réunion · café')).toBe('Réunion · café');
+    expect(repairMojibake('Âge')).toBe('Âge');
   });
 });

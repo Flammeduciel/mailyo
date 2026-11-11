@@ -98,6 +98,7 @@ export function MessageBubble({
   const [showHistory, setShowHistory] = useState(false);
   const html = shouldRenderHtml(message);
   const split = useMemo(() => splitQuotedText(message.bodyText), [message.bodyText]);
+  const bodyText = useMemo(() => tidyPlainText(split.body).trim(), [split.body]);
   const textColor = isOwn ? colors.bubbleOutgoingText : colors.bubbleIncomingText;
 
   return (
@@ -158,7 +159,10 @@ export function MessageBubble({
           />
         ) : (
           <>
-            <RichText style={{ color: textColor }}>{tidyPlainText(split.body)}</RichText>
+            {/* A mail that only carries files has no text: no empty line above them. */}
+            {bodyText.length > 0 ? (
+              <RichText style={{ color: textColor }}>{bodyText}</RichText>
+            ) : null}
             {/* The parent is already in the conversation: no need to unfold it again. */}
             {split.quoted && !parentInThread ? (
               <>

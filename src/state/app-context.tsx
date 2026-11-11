@@ -47,11 +47,23 @@ export interface AppContextValue {
   unlock: () => Promise<boolean>;
   /** Re-run a full sync, then refresh the screens. */
   refresh: () => Promise<void>;
+  /** Progress of the running sync (null when idle); lists refresh as mail arrives. */
+  sync: SyncStatus | null;
   /** Refresh the screens without a network round-trip. */
   invalidate: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+export interface SyncStatus {
+  /** 0..1 */
+  ratio: number;
+  /** Messages stored so far in this run. */
+  stored: number;
+}
+
+/** How often lists reload while a sync is storing new mail. */
+const LIVE_REFRESH_MS = 700;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [service, setService] = useState<MailService | null>(null);
@@ -61,6 +73,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemePreference] = useState<ThemePreference>('system');
   const [locked, setLocked] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [sync, setSync] = useState<SyncStatus | null>(null);
+  const runSync = useCallback((target: MailService): Promise<void> => {
+    let lastBump = 0;
+    let lastStored = 0;
+    setSync({ ratio: 0, stored: 0 });
+    return target
+      .syncAll((progress) => {
+        setSync({ ratio: progress.ratio, stored: progress.stored });
+        const now = Date.now();
+        if (progress.stored > lastStored && now - lastBump > LIVE_REFRESH_MS) {
+          lastBump = now;
+          lastStored = progress.stored;
+          setRevision((value) => value + 1);
+        }
+      })
+      .finally(() => {
+        setSync(null);
+        setRevision((value) => value + 1);
+      });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,8 +127,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => undefined);
       await created.ensureNotificationsConfigured();
-      await created.syncAll();
-      setRevision((value) => value + 1);
+      await runSync(created);
       await registerBackgroundSync();
     })()
       .catch((cause: unknown) => {
@@ -112,15 +143,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [runSync]);
 
   const refresh = useCallback(async () => {
     if (!service) {
       return;
     }
-    await service.syncAll();
-    setRevision((value) => value + 1);
-  }, [service]);
+    await runSync(service);
+  }, [service, runSync]);
 
   const invalidate = useCallback(() => {
     setRevision((value) => value + 1);
@@ -160,9 +190,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       biometricsAvailable,
       unlock,
       refresh,
+      sync,
       invalidate,
     };
   }, [
+    sync,
     service,
     ready,
     error,

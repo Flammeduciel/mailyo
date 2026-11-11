@@ -33,6 +33,7 @@ import {
   FilterChips,
   PopupMenu,
   SearchPill,
+  SyncRing,
   Spacing,
   useAppTheme,
   type AppBarAction,
@@ -87,7 +88,7 @@ export function ConversationListScreen({
   title,
 }: ConversationListScreenProps) {
   const colors = useAppTheme();
-  const { service, refresh, invalidate } = useApp();
+  const { service, refresh, invalidate, sync } = useApp();
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
@@ -315,6 +316,18 @@ export function ConversationListScreen({
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View>
+            {sync && data.threads.length > 0 && !archived ? (
+              <View style={[styles.syncBar, { backgroundColor: colors.primaryContainer }]}>
+                <SyncRing ratio={sync.ratio} size={30} strokeWidth={3} showLabel={false} />
+                <AppText variant="caption" weight="semibold" style={styles.syncText}>
+                  Récupération de vos emails…
+                  {sync.stored > 0 ? ` ${sync.stored} reçus` : ''}
+                </AppText>
+                <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
+                  {Math.round(sync.ratio * 100)} %
+                </AppText>
+              </View>
+            ) : null}
             {archived ? null : (
               <SearchPill onPress={() => router.push('/search')} testID="list-search" />
             )}
@@ -371,20 +384,32 @@ export function ConversationListScreen({
           )
         }
         ListEmptyComponent={
-          <EmptyState
-            icon={archived ? 'archive' : 'forum'}
-            title={empty.title}
-            description={empty.description}
-            action={
-              data.selfAddresses.length === 0 ? (
-                <Button
-                  label="Ajouter un compte"
-                  variant="secondary"
-                  onPress={() => router.push('/login')}
-                />
-              ) : undefined
-            }
-          />
+          sync && !archived ? (
+            <View style={styles.syncEmpty} testID="list-syncing">
+              <SyncRing ratio={sync.ratio} size={96} strokeWidth={7} />
+              <AppText variant="subtitle" weight="semibold">
+                Récupération de vos emails…
+              </AppText>
+              <AppText variant="body" color="textSecondary" style={styles.syncHint}>
+                Vos conversations apparaissent au fur et à mesure.
+              </AppText>
+            </View>
+          ) : (
+            <EmptyState
+              icon={archived ? 'archive' : 'forum'}
+              title={empty.title}
+              description={empty.description}
+              action={
+                data.selfAddresses.length === 0 ? (
+                  <Button
+                    label="Ajouter un compte"
+                    variant="secondary"
+                    onPress={() => router.push('/login')}
+                  />
+                ) : undefined
+              }
+            />
+          )
         }
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
@@ -408,6 +433,28 @@ export function ConversationListScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+  },
+  syncBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: 24,
+  },
+  syncText: {
+    flex: 1,
+  },
+  syncEmpty: {
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingTop: 96,
+    paddingHorizontal: Spacing.xl,
+  },
+  syncHint: {
+    textAlign: 'center',
   },
   archivedRow: {
     flexDirection: 'row',

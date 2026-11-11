@@ -63,3 +63,4 @@ export { AttachmentList, type AttachmentListProps } from './AttachmentList';
 export { ThreadSkeleton } from './ThreadSkeleton';
 export { VideoThumbnail, type VideoThumbnailProps } from './VideoThumbnail';
 export { UndoSnackbar, type UndoSnackbarProps } from './UndoSnackbar';
+export { SyncRing, type SyncRingProps } from './SyncRing';
