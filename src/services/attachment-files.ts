@@ -108,3 +108,26 @@ export function clearAttachmentCache(): void {
 export async function readFileAsBase64(uri: string): Promise<string> {
   return new File(uri).base64();
 }
+
+function thumbnailFile(attachmentId: string): File {
+  const directory = new Directory(Paths.cache, 'attachments', 'thumbs');
+  directory.create({ idempotent: true, intermediates: true });
+  return new File(directory, `${attachmentId}.jpg`);
+}
+
+/** URI of the cached first-page thumbnail of a PDF, or null. */
+export function cachedPdfThumbnail(attachmentId: string): string | null {
+  try {
+    const file = thumbnailFile(attachmentId);
+    return file.exists ? file.uri : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePdfThumbnail(attachmentId: string, jpegBase64: string): Promise<string> {
+  const file = thumbnailFile(attachmentId);
+  file.create({ overwrite: true });
+  file.write(base64ToBytes(jpegBase64));
+  return file.uri;
+}

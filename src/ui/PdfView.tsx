@@ -10,7 +10,8 @@ export interface PdfViewProps {
   uri: string;
 }
 
-const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build';
+export const PDFJS_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build';
+const PDFJS = PDFJS_BASE;
 
 /**
  * In-app PDF reader for Android, whose WebView cannot display PDFs: the bytes

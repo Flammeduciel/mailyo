@@ -71,6 +71,7 @@ export default function ConversationFilesScreen() {
               resolve={actions.resolve}
               onSave={(attachment) => void actions.save(attachment)}
               progress={actions.progress}
+              pdfPreview={actions.pdfPreview}
             />
           </View>
         )}

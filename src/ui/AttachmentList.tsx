@@ -13,6 +13,7 @@ import type { Attachment } from '@/domain/models';
 
 import { AppText } from './AppText';
 import { Radius, Spacing, useAppTheme } from './theme';
+import { PdfThumbnail, type PdfPreviewSource } from './PdfThumbnail';
 import { VideoThumbnail } from './VideoThumbnail';
 
 const KIND_ICON: Record<AttachmentKind, keyof typeof MaterialIcons.glyphMap> = {
@@ -36,6 +37,8 @@ export interface AttachmentListProps {
   onSave?: (attachment: Attachment) => void;
   /** Attachment being downloaded, with its ratio when known. */
   progress?: { id: string; ratio: number | null } | null;
+  /** Enables first-page thumbnails for PDFs. */
+  pdfPreview?: PdfPreviewSource;
   testID?: string;
 }
 
@@ -46,6 +49,7 @@ export function AttachmentList({
   autoPreviewMaxBytes = 3 * 1024 * 1024,
   onSave,
   progress,
+  pdfPreview,
   testID,
 }: AttachmentListProps) {
   if (attachments.length === 0) {
@@ -62,6 +66,7 @@ export function AttachmentList({
           autoPreviewMaxBytes={autoPreviewMaxBytes}
           onSave={onSave}
           progress={progress?.id === attachment.id ? progress : null}
+          pdfPreview={pdfPreview}
         />
       ))}
     </View>
@@ -75,6 +80,7 @@ function AttachmentTile({
   autoPreviewMaxBytes,
   onSave,
   progress,
+  pdfPreview,
 }: {
   attachment: Attachment;
   onOpen: (attachment: Attachment) => void;
@@ -82,6 +88,7 @@ function AttachmentTile({
   autoPreviewMaxBytes: number;
   onSave?: (attachment: Attachment) => void;
   progress: { id: string; ratio: number | null } | null;
+  pdfPreview?: PdfPreviewSource;
 }) {
   const colors = useAppTheme();
   const kind = attachmentKind(attachment.mimeType, attachment.filename);
@@ -132,6 +139,10 @@ function AttachmentTile({
         <Image source={{ uri: localPath }} style={styles.image} contentFit="cover" />
       ) : kind === 'video' ? (
         <VideoThumbnail uri={localPath} style={styles.image} />
+      ) : kind === 'pdf' &&
+        pdfPreview &&
+        (attachment.sizeBytes <= autoPreviewMaxBytes || pdfPreview.cached(attachment.id)) ? (
+        <PdfThumbnail attachmentId={attachment.id} source={pdfPreview} style={styles.image} />
       ) : null}
       <View style={styles.info}>
         <View style={[styles.iconBox, { backgroundColor: colors.primaryContainer }]}>

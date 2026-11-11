@@ -4,12 +4,20 @@
  */
 
 import * as Network from 'expo-network';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, ToastAndroid, Platform } from 'react-native';
 
 import { formatFileSize } from '@/domain/attachments';
 import type { Attachment } from '@/domain/models';
-import { ensureLocalFile, saveFileToDevice, shareFile } from '@/services/attachment-files';
+import {
+  cachedPdfThumbnail,
+  ensureLocalFile,
+  readFileAsBase64,
+  saveFileToDevice,
+  savePdfThumbnail,
+  shareFile,
+} from '@/services/attachment-files';
+import type { PdfPreviewSource } from '@/ui/PdfThumbnail';
 import { useApp } from '@/state/app-context';
 
 function toast(message: string): void {
@@ -119,5 +127,18 @@ export function useAttachmentActions() {
     [localFile],
   );
 
-  return { progress, resolve, allowDownload, save, share };
+  // First-page thumbnails of PDFs: downloaded within the auto-preview limit.
+  const pdfPreview = useMemo<PdfPreviewSource>(
+    () => ({
+      cached: cachedPdfThumbnail,
+      load: async (attachmentId) => {
+        const resolved = await service.resolveAttachment(attachmentId);
+        return readFileAsBase64(await ensureLocalFile(resolved));
+      },
+      save: savePdfThumbnail,
+    }),
+    [service],
+  );
+
+  return { progress, resolve, allowDownload, save, share, pdfPreview };
 }

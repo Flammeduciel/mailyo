@@ -570,6 +570,7 @@ export default function ThreadScreen() {
           onSaveAttachment={(attachment) => void attachmentActions.save(attachment)}
           attachmentProgress={attachmentActions.progress}
           autoPreviewMaxBytes={autoPreviewMaxBytes}
+          pdfPreview={attachmentActions.pdfPreview}
           blockRemoteImages={service.getSettings().blockRemoteImages}
           selected={selected.has(message.id)}
           highlighted={highlighted === message.id}

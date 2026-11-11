@@ -120,6 +120,7 @@ export default function SearchScreen() {
                 resolve={actions.resolve}
                 onSave={(attachment) => void actions.save(attachment)}
                 progress={actions.progress}
+                pdfPreview={actions.pdfPreview}
               />
               <AppText variant="caption" color="textMuted" numberOfLines={1}>
                 {item.senderName} · {new Date(item.receivedAt).toLocaleDateString('fr-FR')}

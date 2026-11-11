@@ -8,6 +8,7 @@ import { splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
 import { AttachmentList } from './AttachmentList';
+import type { PdfPreviewSource } from './PdfThumbnail';
 import { HtmlMessageView } from './HtmlMessageView';
 import { RichText } from './RichText';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
@@ -35,6 +36,7 @@ export interface MessageBubbleProps {
   onSaveAttachment?: (attachment: Attachment) => void;
   attachmentProgress?: { id: string; ratio: number | null } | null;
   autoPreviewMaxBytes?: number;
+  pdfPreview?: PdfPreviewSource;
   /** Hide remote images of HTML mails until the user asks for them. */
   blockRemoteImages?: boolean;
   onPress?: () => void;
@@ -87,6 +89,7 @@ export function MessageBubble({
   onSaveAttachment,
   attachmentProgress,
   autoPreviewMaxBytes,
+  pdfPreview,
   blockRemoteImages = false,
   onPress,
   onLongPress,
@@ -189,6 +192,7 @@ export function MessageBubble({
             onSave={onSaveAttachment}
             progress={attachmentProgress}
             autoPreviewMaxBytes={autoPreviewMaxBytes}
+            pdfPreview={pdfPreview}
             testID={testID ? `${testID}-attachments` : undefined}
           />
         ) : null}
