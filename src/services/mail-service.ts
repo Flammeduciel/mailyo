@@ -20,6 +20,8 @@ import {
   getAttachment,
   listAttachmentsByThread,
   listStarredRemoteAttachments,
+  searchAttachmentsByName,
+  type FileSearchHit,
   replaceMessageAttachments,
   setAttachmentDownloaded,
   setAttachmentState,
@@ -132,6 +134,8 @@ export interface SendMessageInput {
   /** Local files picked in the composer. */
   attachments?: PickedAttachment[];
 }
+
+export type { FileSearchHit };
 
 export interface SaveDraftInput {
   draftId?: string | null;
@@ -797,11 +801,15 @@ export class MailService {
     return searchMessages(this.db, trimmed);
   }
 
-  /**
-   * Send a message. For a reply, recipients and reference headers are derived
-   * from the answered message ({@link buildReplyHeaders}); otherwise the raw
-   * fields are used. Sent messages are persisted into the local "sent" folder.
-   */
+  /** Attachments whose file name contains the query, newest first. */
+  async searchFiles(query: string): Promise<FileSearchHit[]> {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) {
+      return [];
+    }
+    return searchAttachmentsByName(this.db, trimmed);
+  }
+
   /**
    * Save the compose form as a draft, locally first (never lost), then on the
    * server when the provider supports drafts. Returns the local draft id.
@@ -863,6 +871,11 @@ export class MailService {
     }
   }
 
+  /**
+   * Send a message. For a reply, recipients and reference headers are derived
+   * from the answered message ({@link buildReplyHeaders}); otherwise the raw
+   * fields are used. Sent messages are persisted into the local "sent" folder.
+   */
   async send(input: SendMessageInput): Promise<SendResult> {
     const account = await getAccount(this.db, input.accountId);
     if (!account) {

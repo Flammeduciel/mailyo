@@ -105,6 +105,67 @@ describe('MailService', () => {
     expect(backfilled).toHaveLength(3);
   });
 
+  it('sends picked files and keeps them in the conversation', async () => {
+    const db = await createMigratedDatabase();
+    const service = new MailService({
+      db,
+      now: () => NOW,
+      attachmentReader: async () => 'SGVsbG8=',
+    });
+    await service.connectDemo();
+
+    const result = await service.send({
+      accountId: DEMO_ACCOUNT_ID,
+      to: 'bob@example.com',
+      subject: 'Photo',
+      body: '',
+      attachments: [
+        { uri: 'file:///cache/p.jpg', filename: 'p.jpg', mimeType: 'image/jpeg', sizeBytes: 5 },
+      ],
+    });
+    expect(result.status).toBe('sent');
+    const thread = (await service.listConversations()).find((t) => t.normalizedSubject === 'photo');
+    const files = Object.values(await service.getThreadAttachments(thread!.id)).flat();
+    expect(files).toEqual([
+      expect.objectContaining({
+        filename: 'p.jpg',
+        localPath: 'file:///cache/p.jpg',
+        sizeBytes: 5,
+      }),
+    ]);
+  });
+
+  it('saves, updates and discards drafts', async () => {
+    const { service } = await bootstrap();
+    const id = await service.saveDraft({
+      accountId: DEMO_ACCOUNT_ID,
+      to: 'bob@example.com',
+      subject: 'Brouillon',
+      body: 'v1',
+    });
+    await service.saveDraft({
+      draftId: id,
+      accountId: DEMO_ACCOUNT_ID,
+      to: 'bob@example.com',
+      subject: 'Brouillon',
+      body: 'v2',
+    });
+    const drafts = await service.listDrafts(DEMO_ACCOUNT_ID);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({ body: 'v2', syncState: 'synced' });
+    expect(drafts[0].remoteDraftId).toBeTruthy();
+
+    await service.discardDraft(id);
+    expect(await service.listDrafts(DEMO_ACCOUNT_ID)).toHaveLength(0);
+  });
+
+  it('finds attachments by file name', async () => {
+    const { service } = await bootstrap();
+    await service.listConversations();
+    const hits = await service.searchFiles('salle');
+    expect(hits.map((h) => h.attachment.filename)).toEqual(['salle-de-reunion.jpg']);
+  });
+
   it('finds messages with the FTS index', async () => {
     const { service } = await bootstrap();
 

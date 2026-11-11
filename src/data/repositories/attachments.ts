@@ -127,3 +127,41 @@ export async function listStarredRemoteAttachments(db: Database): Promise<Attach
   );
   return rows.map(mapAttachment);
 }
+
+/** An attachment found by name, with what is needed to open its conversation. */
+export interface FileSearchHit {
+  attachment: Attachment;
+  threadId: string;
+  senderName: string;
+  receivedAt: number;
+}
+
+export async function searchAttachmentsByName(
+  db: Database,
+  query: string,
+  limit = 100,
+): Promise<FileSearchHit[]> {
+  const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const rows = await db.getAllAsync<
+    AttachmentRow & {
+      thread_id: string;
+      sender_name: string;
+      sender_address: string;
+      received_at: number;
+    }
+  >(
+    `SELECT a.*, m.thread_id, m.sender_name, m.sender_address, m.received_at
+       FROM attachments a
+       JOIN messages m ON m.id = a.message_id
+      WHERE a.filename LIKE ? ESCAPE '\\'
+      ORDER BY m.received_at DESC
+      LIMIT ?`,
+    [pattern, limit],
+  );
+  return rows.map((row) => ({
+    attachment: mapAttachment(row),
+    threadId: row.thread_id,
+    senderName: row.sender_name || row.sender_address,
+    receivedAt: row.received_at,
+  }));
+}

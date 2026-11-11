@@ -125,4 +125,23 @@ describe('gmailCategory', () => {
     expect(gmailCategory(['INBOX'])).toBe('primary');
     expect(gmailCategory(['SENT'])).toBeNull();
   });
+
+  it('builds a multipart message when files are attached', () => {
+    const raw = buildRawMessage('moi@gmail.com', {
+      to: [{ name: '', address: 'bob@example.com' }],
+      cc: [],
+      bcc: [],
+      subject: 'Devis',
+      bodyText: 'Ci-joint.',
+      attachments: [
+        { filename: 'devis été.pdf', mimeType: 'application/pdf', base64: 'JVBERi0xLjQ=' },
+      ],
+    });
+    const decoded = utf8Decode(base64ToBytes(raw));
+    expect(decoded).toMatch(/Content-Type: multipart\/mixed; boundary="mailyo_/);
+    expect(decoded).toContain('Content-Type: application/pdf; name="=?UTF-8?B?');
+    expect(decoded).toContain('Content-Disposition: attachment; filename=');
+    expect(decoded).toContain('JVBERi0xLjQ=');
+    expect(decoded.trim().endsWith('--')).toBe(true);
+  });
 });

@@ -1,6 +1,7 @@
 import type { Database } from '@/data/db/database';
 import {
   getAttachment,
+  searchAttachmentsByName,
   listAttachmentsByThread,
   replaceMessageAttachments,
   setAttachmentDownloaded,
@@ -68,5 +69,19 @@ describe('attachments repository', () => {
       localPath: 'file:///cache/plan.pdf',
       downloadState: 'downloaded',
     });
+  });
+
+  it('finds attachments by file name, with their conversation', async () => {
+    await replaceMessageAttachments(db, 'msg_1', [
+      attachment(),
+      attachment({ id: 'att_2', filename: 'photo_50%.jpg', mimeType: 'image/jpeg' }),
+    ]);
+    const hits = await searchAttachmentsByName(db, 'PLAN');
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ threadId: 'thr_1', senderName: 'Bob' });
+    expect((await searchAttachmentsByName(db, '50%')).map((h) => h.attachment.id)).toEqual([
+      'att_2',
+    ]);
+    expect(await searchAttachmentsByName(db, '%')).toHaveLength(1);
   });
 });
