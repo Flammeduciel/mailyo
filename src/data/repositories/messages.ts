@@ -33,6 +33,7 @@ interface MessageRow {
   sync_state: string;
   category?: string | null;
   list_unsubscribe?: string | null;
+  list_unsubscribe_post?: string | null;
 }
 
 function parseAddresses(value: string): EmailAddress[] {
@@ -68,6 +69,7 @@ function mapMessage(row: MessageRow): Message {
     syncState: row.sync_state as SyncState,
     category: (row.category ?? null) as MailCategory | null,
     listUnsubscribe: row.list_unsubscribe ?? null,
+    listUnsubscribePost: row.list_unsubscribe_post ?? null,
   };
 }
 
@@ -77,8 +79,8 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        (id, account_id, folder_id, remote_uid, message_id_header, in_reply_to, references_header,
         thread_id, sender_name, sender_address, to_json, cc_json, subject, body_text,
         body_html_sanitized, received_at, is_read, is_starred, has_attachments, sync_state,
-        category, list_unsubscribe)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        category, list_unsubscribe, list_unsubscribe_post)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id = excluded.account_id,
        folder_id = excluded.folder_id,
@@ -101,7 +103,8 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        sync_state = excluded.sync_state,
        -- The same mail seen in SENT carries no category: keep the inbox one.
        category = COALESCE(excluded.category, messages.category),
-       list_unsubscribe = COALESCE(excluded.list_unsubscribe, messages.list_unsubscribe)`,
+       list_unsubscribe = COALESCE(excluded.list_unsubscribe, messages.list_unsubscribe),
+       list_unsubscribe_post = COALESCE(excluded.list_unsubscribe_post, messages.list_unsubscribe_post)`,
     [
       message.id,
       message.accountId,
@@ -125,6 +128,7 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
       message.syncState,
       message.category ?? null,
       message.listUnsubscribe ?? null,
+      message.listUnsubscribePost ?? null,
     ],
   );
 }
@@ -219,7 +223,10 @@ export async function deleteMessagesInFolder(db: Database, folderId: string): Pr
 
 export async function countUnread(db: Database, accountId?: string): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) AS count FROM messages WHERE is_read = 0 AND (? IS NULL OR account_id = ?)',
+    // Spam never counts towards the unread badge.
+    `SELECT COUNT(*) AS count FROM messages m
+      WHERE m.is_read = 0 AND (? IS NULL OR m.account_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM folders f WHERE f.id = m.folder_id AND f.role = 'spam')`,
     [accountId ?? null, accountId ?? null],
   );
   return row?.count ?? 0;
@@ -327,6 +334,98 @@ export async function listCorrespondents(
     if (!current.name && name && name !== address) current.name = name;
   }
   return [...byAddress.values()].sort((a, b) => b.lastAt - a.lastAt).slice(0, limit);
+}
+
+/** Store List-Unsubscribe headers fetched after the message itself (backfill). */
+export async function setUnsubscribeHeaders(
+  db: Database,
+  id: string,
+  listUnsubscribe: string | null,
+  listUnsubscribePost: string | null,
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE messages SET list_unsubscribe = ?, list_unsubscribe_post = ? WHERE id = ?',
+    [listUnsubscribe ?? '', listUnsubscribePost, id],
+  );
+}
+
+/** Sender of bulk mail (has List-Unsubscribe), aggregated for the subscriptions screen. */
+export interface MailingSender {
+  address: string;
+  name: string;
+  count: number;
+  lastAt: number;
+  /** Latest message id carrying the headers. */
+  messageId: string;
+  accountId: string;
+  listUnsubscribe: string;
+  listUnsubscribePost: string | null;
+}
+
+export async function listMailingSenders(db: Database): Promise<MailingSender[]> {
+  const rows = await db.getAllAsync<{
+    address: string;
+    name: string;
+    count: number;
+    last_at: number;
+    message_id: string;
+    account_id: string;
+    unsub: string;
+    unsub_post: string | null;
+  }>(
+    `SELECT lower(m.sender_address) AS address,
+            MAX(m.sender_name) AS name,
+            COUNT(*) AS count,
+            MAX(m.received_at) AS last_at,
+            (SELECT x.id FROM messages x WHERE lower(x.sender_address) = lower(m.sender_address)
+               AND x.list_unsubscribe IS NOT NULL AND x.list_unsubscribe <> ''
+             ORDER BY x.received_at DESC LIMIT 1) AS message_id,
+            MAX(m.account_id) AS account_id,
+            (SELECT x.list_unsubscribe FROM messages x WHERE lower(x.sender_address) = lower(m.sender_address)
+               AND x.list_unsubscribe IS NOT NULL AND x.list_unsubscribe <> ''
+             ORDER BY x.received_at DESC LIMIT 1) AS unsub,
+            (SELECT x.list_unsubscribe_post FROM messages x WHERE lower(x.sender_address) = lower(m.sender_address)
+               AND x.list_unsubscribe IS NOT NULL AND x.list_unsubscribe <> ''
+             ORDER BY x.received_at DESC LIMIT 1) AS unsub_post
+       FROM messages m
+      GROUP BY lower(m.sender_address)
+     HAVING unsub IS NOT NULL
+      ORDER BY count DESC, last_at DESC`,
+  );
+  return rows.map((row) => ({
+    address: row.address,
+    name: repairMojibake(row.name ?? ''),
+    count: row.count,
+    lastAt: row.last_at,
+    messageId: row.message_id,
+    accountId: row.account_id,
+    listUnsubscribe: row.unsub,
+    listUnsubscribePost: row.unsub_post,
+  }));
+}
+
+/** Messages whose List-Unsubscribe header was never looked up (NULL; '' = none). */
+export async function listMessagesMissingUnsubscribe(
+  db: Database,
+  limit = 200,
+): Promise<{ id: string; accountId: string; remoteUid: number }[]> {
+  const rows = await db.getAllAsync<{ id: string; account_id: string; remote_uid: number }>(
+    `SELECT id, account_id, remote_uid FROM messages
+      WHERE list_unsubscribe IS NULL AND remote_uid IS NOT NULL
+        AND lower(sender_address) NOT IN (SELECT lower(email_address) FROM accounts)
+      ORDER BY received_at DESC LIMIT ?`,
+    [limit],
+  );
+  return rows.map((row) => ({ id: row.id, accountId: row.account_id, remoteUid: row.remote_uid }));
+}
+
+/** Move messages to another local folder (spam / not spam). */
+export async function moveMessageToFolder(
+  db: Database,
+  id: string,
+  folderId: string,
+): Promise<void> {
+  await db.runAsync('UPDATE OR IGNORE messages SET folder_id = ? WHERE id = ?', [folderId, id]);
 }
 
 export interface ThreadingRow {

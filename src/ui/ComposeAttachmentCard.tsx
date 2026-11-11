@@ -48,7 +48,10 @@ export function ComposeAttachmentCard({
   const [draft, setDraft] = useState(base);
 
   const commit = () => {
-    const cleaned = draft.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const cleaned = draft
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (cleaned) onRename(`${cleaned}${extension}`);
     else setDraft(base);
     setEditing(false);

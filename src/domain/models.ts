@@ -66,6 +66,8 @@ export interface Message {
   category?: MailCategory | null;
   /** Raw List-Unsubscribe header (newsletters), when the sender provides one. */
   listUnsubscribe?: string | null;
+  /** "List-Unsubscribe=One-Click" when the sender supports RFC 8058 one-click unsubscribe. */
+  listUnsubscribePost?: string | null;
 }
 
 /** Gmail-style inbox categories. */
@@ -78,7 +80,7 @@ export type MailCategory = 'primary' | 'social' | 'promotions' | 'updates' | 'fo
 export type ConversationTab = 'discussions' | 'actus' | 'groupes' | 'favoris';
 
 /** Extra filter chip applied on top of a tab. */
-export type ConversationFilter = 'all' | 'unread' | 'attachments';
+export type ConversationFilter = 'all' | 'unread' | 'attachments' | 'spam';
 
 export interface Thread {
   id: string;
@@ -102,6 +104,8 @@ export interface ThreadSummary extends Thread {
   isStarred: boolean;
   /** Who the conversation is with: latest other sender, else the user's recipient. */
   contact: EmailAddress;
+  /** At least one message sits in the provider's spam folder. */
+  isSpam?: boolean;
 }
 
 export type RuleMatchType = 'sender' | 'domain' | 'subject' | 'vip' | 'all';

@@ -41,6 +41,7 @@ function message(overrides: Partial<Message> = {}): Message {
     syncState: 'synced',
     category: 'updates',
     listUnsubscribe: null,
+    listUnsubscribePost: null,
     ...overrides,
   };
 }

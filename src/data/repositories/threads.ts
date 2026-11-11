@@ -40,6 +40,7 @@ interface ThreadSummaryRow extends ThreadRow {
   message_count: number;
   has_attachments: number | null;
   is_starred: number | null;
+  is_spam?: number | null;
   last_sender_name: string | null;
   last_sender_address: string | null;
   last_subject: string | null;
@@ -73,6 +74,7 @@ function mapThreadSummary(row: ThreadSummaryRow): ThreadSummary {
     messageCount: row.message_count,
     hasAttachments: row.has_attachments !== null && row.has_attachments !== 0,
     isStarred: row.is_starred !== null && row.is_starred !== 0,
+    isSpam: Boolean(row.is_spam),
     lastMessage: {
       senderName: repairMojibake(row.last_sender_name ?? ''),
       senderAddress: row.last_sender_address ?? '',
@@ -130,6 +132,13 @@ const TAB_CATEGORIES: Record<Exclude<ConversationTab, 'favoris'>, MailCategory[]
 const FROM_OTHER = `lower(m.sender_address) <> COALESCE(
    (SELECT lower(a.email_address) FROM accounts a WHERE a.id = t.account_id), '')`;
 
+/** A message of the thread is in the provider's spam folder. */
+const IS_SPAM = `EXISTS (SELECT 1 FROM messages m JOIN folders f ON f.id = m.folder_id
+   WHERE m.thread_id = t.id AND f.role = 'spam')`;
+
+const HAS_ATTACHMENTS =
+  'EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.has_attachments = 1)';
+
 const IS_STARRED =
   'EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.is_starred = 1)';
 
@@ -144,10 +153,10 @@ export interface ListThreadSummariesOptions {
   offset?: number;
 }
 
-export async function listThreadSummaries(
-  db: Database,
-  options?: ListThreadSummariesOptions,
-): Promise<ThreadSummary[]> {
+function buildConditions(
+  options: ListThreadSummariesOptions | undefined,
+  includeFilter: boolean,
+): { conditions: string[]; params: SqlValue[] } {
   const conditions: string[] = [];
   const params: SqlValue[] = [];
 
@@ -164,16 +173,72 @@ export async function listThreadSummaries(
     conditions.push(IS_STARRED);
   } else if (options?.tab) {
     const categories = TAB_CATEGORIES[options.tab];
-    conditions.push(`${THREAD_CATEGORY} IN (${categories.map(() => '?').join(', ')})`);
+    // Spam has no Gmail category: it shows in every tab, flagged.
+    conditions.push(
+      `(${THREAD_CATEGORY} IN (${categories.map(() => '?').join(', ')}) OR ${IS_SPAM})`,
+    );
     params.push(...categories);
   }
-  if (options?.filter === 'unread') {
-    conditions.push('t.unread_count > 0');
-  } else if (options?.filter === 'attachments') {
-    conditions.push(
-      'EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.has_attachments = 1)',
-    );
+  if (includeFilter) {
+    if (options?.filter === 'unread') {
+      conditions.push('t.unread_count > 0');
+    } else if (options?.filter === 'attachments') {
+      conditions.push(HAS_ATTACHMENTS);
+    } else if (options?.filter === 'spam') {
+      conditions.push(IS_SPAM);
+    }
   }
+  return { conditions, params };
+}
+
+export async function isThreadSpam(db: Database, threadId: string): Promise<boolean> {
+  const row = await db.getFirstAsync<{ spam: number }>(
+    `SELECT ${IS_SPAM.replace(/t\.id/g, '?')} AS spam`,
+    [threadId],
+  );
+  return Boolean(row?.spam);
+}
+
+export interface ConversationCounts {
+  all: number;
+  unread: number;
+  attachments: number;
+  spam: number;
+}
+
+/** Conversation counts shown on the filter chips (same tab/archive scope as the list). */
+export async function countThreadSummaries(
+  db: Database,
+  options?: ListThreadSummariesOptions,
+): Promise<ConversationCounts> {
+  const { conditions, params } = buildConditions(options, false);
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const row = await db.getFirstAsync<{
+    all_count: number;
+    unread: number;
+    attachments: number;
+    spam: number;
+  }>(
+    `SELECT COUNT(*) AS all_count,
+            COALESCE(SUM(CASE WHEN t.unread_count > 0 THEN 1 ELSE 0 END), 0) AS unread,
+            COALESCE(SUM(CASE WHEN ${HAS_ATTACHMENTS} THEN 1 ELSE 0 END), 0) AS attachments,
+            COALESCE(SUM(CASE WHEN ${IS_SPAM} THEN 1 ELSE 0 END), 0) AS spam
+       FROM threads t ${where}`,
+    params,
+  );
+  return {
+    all: row?.all_count ?? 0,
+    unread: row?.unread ?? 0,
+    attachments: row?.attachments ?? 0,
+    spam: row?.spam ?? 0,
+  };
+}
+
+export async function listThreadSummaries(
+  db: Database,
+  options?: ListThreadSummariesOptions,
+): Promise<ThreadSummary[]> {
+  const { conditions, params } = buildConditions(options, true);
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   // `LIMIT -1` means "no limit" in SQLite, so the optional limit stays positional.
@@ -185,6 +250,7 @@ export async function listThreadSummaries(
        (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id) AS message_count,
        (SELECT MAX(m.has_attachments) FROM messages m WHERE m.thread_id = t.id) AS has_attachments,
        ${IS_STARRED} AS is_starred,
+       ${IS_SPAM} AS is_spam,
        (SELECT m.sender_name FROM messages m
           WHERE m.thread_id = t.id ORDER BY m.received_at DESC, m.id DESC LIMIT 1) AS last_sender_name,
        (SELECT m.sender_address FROM messages m

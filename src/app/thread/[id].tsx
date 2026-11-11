@@ -17,7 +17,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Correspondence } from '@/data/repositories/messages';
-import type { Attachment, Message } from '@/domain/models';
+import { copyChanges, joinNames } from '@/domain/copies';
+import type { Attachment, EmailAddress, Message } from '@/domain/models';
 import { splitQuotedText } from '@/domain/quote';
 import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
@@ -35,6 +36,7 @@ import {
   AppBar,
   AppText,
   Avatar,
+  PeopleSheet,
   ThreadSkeleton,
   UndoSnackbar,
   ChatComposer,
@@ -54,16 +56,24 @@ import {
 interface ThreadData {
   messages: Message[];
   attachments: Record<string, Attachment[]>;
+  isSpam: boolean;
   selfAddress: string;
   /** Reference time for day labels, captured when the data is loaded. */
   now: number;
 }
 
-const INITIAL: ThreadData = { messages: [], attachments: {}, selfAddress: '', now: 0 };
+const INITIAL: ThreadData = {
+  messages: [],
+  attachments: {},
+  isSpam: false,
+  selfAddress: '',
+  now: 0,
+};
 
 type Row =
   | { type: 'message'; key: string; message: Message; showSender: boolean }
-  | { type: 'day'; key: string; label: string };
+  | { type: 'day'; key: string; label: string }
+  | { type: 'copy'; key: string; text: string; added: boolean; people: EmailAddress[] };
 
 const MONTHS = [
   'janvier',
@@ -131,7 +141,14 @@ export default function ThreadScreen() {
     const messages = await mailService.openThread(id);
     const account = messages[0] ? await mailService.getAccountById(messages[0].accountId) : null;
     const attachments = await mailService.getThreadAttachments(id);
-    return { messages, attachments, selfAddress: account?.emailAddress ?? '', now: Date.now() };
+    const isSpam = await mailService.isThreadSpam(id);
+    return {
+      messages,
+      attachments,
+      isSpam,
+      selfAddress: account?.emailAddress ?? '',
+      now: Date.now(),
+    };
   }, INITIAL);
 
   // Every attachment of the conversation, oldest first: the viewer swipes through them.
@@ -222,6 +239,8 @@ export default function ThreadScreen() {
   // Newest first for the inverted list, with a day chip above each day.
   const rows = useMemo<Row[]>(() => {
     const { now } = data;
+    const changes = copyChanges(data.messages, data.selfAddress);
+    const isOwnAddress = (address: string) => address.toLowerCase() === self;
     const chronological: Row[] = [];
     let currentDay = '';
     let previousSender = '';
@@ -236,6 +255,29 @@ export default function ThreadScreen() {
           label: dayLabel(message.receivedAt, now),
         });
       }
+      // « Marc a été ajouté en copie » when the Cc list changes along the thread.
+      const change = changes.get(message.id);
+      const by = isOwnAddress(message.senderAddress)
+        ? 'vous'
+        : message.senderName || message.senderAddress;
+      if (change?.added.length) {
+        chronological.push({
+          type: 'copy',
+          key: `cc-add-${message.id}`,
+          added: true,
+          people: change.added,
+          text: `${joinNames(change.added)} ajouté${change.added.length > 1 ? 's' : ''} en copie par ${by}`,
+        });
+      }
+      if (change?.removed.length) {
+        chronological.push({
+          type: 'copy',
+          key: `cc-del-${message.id}`,
+          added: false,
+          people: change.removed,
+          text: `${joinNames(change.removed)} ${change.removed.length > 1 ? 'ne sont' : 'n’est'} plus en copie`,
+        });
+      }
       const sender = message.senderAddress.toLowerCase();
       chronological.push({
         type: 'message',
@@ -247,7 +289,7 @@ export default function ThreadScreen() {
       previousSender = sender;
     }
     return chronological.reverse();
-  }, [data]);
+  }, [data, self]);
 
   const jumpTo = useCallback(
     (messageId: string) => {
@@ -270,16 +312,29 @@ export default function ThreadScreen() {
     router.back();
   };
 
-  const [contactOpen, setContactOpen] = useState(false);
+  // Contact sheet: the correspondent, or anyone shown in copy under a bubble.
+  const [sheetPerson, setSheetPerson] = useState<{ name: string; address: string } | null>(null);
   const [correspondence, setCorrespondence] = useState<Correspondence>();
+
+  const openPerson = (person: { name: string; address: string }) => {
+    Keyboard.dismiss();
+    setCorrespondence(undefined);
+    setSheetPerson(person);
+    void service.getCorrespondence(person.address).then(setCorrespondence);
+  };
+
+  // People in copy: one → their contact; several → pick in a sheet first.
+  const [copyPeople, setCopyPeople] = useState<EmailAddress[] | null>(null);
+  const onCopyPress = (people: EmailAddress[]) => {
+    if (people.length === 1) openPerson(people[0]);
+    else setCopyPeople(people);
+  };
 
   const openContactProfile = () => {
     if (!correspondentAddress) {
       return;
     }
-    Keyboard.dismiss();
-    setContactOpen(true);
-    void service.getCorrespondence(correspondentAddress).then(setCorrespondence);
+    openPerson({ name: correspondent, address: correspondentAddress });
   };
 
   const [picked, setPicked] = useState<PickedAttachment[]>([]);
@@ -503,8 +558,22 @@ export default function ThreadScreen() {
     );
   };
 
+  const toggleSpam = async () => {
+    await service.setThreadSpam(id, !data.isSpam);
+    ToastAndroid.show(
+      data.isSpam ? 'Remis dans la boîte de réception' : 'Signalé comme spam',
+      ToastAndroid.SHORT,
+    );
+    await reload();
+    invalidate();
+  };
+
   const menuItems = [
     ...(unsubscribe ? [{ label: 'Se désabonner', onPress: onUnsubscribe }] : []),
+    {
+      label: data.isSpam ? 'Ce n’est pas du spam' : 'Signaler comme spam',
+      onPress: () => void toggleSpam(),
+    },
     {
       label: 'Marquer comme non lu',
       onPress: () =>
@@ -535,6 +604,32 @@ export default function ThreadScreen() {
   // ------------------------------------------------------------------ render
 
   const renderItem: ListRenderItem<Row> = ({ item }) => {
+    if (item.type === 'copy') {
+      return (
+        <Pressable
+          style={styles.dayRow}
+          onPress={() => onCopyPress(item.people)}
+          accessibilityRole="button"
+          testID={item.key}
+        >
+          <View style={[styles.copyChip, { backgroundColor: colors.surface }]}>
+            <MaterialIcons
+              name={item.added ? 'person-add-alt' : 'person-remove'}
+              size={14}
+              color={item.added ? colors.primary : colors.textMuted}
+            />
+            <AppText
+              variant="caption"
+              color="textSecondary"
+              numberOfLines={2}
+              style={styles.copyText}
+            >
+              {item.text}
+            </AppText>
+          </View>
+        </Pressable>
+      );
+    }
     if (item.type === 'day') {
       return (
         <View style={styles.dayRow}>
@@ -565,6 +660,8 @@ export default function ThreadScreen() {
           autoPreviewMaxBytes={autoPreviewMaxBytes}
           pdfPreview={attachmentActions.pdfPreview}
           blockRemoteImages={service.getSettings().blockRemoteImages}
+          onCopyPress={onCopyPress}
+          photoOf={(address) => service.getContactPhoto(address)}
           selected={selected.has(message.id)}
           highlighted={highlighted === message.id}
           onPress={selecting ? () => toggleSelected(message.id) : undefined}
@@ -620,6 +717,24 @@ export default function ThreadScreen() {
         behavior="padding"
         style={[styles.body, { backgroundColor: colors.chatBackground }]}
       >
+        {data.isSpam ? (
+          <View style={[styles.spamBar, { backgroundColor: colors.danger + '1A' }]}>
+            <MaterialIcons name="report" size={20} color={colors.danger} />
+            <AppText variant="caption" style={styles.filesText}>
+              Classé comme spam par Gmail. Méfiez-vous des liens et des pièces jointes.
+            </AppText>
+            <Pressable
+              onPress={() => void toggleSpam()}
+              hitSlop={Spacing.sm}
+              testID="thread-not-spam"
+            >
+              <AppText variant="caption" weight="semibold" style={{ color: colors.link }}>
+                Pas un spam
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+
         {allAttachments.length > 0 ? (
           <Pressable
             onPress={() => router.push({ pathname: '/files/[id]', params: { id } })}
@@ -727,25 +842,38 @@ export default function ThreadScreen() {
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
 
-      {correspondentAddress ? (
+      {copyPeople ? (
+        <PeopleSheet
+          title="En copie"
+          people={copyPeople}
+          photoOf={(address) => service.getContactPhoto(address)}
+          onPick={(person) => {
+            setCopyPeople(null);
+            openPerson(person);
+          }}
+          onClose={() => setCopyPeople(null)}
+        />
+      ) : null}
+
+      {sheetPerson ? (
         <ContactSheet
-          visible={contactOpen}
-          onClose={() => setContactOpen(false)}
+          visible
+          onClose={() => setSheetPerson(null)}
           name={
-            service.getContactDetails(correspondentAddress)?.name ||
-            correspondent ||
-            correspondentAddress
+            service.getContactDetails(sheetPerson.address)?.name ||
+            sheetPerson.name ||
+            sheetPerson.address
           }
-          address={correspondentAddress}
-          photoUri={service.getContactPhoto(correspondentAddress)}
-          details={service.getContactDetails(correspondentAddress)}
+          address={sheetPerson.address}
+          photoUri={service.getContactPhoto(sheetPerson.address)}
+          details={service.getContactDetails(sheetPerson.address)}
           stats={correspondence}
           onCompose={() => {
-            setContactOpen(false);
-            router.push({ pathname: '/compose', params: { to: correspondentAddress } });
+            setSheetPerson(null);
+            router.push({ pathname: '/compose', params: { to: sheetPerson.address } });
           }}
           onCopyAddress={() => {
-            void Clipboard.setStringAsync(correspondentAddress);
+            void Clipboard.setStringAsync(sheetPerson.address);
             ToastAndroid.show('Adresse copiée', ToastAndroid.SHORT);
           }}
           onCall={(phone) => void Linking.openURL(`tel:${phone.replace(/[^\d+]/g, '')}`)}
@@ -774,6 +902,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.sm,
   },
+  copyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    maxWidth: '86%',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.lg,
+  },
+  copyText: {
+    flexShrink: 1,
+    textAlign: 'center',
+  },
   dayChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
@@ -786,6 +927,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  spamBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   filesText: {
     flex: 1,

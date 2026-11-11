@@ -288,7 +288,8 @@ export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: stri
     isStarred: labels.includes('STARRED'),
     hasAttachments: body.hasAttachments,
     attachments: body.attachments,
-    listUnsubscribe: header(headers, 'List-Unsubscribe'),
+    listUnsubscribe: header(headers, 'List-Unsubscribe') ?? '',
+    listUnsubscribePost: header(headers, 'List-Unsubscribe-Post'),
     category: gmailCategory(labels),
   };
 }

@@ -113,6 +113,14 @@ export function ConversationRow({
           <AppText weight={isUnread ? 'bold' : 'semibold'} numberOfLines={1} style={styles.name}>
             {senderName}
           </AppText>
+          {thread.isSpam ? (
+            <View style={[styles.subjects, { backgroundColor: colors.danger + '22' }]}>
+              <MaterialIcons name="report" size={12} color={colors.danger} />
+              <AppText variant="caption" weight="semibold" style={{ color: colors.danger }}>
+                Spam
+              </AppText>
+            </View>
+          ) : null}
           {subjectCount > 1 ? (
             <View style={[styles.subjects, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="forum" size={12} color={colors.onPrimaryContainer} />

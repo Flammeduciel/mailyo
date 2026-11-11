@@ -43,6 +43,8 @@ const FETCH_CONCURRENCY = 8;
 const FOLDERS: RemoteFolder[] = [
   { remoteFolderId: 'INBOX', name: 'Boîte de réception', role: 'inbox' },
   { remoteFolderId: 'SENT', name: 'Envoyés', role: 'sent' },
+  // Gmail's own spam filter: shown in the list with a "Spam" badge.
+  { remoteFolderId: 'SPAM', name: 'Spam', role: 'spam' },
 ];
 
 export class GmailApiError extends Error {
@@ -206,6 +208,7 @@ export class GmailApiProvider implements MailProvider {
     do {
       const params = [
         `labelIds=${encodeURIComponent(label)}`,
+        ...(label === 'SPAM' || label === 'TRASH' ? ['includeSpamTrash=true'] : []),
         `maxResults=${Math.min(max - ids.length, 500)}`,
       ];
       if (query) {
@@ -242,6 +245,29 @@ export class GmailApiProvider implements MailProvider {
 
   async deleteDraft(draftId: string): Promise<void> {
     await this.request(`/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
+  }
+
+  async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {
+    await this.modifyLabels(
+      remoteUid,
+      isSpam ? { add: ['SPAM'], remove: ['INBOX'] } : { add: ['INBOX'], remove: ['SPAM'] },
+    );
+  }
+
+  async fetchUnsubscribeHeaders(
+    remoteUid: number,
+  ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }> {
+    const gmailId = await this.resolveGmailId(remoteUid);
+    const data = (await this.requestJson(
+      `/messages/${gmailId}?format=metadata&metadataHeaders=List-Unsubscribe&metadataHeaders=List-Unsubscribe-Post`,
+    )) as GmailMessage;
+    const find = (name: string) =>
+      data.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
+      null;
+    return {
+      listUnsubscribe: find('List-Unsubscribe'),
+      listUnsubscribePost: find('List-Unsubscribe-Post'),
+    };
   }
 
   async fetchAttachments(remoteUid: number): Promise<RemoteAttachment[]> {

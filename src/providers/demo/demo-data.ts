@@ -34,6 +34,12 @@ const SENT_FOLDER: RemoteFolder = {
   role: 'sent',
 };
 
+const SPAM_FOLDER: RemoteFolder = {
+  remoteFolderId: 'SPAM',
+  name: 'Spam',
+  role: 'spam',
+};
+
 export function createDemoAccount(now: number = Date.now()): Account {
   return {
     id: DEMO_ACCOUNT_ID,
@@ -65,6 +71,15 @@ export function createDemoFolders(accountId: string): Folder[] {
       remoteFolderId: SENT_FOLDER.remoteFolderId,
       name: SENT_FOLDER.name,
       role: 'sent',
+      lastUidValidity: null,
+      lastSyncedUid: null,
+    },
+    {
+      id: deterministicId(accountId, SPAM_FOLDER.remoteFolderId),
+      accountId,
+      remoteFolderId: SPAM_FOLDER.remoteFolderId,
+      name: SPAM_FOLDER.name,
+      role: 'spam',
       lastUidValidity: null,
       lastSyncedUid: null,
     },
@@ -142,7 +157,10 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
       senderName: 'Claire Fontaine',
       senderAddress: 'claire.fontaine@atelier-nord.fr',
       to: [{ name: 'Compte démo', address: DEMO_EMAIL }],
-      cc: [],
+      cc: [
+        { name: 'Bureau', address: 'bureau@atelier-nord.fr' },
+        { name: 'Marc Dupuis', address: 'marc.dupuis@atelier-nord.fr' },
+      ],
       subject: 'Re: Préparation de la réunion d’équipe',
       bodyText: 'Parfait, je réserve la salle. Merci !',
       bodyHtml: null,
@@ -221,6 +239,26 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
       hasAttachments: false,
       listUnsubscribe:
         '<mailto:desinscription@lefilvert.example?subject=unsubscribe>, <https://lefilvert.example/desinscription>',
+      listUnsubscribePost: 'List-Unsubscribe=One-Click',
+    },
+    {
+      // Classified as spam by the provider: shown with a "Spam" badge.
+      remoteUid: 7,
+      folderRemoteId: SPAM_FOLDER.remoteFolderId,
+      messageIdHeader: '<gain-2026@promo-gagnant.example>',
+      inReplyTo: null,
+      referencesHeader: null,
+      senderName: 'Service Gagnant',
+      senderAddress: 'gagnant@promo-gagnant.example',
+      to: [{ name: 'Compte démo', address: DEMO_EMAIL }],
+      cc: [],
+      subject: 'Félicitations, vous avez gagné un smartphone !',
+      bodyText: 'Cliquez vite pour réclamer votre lot avant ce soir minuit.',
+      bodyHtml: null,
+      receivedAt: BASE_TIME + 4 * HOUR,
+      isRead: false,
+      isStarred: false,
+      hasAttachments: false,
     },
   ];
 }
@@ -264,7 +302,7 @@ export function createDemoProvider(now: number = Date.now()): {
   const provider = new MockMailProvider({
     emailAddress: account.emailAddress,
     provider: account.provider,
-    folders: [{ ...INBOX_FOLDER }, { ...SENT_FOLDER }],
+    folders: [{ ...INBOX_FOLDER }, { ...SENT_FOLDER }, { ...SPAM_FOLDER }],
     messages,
   });
 

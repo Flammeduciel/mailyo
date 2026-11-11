@@ -1,7 +1,12 @@
 import { firstToOpen, groupThreadsByContact } from '@/domain/grouping';
 import type { ThreadSummary } from '@/domain/models';
 
-function thread(id: string, address: string, at: number, extra: Partial<ThreadSummary> = {}): ThreadSummary {
+function thread(
+  id: string,
+  address: string,
+  at: number,
+  extra: Partial<ThreadSummary> = {},
+): ThreadSummary {
   return {
     id,
     accountId: 'a',
@@ -14,7 +19,13 @@ function thread(id: string, address: string, at: number, extra: Partial<ThreadSu
     hasAttachments: false,
     isStarred: false,
     contact: { name: address, address },
-    lastMessage: { senderName: '', senderAddress: address, subject: id, bodyText: '', receivedAt: at },
+    lastMessage: {
+      senderName: '',
+      senderAddress: address,
+      subject: id,
+      bodyText: '',
+      receivedAt: at,
+    },
     ...extra,
   };
 }

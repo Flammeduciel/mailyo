@@ -263,6 +263,20 @@ export default function SettingsScreen() {
           testID="settings-new-rule"
         />
 
+        <Section title="Newsletters et publicités" />
+        <SettingRow
+          icon="unsubscribe"
+          label="Abonnements"
+          description="Voir les newsletters reçues et s’en désabonner en un appui"
+          onPress={() => router.push('/subscriptions')}
+          testID="settings-subscriptions"
+        />
+        <SettingRow
+          icon="report"
+          label="Spam"
+          description="Les mails classés spam par Gmail portent un badge rouge ; filtre « Spam » en haut de la liste"
+        />
+
         <Section title="Pièces jointes" />
         <SettingRow
           icon="image"

@@ -36,14 +36,14 @@ describe('MailService', () => {
   it('imports the demo conversations on connect', async () => {
     const { service } = await bootstrap();
     const threads = await service.listConversations();
-    expect(threads.length).toBe(3);
+    expect(threads.length).toBe(4);
     expect(await service.unreadCount()).toBe(2);
   });
 
   it('does not duplicate data when initialised again', async () => {
     const { service } = await bootstrap();
     await service.initialize();
-    expect(await service.listConversations()).toHaveLength(3);
+    expect(await service.listConversations()).toHaveLength(4);
   });
 
   it('marks a thread read when it is opened', async () => {
@@ -186,6 +186,52 @@ describe('MailService', () => {
     expect(ratios[ratios.length - 1]).toBe(1);
     expect([...ratios].sort((a, b) => a - b)).toEqual(ratios);
     expect(Math.max(...stored)).toBeGreaterThan(0);
+  });
+
+  it('flags provider spam, counts it, and moves threads in and out of spam', async () => {
+    const { service } = await bootstrap();
+    const counts = await service.conversationCounts();
+    expect(counts).toMatchObject({ all: 4, spam: 1, attachments: 1 });
+
+    const spam = await service.listConversations({ filter: 'spam' });
+    expect(spam.map((t) => t.contact.address)).toEqual(['gagnant@promo-gagnant.example']);
+    expect(spam[0].isSpam).toBe(true);
+    // Spam never feeds the unread badge.
+    expect(await service.unreadCount()).toBe(2);
+
+    await service.setThreadSpam(spam[0].id, false);
+    expect((await service.conversationCounts()).spam).toBe(0);
+
+    const meeting = (await service.listConversations()).find((t) =>
+      t.normalizedSubject.includes('réunion'),
+    )!;
+    await service.setThreadSpam(meeting.id, true);
+    const after = (await service.listConversations()).find((t) => t.id === meeting.id)!;
+    expect(after.isSpam).toBe(true);
+    expect(after.unreadCount).toBe(0);
+  });
+
+  it('lists bulk senders and unsubscribes in one click when offered', async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const db = await createMigratedDatabase();
+    const service = new MailService({
+      db,
+      now: () => NOW,
+      fetchImpl: (async (url: string, init?: RequestInit) => {
+        calls.push({ url, body: init?.body });
+        return { ok: true } as Response;
+      }) as unknown as typeof fetch,
+    });
+    await service.connectDemo();
+
+    const subscriptions = await service.listSubscriptions();
+    expect(subscriptions.map((s) => s.address)).toEqual(['lettre@lefilvert.example']);
+
+    const result = await service.unsubscribe(subscriptions[0]);
+    expect(result).toEqual({ kind: 'done' });
+    expect(calls).toEqual([
+      { url: 'https://lefilvert.example/desinscription', body: 'List-Unsubscribe=One-Click' },
+    ]);
   });
 
   it('finds messages with the FTS index', async () => {

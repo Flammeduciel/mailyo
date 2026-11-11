@@ -268,6 +268,7 @@ export class SyncEngine {
       syncState: 'synced',
       category: remote.category ?? null,
       listUnsubscribe: remote.listUnsubscribe ?? null,
+      listUnsubscribePost: remote.listUnsubscribePost ?? null,
     };
 
     const isNew = (await getMessage(this.db, message.id)) === null;

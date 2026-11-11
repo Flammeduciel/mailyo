@@ -2,12 +2,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { Attachment, Message } from '@/domain/models';
+import type { Attachment, EmailAddress, Message } from '@/domain/models';
 import { tidyPlainText } from '@/domain/plain-text';
 import { splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
 import { AttachmentList } from './AttachmentList';
+import { CopyAvatars } from './CopyAvatars';
 import type { PdfPreviewSource } from './PdfThumbnail';
 import { HtmlMessageView } from './HtmlMessageView';
 import { RichText } from './RichText';
@@ -37,6 +38,9 @@ export interface MessageBubbleProps {
   attachmentProgress?: { id: string; ratio: number | null } | null;
   autoPreviewMaxBytes?: number;
   pdfPreview?: PdfPreviewSource;
+  /** People in copy, shown as faces under the bubble; tap opens their contact. */
+  onCopyPress?: (people: EmailAddress[]) => void;
+  photoOf?: (address: string) => string | undefined;
   /** Hide remote images of HTML mails until the user asks for them. */
   blockRemoteImages?: boolean;
   onPress?: () => void;
@@ -91,6 +95,8 @@ export function MessageBubble({
   autoPreviewMaxBytes,
   pdfPreview,
   blockRemoteImages = false,
+  onCopyPress,
+  photoOf,
   onPress,
   onLongPress,
   selected = false,
@@ -194,6 +200,16 @@ export function MessageBubble({
             autoPreviewMaxBytes={autoPreviewMaxBytes}
             pdfPreview={pdfPreview}
             testID={testID ? `${testID}-attachments` : undefined}
+          />
+        ) : null}
+
+        {message.cc.length > 0 && onCopyPress ? (
+          <CopyAvatars
+            people={message.cc}
+            photoOf={photoOf}
+            onPress={onCopyPress}
+            textColor={textColor}
+            testID={testID ? `${testID}-cc` : undefined}
           />
         ) : null}
 

@@ -33,12 +33,12 @@ describe('demo data', () => {
     expect(createDemoRemoteMessages()).toEqual(createDemoRemoteMessages());
   });
 
-  it('exposes three conversations with varied senders', () => {
+  it('exposes four conversations (one spam) with varied senders', () => {
     const messages = createDemoRemoteMessages();
     expect(messages.length).toBeGreaterThanOrEqual(4);
 
     const conversations = new Set(messages.map((message) => normalizeSubject(message.subject)));
-    expect(conversations.size).toBe(3);
+    expect(conversations.size).toBe(4);
 
     const domains = new Set(messages.map((message) => message.senderAddress.split('@')[1]));
     expect(domains.size).toBeGreaterThanOrEqual(3);
@@ -103,6 +103,8 @@ describe('demo data', () => {
       lastSyncedUid: null,
     });
     expect(result.uidValidity).toBe(1);
-    expect(result.messages.map((m) => m.remoteUid)).toEqual(messages.map((m) => m.remoteUid));
+    expect(result.messages.map((m) => m.remoteUid)).toEqual(
+      messages.filter((m) => m.folderRemoteId === 'INBOX').map((m) => m.remoteUid),
+    );
   });
 });

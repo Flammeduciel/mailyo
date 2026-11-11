@@ -21,6 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
+import type { ConversationCounts } from '@/data/repositories/threads';
 import type { ConversationFilter, ConversationTab, ThreadSummary } from '@/domain/models';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
@@ -52,13 +53,21 @@ export interface ConversationListScreenProps {
 
 interface ListData {
   threads: ThreadSummary[];
+  counts: ConversationCounts;
   unread: number;
   archivedCount: number;
   selfAddresses: string[];
   now: number;
 }
 
-const INITIAL: ListData = { threads: [], unread: 0, archivedCount: 0, selfAddresses: [], now: 0 };
+const INITIAL: ListData = {
+  threads: [],
+  counts: { all: 0, unread: 0, attachments: 0, spam: 0 },
+  unread: 0,
+  archivedCount: 0,
+  selfAddresses: [],
+  now: 0,
+};
 
 const EMPTY_COPY: Record<string, { title: string; description: string }> = {
   discussions: {
@@ -99,9 +108,9 @@ export function ConversationListScreen({
   const exhausted = useRef(false);
 
   const { data, reload } = useServiceQuery<ListData>(async (mailService) => {
-    const [threads, unreadThreads, archivedThreads, accounts] = await Promise.all([
+    const [threads, counts, archivedThreads, accounts] = await Promise.all([
       mailService.listConversations({ tab, filter, archivedOnly: archived, limit }),
-      mailService.listConversations({ tab, filter: 'unread', archivedOnly: archived }),
+      mailService.conversationCounts({ tab, archivedOnly: archived }),
       tab === 'discussions'
         ? mailService.listConversations({ archivedOnly: true })
         : Promise.resolve([]),
@@ -109,7 +118,8 @@ export function ConversationListScreen({
     ]);
     return {
       threads,
-      unread: unreadThreads.length,
+      counts,
+      unread: counts.unread,
       archivedCount: archivedThreads.length,
       selfAddresses: accounts.map((account) => account.emailAddress.toLowerCase()),
       now: Date.now(),
@@ -226,6 +236,7 @@ export function ConversationListScreen({
   const allPinned = selectedThreads.length > 0 && selectedThreads.every((t) => t.isPinned);
   const allStarred = selectedThreads.length > 0 && selectedThreads.every((t) => t.isStarred);
   const anyUnread = selectedThreads.some((t) => t.unreadCount > 0);
+  const allSpam = selectedThreads.length > 0 && selectedThreads.every((t) => t.isSpam);
 
   const selectionActions: AppBarAction[] = [
     {
@@ -268,6 +279,12 @@ export function ConversationListScreen({
       testID: 'selection-delete',
     },
     {
+      icon: allSpam ? 'report-off' : 'report',
+      label: allSpam ? 'Ce n’est pas du spam' : 'Signaler comme spam',
+      onPress: () => void runOnSelection((t) => service.setThreadSpam(t.id, !allSpam)),
+      testID: 'selection-spam',
+    },
+    {
       icon: anyUnread ? 'mark-email-read' : 'mark-email-unread',
       label: anyUnread ? 'Marquer comme lu' : 'Marquer comme non lu',
       onPress: () => void runOnSelection((t) => service.markThreadRead(t.id, anyUnread)),
@@ -295,9 +312,14 @@ export function ConversationListScreen({
   ];
 
   const chips: FilterChipOption<ConversationFilter>[] = [
-    { value: 'all', label: 'Toutes' },
-    { value: 'unread', label: 'Non lus', count: data.unread || undefined },
-    { value: 'attachments', label: 'Pièces jointes' },
+    { value: 'all', label: 'Toutes', count: data.counts.all || undefined },
+    { value: 'unread', label: 'Non lus', count: data.counts.unread || undefined },
+    {
+      value: 'attachments',
+      label: 'Pièces jointes',
+      count: data.counts.attachments || undefined,
+    },
+    { value: 'spam', label: 'Spam', count: data.counts.spam || undefined },
   ];
 
   const empty = EMPTY_COPY[archived ? 'archived' : (tab ?? 'discussions')];
@@ -389,6 +411,7 @@ export function ConversationListScreen({
                 isPinned: item.isPinned,
                 isStarred: item.isStarred,
                 hasAttachments: item.hasAttachments,
+                isSpam: item.threads.some((t) => t.isSpam),
               }}
               subjectCount={item.threads.length}
               now={data.now}

@@ -135,6 +135,23 @@ export class MockMailProvider implements MailProvider {
     }
   }
 
+  async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {
+    const message = this.findMessage(remoteUid);
+    if (message) {
+      message.folderRemoteId = isSpam ? 'SPAM' : 'INBOX';
+    }
+  }
+
+  async fetchUnsubscribeHeaders(
+    remoteUid: number,
+  ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }> {
+    const message = this.findMessage(remoteUid);
+    return {
+      listUnsubscribe: message?.listUnsubscribe ?? null,
+      listUnsubscribePost: message?.listUnsubscribePost ?? null,
+    };
+  }
+
   async moveToTrash(remoteUid: number): Promise<void> {
     const message = this.findMessage(remoteUid);
     if (message) {

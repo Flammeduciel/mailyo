@@ -91,7 +91,8 @@ describe('gmail codec', () => {
           remotePartId: 'att1',
         },
       ],
-      listUnsubscribe: null,
+      listUnsubscribe: '',
+      listUnsubscribePost: null,
       category: 'primary',
     });
   });

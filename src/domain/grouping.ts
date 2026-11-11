@@ -33,9 +33,7 @@ export function groupThreadsByContact(threads: ThreadSummary[]): ContactGroup[] 
   }
   const groups: ContactGroup[] = [];
   for (const [key, list] of byKey) {
-    const sorted = [...list].sort(
-      (a, b) => b.lastMessage.receivedAt - a.lastMessage.receivedAt,
-    );
+    const sorted = [...list].sort((a, b) => b.lastMessage.receivedAt - a.lastMessage.receivedAt);
     groups.push({
       key,
       lead: sorted[0],

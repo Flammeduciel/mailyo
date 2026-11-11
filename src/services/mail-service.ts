@@ -40,6 +40,11 @@ import {
   getMessage,
   getCorrespondence,
   listCorrespondents,
+  listMailingSenders,
+  listMessagesMissingUnsubscribe,
+  moveMessageToFolder,
+  setUnsubscribeHeaders,
+  type MailingSender,
   getThreadIdByMessageIdHeader,
   listThreadingRows,
   type Correspondence,
@@ -59,14 +64,17 @@ import {
 import {
   deleteEmptyThreads,
   getThread,
+  countThreadSummaries,
+  isThreadSpam,
   listThreadSummaries,
   recomputeThreadAggregates,
+  type ConversationCounts,
   setThreadArchived as setThreadArchivedRow,
   setThreadPinned as setThreadPinnedRow,
   type ListThreadSummariesOptions,
   upsertThread,
 } from '@/data/repositories/threads';
-import { getAllSettings, setSetting, setSettings } from '@/data/repositories/settings';
+import { getAllSettings, getSetting, setSetting, setSettings } from '@/data/repositories/settings';
 import type {
   Account,
   Attachment,
@@ -77,6 +85,7 @@ import type {
   ThreadSummary,
 } from '@/domain/models';
 import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
+import { parseListUnsubscribe } from '@/domain/html-privacy';
 import { createId, deterministicId } from '@/domain/ids';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
@@ -138,6 +147,13 @@ export interface SendMessageInput {
 }
 
 export type { FileSearchHit };
+
+const UNSUBSCRIBED_KEY = 'subscriptions.unsubscribed';
+
+export type UnsubscribeResult =
+  { kind: 'done' } | { kind: 'open'; url: string } | { kind: 'failed' };
+
+export type { MailingSender };
 
 export interface SaveDraftInput {
   draftId?: string | null;
@@ -819,6 +835,149 @@ export class MailService {
     await setMessageStarred(this.db, messageId, isStarred);
   }
 
+  async isThreadSpam(threadId: string): Promise<boolean> {
+    return isThreadSpam(this.db, threadId);
+  }
+
+  /** Conversation counts for the filter chips (Toutes, Non lus, Pièces jointes, Spam). */
+  async conversationCounts(options?: ListThreadSummariesOptions): Promise<ConversationCounts> {
+    return countThreadSummaries(this.db, { includeArchived: false, ...options });
+  }
+
+  /**
+   * "Signaler comme spam" / "Ce n'est pas du spam": moves the received mail of
+   * the thread to the provider's spam folder (or back to the inbox), so the
+   * provider's filter learns from it.
+   */
+  async setThreadSpam(threadId: string, isSpam: boolean): Promise<void> {
+    const messages = await listMessagesByThread(this.db, threadId);
+    for (const message of messages) {
+      const account = await getAccount(this.db, message.accountId);
+      if (!account || isSelf(message.senderAddress, account.emailAddress)) continue;
+      const target = await getFolderByRole(this.db, account.id, isSpam ? 'spam' : 'inbox');
+      const provider = this.registry.get(account.id);
+      if (provider?.setSpam && message.remoteUid !== null) {
+        try {
+          await provider.setSpam(message.remoteUid, isSpam);
+        } catch {
+          // Applied locally anyway; the next sync reconciles.
+        }
+      }
+      if (target) await moveMessageToFolder(this.db, message.id, target.id);
+      if (isSpam && !message.isRead) await setMessageRead(this.db, message.id, true);
+    }
+    await recomputeThreadAggregates(this.db, threadId);
+  }
+
+  /**
+   * Senders of bulk mail (newsletters, promotions), most frequent first. Older
+   * messages are first checked for their List-Unsubscribe header (metadata
+   * only, no content is downloaded).
+   */
+  async listSubscriptions(): Promise<(MailingSender & { unsubscribed: boolean })[]> {
+    await this.backfillUnsubscribeHeaders();
+    const done = await this.unsubscribedSenders();
+    return (await listMailingSenders(this.db)).map((sender) => ({
+      ...sender,
+      unsubscribed: done.has(sender.address),
+    }));
+  }
+
+  private async unsubscribedSenders(): Promise<Set<string>> {
+    try {
+      const raw = await getSetting(this.db, UNSUBSCRIBED_KEY);
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  private async rememberUnsubscribed(address: string): Promise<void> {
+    const done = await this.unsubscribedSenders();
+    done.add(address.toLowerCase());
+    await setSetting(this.db, UNSUBSCRIBED_KEY, JSON.stringify([...done]));
+  }
+
+  private async backfillUnsubscribeHeaders(): Promise<void> {
+    const missing = await listMessagesMissingUnsubscribe(this.db, 150);
+    for (const message of missing) {
+      const provider = this.registry.get(message.accountId);
+      if (!provider?.fetchUnsubscribeHeaders) {
+        await setUnsubscribeHeaders(this.db, message.id, null, null);
+        continue;
+      }
+      try {
+        const headers = await provider.fetchUnsubscribeHeaders(message.remoteUid);
+        await setUnsubscribeHeaders(
+          this.db,
+          message.id,
+          headers.listUnsubscribe,
+          headers.listUnsubscribePost,
+        );
+      } catch {
+        // Offline: retried next time the screen opens.
+        return;
+      }
+    }
+  }
+
+  /**
+   * Unsubscribe from a sender: RFC 8058 one-click POST when offered (silent,
+   * no browser), else the unsubscribe email, else the web page to open.
+   */
+  async unsubscribe(sender: MailingSender): Promise<UnsubscribeResult> {
+    const targets = parseListUnsubscribe(sender.listUnsubscribe);
+    const oneClick = /list-unsubscribe=one-click/i.test(sender.listUnsubscribePost ?? '');
+    if (targets.url && oneClick) {
+      try {
+        const response = await (this.fetchImpl ?? fetch)(targets.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'List-Unsubscribe=One-Click',
+        });
+        if (response.ok) {
+          await this.rememberUnsubscribed(sender.address);
+          return { kind: 'done' };
+        }
+      } catch {
+        // Fall back to the other methods.
+      }
+    }
+    if (targets.mailto) {
+      const [address, query = ''] = targets.mailto.replace(/^mailto:/i, '').split('?');
+      const params = new URLSearchParams(query);
+      const result = await this.send({
+        accountId: sender.accountId,
+        to: decodeURIComponent(address),
+        subject: params.get('subject') ?? 'unsubscribe',
+        body: params.get('body') ?? 'unsubscribe',
+      });
+      if (result.status === 'sent') {
+        await this.rememberUnsubscribed(sender.address);
+        return { kind: 'done' };
+      }
+    }
+    if (targets.url) {
+      // The page finishes the job: remembered as done once opened.
+      await this.rememberUnsubscribed(sender.address);
+      return { kind: 'open', url: targets.url };
+    }
+    return { kind: 'failed' };
+  }
+
+  /** Archive every conversation whose last message comes from this sender. */
+  async archiveSender(address: string): Promise<number> {
+    const threads = await listThreadSummaries(this.db, { includeArchived: false });
+    let count = 0;
+    for (const thread of threads) {
+      if (thread.contact.address.toLowerCase() === address.toLowerCase()) {
+        await setThreadArchivedRow(this.db, thread.id, true);
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   async archiveThread(threadId: string): Promise<void> {
     await setThreadArchivedRow(this.db, threadId, true);
   }
@@ -1116,8 +1275,14 @@ export class MailService {
       return;
     }
     const rules = await listRulesRepo(this.db, account.id);
+    const spamFolder = await getFolderByRole(this.db, account.id, 'spam');
     for (const message of messages) {
-      if (message.isRead || isSelf(message.senderAddress, account.emailAddress)) {
+      // Spam is visible in the list (flagged) but never rings.
+      if (
+        message.isRead ||
+        isSelf(message.senderAddress, account.emailAddress) ||
+        (spamFolder && message.folderId === spamFolder.id)
+      ) {
         continue;
       }
       const decision = resolveNotification({

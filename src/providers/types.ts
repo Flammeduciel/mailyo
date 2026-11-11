@@ -50,6 +50,7 @@ export interface RemoteMessage {
   hasAttachments: boolean;
   attachments?: RemoteAttachment[];
   listUnsubscribe?: string | null;
+  listUnsubscribePost?: string | null;
   /** Provider category (Gmail tabs), when the provider has one. */
   category?: MailCategory | null;
 }
@@ -129,6 +130,12 @@ export interface MailProvider {
   /** Create (no id) or replace a server-side draft; returns its id. */
   saveDraft?(draftId: string | null, message: OutgoingMessage): Promise<string>;
   deleteDraft?(draftId: string): Promise<void>;
+  /** Move a message to (true) or out of (false) the spam folder. */
+  setSpam?(remoteUid: number, isSpam: boolean): Promise<void>;
+  /** List-Unsubscribe headers of an already synced message (backfill). */
+  fetchUnsubscribeHeaders?(
+    remoteUid: number,
+  ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }>;
   /** Attachment list of an already synced message (backfill for older mails). */
   fetchAttachments?(remoteUid: number): Promise<RemoteAttachment[]>;
   /**

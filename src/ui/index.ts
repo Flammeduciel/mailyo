@@ -70,3 +70,5 @@ export {
   type ComposeAttachment,
   type ComposeAttachmentCardProps,
 } from './ComposeAttachmentCard';
+export { CopyAvatars, type CopyAvatarsProps } from './CopyAvatars';
+export { PeopleSheet, type PeopleSheetProps } from './PeopleSheet';

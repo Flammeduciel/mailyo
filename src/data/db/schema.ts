@@ -8,7 +8,7 @@
 
 import type { Database } from '@/data/db/database';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 const MIGRATION_1 = `
 CREATE TABLE IF NOT EXISTS accounts (
@@ -204,12 +204,18 @@ const MIGRATION_5 = `
 ALTER TABLE messages ADD COLUMN list_unsubscribe TEXT;
 `;
 
+/** RFC 8058 one-click unsubscribe ("List-Unsubscribe-Post: List-Unsubscribe=One-Click"). */
+const MIGRATION_6 = `
+ALTER TABLE messages ADD COLUMN list_unsubscribe_post TEXT;
+`;
+
 const MIGRATIONS: readonly string[] = [
   MIGRATION_1,
   MIGRATION_2,
   MIGRATION_3,
   MIGRATION_4,
   MIGRATION_5,
+  MIGRATION_6,
 ];
 
 /** Apply every pending migration. Resumable and idempotent. */
