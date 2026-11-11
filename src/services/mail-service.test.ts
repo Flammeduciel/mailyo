@@ -36,14 +36,14 @@ describe('MailService', () => {
   it('imports the demo conversations on connect', async () => {
     const { service } = await bootstrap();
     const threads = await service.listConversations();
-    expect(threads.length).toBe(2);
+    expect(threads.length).toBe(3);
     expect(await service.unreadCount()).toBe(2);
   });
 
   it('does not duplicate data when initialised again', async () => {
     const { service } = await bootstrap();
     await service.initialize();
-    expect(await service.listConversations()).toHaveLength(2);
+    expect(await service.listConversations()).toHaveLength(3);
   });
 
   it('marks a thread read when it is opened', async () => {

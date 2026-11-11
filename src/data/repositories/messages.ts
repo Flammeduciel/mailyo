@@ -31,6 +31,7 @@ interface MessageRow {
   has_attachments: number;
   sync_state: string;
   category?: string | null;
+  list_unsubscribe?: string | null;
 }
 
 function parseAddresses(value: string): EmailAddress[] {
@@ -65,6 +66,7 @@ function mapMessage(row: MessageRow): Message {
     hasAttachments: row.has_attachments !== 0,
     syncState: row.sync_state as SyncState,
     category: (row.category ?? null) as MailCategory | null,
+    listUnsubscribe: row.list_unsubscribe ?? null,
   };
 }
 
@@ -74,8 +76,8 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        (id, account_id, folder_id, remote_uid, message_id_header, in_reply_to, references_header,
         thread_id, sender_name, sender_address, to_json, cc_json, subject, body_text,
         body_html_sanitized, received_at, is_read, is_starred, has_attachments, sync_state,
-        category)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        category, list_unsubscribe)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id = excluded.account_id,
        folder_id = excluded.folder_id,
@@ -97,7 +99,8 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        has_attachments = excluded.has_attachments,
        sync_state = excluded.sync_state,
        -- The same mail seen in SENT carries no category: keep the inbox one.
-       category = COALESCE(excluded.category, messages.category)`,
+       category = COALESCE(excluded.category, messages.category),
+       list_unsubscribe = COALESCE(excluded.list_unsubscribe, messages.list_unsubscribe)`,
     [
       message.id,
       message.accountId,
@@ -120,6 +123,7 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
       message.hasAttachments ? 1 : 0,
       message.syncState,
       message.category ?? null,
+      message.listUnsubscribe ?? null,
     ],
   );
 }

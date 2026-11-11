@@ -238,6 +238,7 @@ export class SyncEngine {
       hasAttachments: remote.hasAttachments || (remote.attachments?.length ?? 0) > 0,
       syncState: 'synced',
       category: remote.category ?? null,
+      listUnsubscribe: remote.listUnsubscribe ?? null,
     };
 
     const isNew = (await getMessage(this.db, message.id)) === null;

@@ -188,6 +188,40 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
       isStarred: false,
       hasAttachments: false,
     },
+    {
+      // HTML newsletter: remote images, wide layout, unsubscribe header and a
+      // link whose text shows another domain (anti-phishing demo).
+      remoteUid: 6,
+      folderRemoteId: INBOX_FOLDER.remoteFolderId,
+      messageIdHeader: '<lettre-2026-01@lefilvert.example>',
+      inReplyTo: null,
+      referencesHeader: null,
+      senderName: 'Le Fil Vert',
+      senderAddress: 'lettre@lefilvert.example',
+      to: [{ name: 'Compte démo', address: DEMO_EMAIL }],
+      cc: [],
+      subject: 'La lettre du jardin — janvier',
+      bodyText: '',
+      bodyHtml: `<table width="640" cellpadding="0" cellspacing="0" style="font-family:Georgia,serif">
+  <tr><td style="background:#2f6b3a;color:#fff;padding:18px 24px;font-size:22px">Le Fil Vert · janvier</td></tr>
+  <tr><td><img src="https://picsum.photos/id/152/640/260.jpg" width="640" alt="Serre en hiver"></td></tr>
+  <tr><td style="padding:16px 24px;font-size:15px;line-height:1.5">
+    <h2 style="margin:0 0 8px">Préparer ses semis</h2>
+    <p>Janvier est le bon moment pour trier ses graines, nettoyer les godets et planifier le potager.
+    Voici nos trois conseils de saison, ainsi que l’agenda des ateliers du mois.</p>
+    <ul><li>Tester la germination sur coton humide</li><li>Désinfecter les outils</li><li>Commander le terreau</li></ul>
+    <p><img src="https://picsum.photos/id/292/600/240.jpg" width="600" alt="Graines"></p>
+    <p>Pour gérer votre abonnement : <a href="https://example.org/connexion">www.banque-exemple.fr</a></p>
+    <p style="color:#777;font-size:12px">Vous recevez cette lettre car vous êtes inscrit. <a href="https://lefilvert.example/desinscription">Se désinscrire</a></p>
+  </td></tr>
+</table>`,
+      receivedAt: BASE_TIME + 3 * HOUR,
+      isRead: true,
+      isStarred: false,
+      hasAttachments: false,
+      listUnsubscribe:
+        '<mailto:desinscription@lefilvert.example?subject=unsubscribe>, <https://lefilvert.example/desinscription>',
+    },
   ];
 }
 

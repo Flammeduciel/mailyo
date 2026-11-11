@@ -35,6 +35,8 @@ export interface MessageBubbleProps {
   onSaveAttachment?: (attachment: Attachment) => void;
   attachmentProgress?: { id: string; ratio: number | null } | null;
   autoPreviewMaxBytes?: number;
+  /** Hide remote images of HTML mails until the user asks for them. */
+  blockRemoteImages?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   selected?: boolean;
@@ -85,6 +87,7 @@ export function MessageBubble({
   onSaveAttachment,
   attachmentProgress,
   autoPreviewMaxBytes,
+  blockRemoteImages = false,
   onPress,
   onLongPress,
   selected = false,
@@ -148,7 +151,11 @@ export function MessageBubble({
         ) : null}
 
         {html && message.bodyHtmlSanitized ? (
-          <HtmlMessageView html={message.bodyHtmlSanitized} allowHistory={!parentInThread} />
+          <HtmlMessageView
+            html={message.bodyHtmlSanitized}
+            allowHistory={!parentInThread}
+            blockImages={blockRemoteImages}
+          />
         ) : (
           <>
             <RichText style={{ color: textColor }}>{tidyPlainText(split.body)}</RichText>

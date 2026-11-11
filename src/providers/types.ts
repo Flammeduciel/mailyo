@@ -49,6 +49,7 @@ export interface RemoteMessage {
   isStarred: boolean;
   hasAttachments: boolean;
   attachments?: RemoteAttachment[];
+  listUnsubscribe?: string | null;
   /** Provider category (Gmail tabs), when the provider has one. */
   category?: MailCategory | null;
 }

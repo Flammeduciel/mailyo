@@ -39,6 +39,7 @@ function message(overrides: Partial<Message> = {}): Message {
     hasAttachments: false,
     syncState: 'synced',
     category: 'updates',
+    listUnsubscribe: null,
     ...overrides,
   };
 }

@@ -28,6 +28,8 @@ import { useUndoSend } from '@/state/use-undo-send';
 import type { PickedAttachment, SendMessageInput } from '@/services/mail-service';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
 import { formatFileSize } from '@/domain/attachments';
+import { hostOf, parseListUnsubscribe } from '@/domain/html-privacy';
+import { openLink } from '@/ui/open-link';
 import {
   AppBar,
   AppText,
@@ -460,7 +462,56 @@ export default function ThreadScreen() {
   ];
 
   const threadStarred = data.messages.some((message) => message.isStarred);
+  // Newsletter: the most recent List-Unsubscribe of the correspondent.
+  const unsubscribe = useMemo(() => {
+    for (let i = data.messages.length - 1; i >= 0; i -= 1) {
+      const targets = parseListUnsubscribe(data.messages[i].listUnsubscribe);
+      if (targets.url || targets.mailto) return targets;
+    }
+    return null;
+  }, [data.messages]);
+
+  const onUnsubscribe = () => {
+    if (!unsubscribe) return;
+    Alert.alert(
+      'Se désabonner ?',
+      unsubscribe.url
+        ? `La page de désabonnement de ${hostOf(unsubscribe.url) ?? 'l’expéditeur'} va s’ouvrir.`
+        : 'Un email de désabonnement sera envoyé à l’expéditeur.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Se désabonner',
+          style: 'destructive',
+          onPress: () =>
+            void (async () => {
+              if (unsubscribe.url) {
+                await openLink(unsubscribe.url);
+                return;
+              }
+              const mailto = unsubscribe.mailto ?? '';
+              const [address, query = ''] = mailto.replace(/^mailto:/i, '').split('?');
+              const subject = new URLSearchParams(query).get('subject') ?? 'unsubscribe';
+              const target = defaultReplyTarget;
+              if (!target) return;
+              const result = await service.send({
+                accountId: target.accountId,
+                to: decodeURIComponent(address),
+                subject,
+                body: 'unsubscribe',
+              });
+              ToastAndroid.show(
+                result.status === 'sent' ? 'Demande de désabonnement envoyée' : 'Échec de l’envoi',
+                ToastAndroid.SHORT,
+              );
+            })(),
+        },
+      ],
+    );
+  };
+
   const menuItems = [
+    ...(unsubscribe ? [{ label: 'Se désabonner', onPress: onUnsubscribe }] : []),
     {
       label: 'Marquer comme non lu',
       onPress: () =>
@@ -519,6 +570,7 @@ export default function ThreadScreen() {
           onSaveAttachment={(attachment) => void attachmentActions.save(attachment)}
           attachmentProgress={attachmentActions.progress}
           autoPreviewMaxBytes={autoPreviewMaxBytes}
+          blockRemoteImages={service.getSettings().blockRemoteImages}
           selected={selected.has(message.id)}
           highlighted={highlighted === message.id}
           onPress={selecting ? () => toggleSelected(message.id) : undefined}

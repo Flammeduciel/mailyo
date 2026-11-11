@@ -90,6 +90,7 @@ describe('gmail codec', () => {
           remotePartId: 'att1',
         },
       ],
+      listUnsubscribe: null,
       category: 'primary',
     });
   });

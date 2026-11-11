@@ -64,6 +64,8 @@ export interface Message {
   syncState: SyncState;
   /** Provider category (Gmail tabs); `null`/absent when unknown or for sent mail. */
   category?: MailCategory | null;
+  /** Raw List-Unsubscribe header (newsletters), when the sender provides one. */
+  listUnsubscribe?: string | null;
 }
 
 /** Gmail-style inbox categories. */

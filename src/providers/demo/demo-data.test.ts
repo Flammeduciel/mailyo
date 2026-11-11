@@ -33,12 +33,12 @@ describe('demo data', () => {
     expect(createDemoRemoteMessages()).toEqual(createDemoRemoteMessages());
   });
 
-  it('exposes at least two conversations with varied senders', () => {
+  it('exposes three conversations with varied senders', () => {
     const messages = createDemoRemoteMessages();
     expect(messages.length).toBeGreaterThanOrEqual(4);
 
     const conversations = new Set(messages.map((message) => normalizeSubject(message.subject)));
-    expect(conversations.size).toBe(2);
+    expect(conversations.size).toBe(3);
 
     const domains = new Set(messages.map((message) => message.senderAddress.split('@')[1]));
     expect(domains.size).toBeGreaterThanOrEqual(3);
