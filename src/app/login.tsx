@@ -127,7 +127,13 @@ export default function LoginScreen() {
               accessibilityLabel={`Connecter ${service.name}`}
               testID={`connect-${service.id}`}
             >
-              <ServiceLogo id={service.id} color={service.color} monogram={service.monogram} />
+              <ServiceLogo
+                id={service.id}
+                color={service.color}
+                monogram={service.monogram}
+                size={40}
+                wide
+              />
               <AppText
                 variant="caption"
                 weight="semibold"

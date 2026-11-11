@@ -122,7 +122,8 @@ export default function ImapLoginScreen() {
               id={preset?.id ?? 'other'}
               color={preset?.color ?? '#607D8B'}
               monogram={preset?.monogram ?? '@'}
-              size={64}
+              size={56}
+              wide
             />
             <AppText variant="subtitle" weight="semibold">
               {preset?.name ?? title}

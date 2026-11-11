@@ -21,6 +21,16 @@ const LOGOS: Record<string, number> = {
   microsoft365: require('@/assets/images/services/microsoft365.png'),
 };
 
+/** Wordmark logos (« free », « yahoo!mail »…) in a wide format, for wide tiles. */
+const WIDE_LOGOS: Record<string, number> = {
+  free: require('@/assets/images/services/free-wide.png'),
+  laposte: require('@/assets/images/services/laposte-wide.png'),
+  gmx: require('@/assets/images/services/gmx-wide.png'),
+  ovh: require('@/assets/images/services/ovh-wide.png'),
+  yahoo: require('@/assets/images/services/yahoo-wide.png'),
+  zoho: require('@/assets/images/services/zoho-wide.png'),
+};
+
 export interface ServiceLogoProps {
   /** Service id (gmail, yahoo, icloud, orange…). */
   id: string;
@@ -31,11 +41,39 @@ export interface ServiceLogoProps {
   size?: number;
   /** Greyed out (coming soon). */
   muted?: boolean;
+  /** Wide logo area (size × 2.4): wordmarks stay readable, square icons are centred. */
+  wide?: boolean;
 }
 
 /** The service's real logo on a white rounded tile (or a coloured monogram). */
-export function ServiceLogo({ id, color, monogram, size = 44, muted = false }: ServiceLogoProps) {
+export function ServiceLogo({
+  id,
+  color,
+  monogram,
+  size = 44,
+  muted = false,
+  wide = false,
+}: ServiceLogoProps) {
   const colors = useAppTheme();
+  if (wide) {
+    const wordmark = WIDE_LOGOS[id];
+    const square = LOGOS[id];
+    return (
+      <View style={[styles.tile, { width: size * 2.4, height: size }, muted && styles.muted]}>
+        {wordmark ? (
+          <Image
+            source={wordmark}
+            style={{ width: size * 2.4, height: size }}
+            contentFit="contain"
+          />
+        ) : square ? (
+          <Image source={square} style={{ width: size, height: size }} contentFit="contain" />
+        ) : (
+          <ServiceLogo id={id} color={color} monogram={monogram} size={size} muted={muted} />
+        )}
+      </View>
+    );
+  }
   const logo = LOGOS[id];
   const radius = size * 0.26;
   if (!logo) {
@@ -69,7 +107,11 @@ export function ServiceLogo({ id, color, monogram, size = 44, muted = false }: S
       ]}
       accessibilityIgnoresInvertColors
     >
-      <Image source={logo} style={{ width: size * 0.86, height: size * 0.86 }} contentFit="contain" />
+      <Image
+        source={logo}
+        style={{ width: size * 0.86, height: size * 0.86 }}
+        contentFit="contain"
+      />
     </View>
   );
 }
