@@ -125,7 +125,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         })
         .catch(() => undefined);
-      await created.ensureNotificationsConfigured();
+      // On first launch the welcome screen asks for the permission, with an explanation.
+      if (created.getSettings().permissionsIntroDone) {
+        await created.ensureNotificationsConfigured();
+      } else {
+        await created.configureNotificationChannels();
+      }
       await runSync(created);
       await registerBackgroundSync();
     })()

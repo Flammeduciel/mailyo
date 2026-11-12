@@ -3,7 +3,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -25,7 +24,7 @@ import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import { useAttachmentActions } from '@/state/use-attachment-actions';
 import { pickFrom, type AttachmentSource } from '@/state/pick-attachments';
-import { useUndoSend } from '@/state/use-undo-send';
+import { UNDO_SEND_SECONDS, useUndoSend } from '@/state/use-undo-send';
 import type { PickedAttachment, SendMessageInput } from '@/services/mail-service';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
 import { formatFileSize } from '@/domain/attachments';
@@ -39,7 +38,6 @@ import {
   AttachmentPickerSheet,
   PeopleSheet,
   ThreadSkeleton,
-  UndoSnackbar,
   ChatComposer,
   ContactSheet,
   EmptyState,
@@ -52,6 +50,7 @@ import {
   useAppTheme,
   type AppBarAction,
   type QuotedParent,
+  showAlert,
 } from '@/ui';
 
 interface ThreadData {
@@ -110,7 +109,8 @@ function dayLabel(timestamp: number, now: number): string {
 }
 
 export default function ThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; name?: string; address?: string }>();
+  const { id } = params;
   const colors = useAppTheme();
   const insets = useSafeAreaInsets();
   const { service, invalidate } = useApp();
@@ -183,8 +183,10 @@ export default function ThreadScreen() {
       }
     }
     const first = data.messages[0]?.to[0];
-    return first ? service.displayName(first.address, first.name) || first.address : '';
-  }, [data.messages, isOwn, service]);
+    if (first) return service.displayName(first.address, first.name) || first.address;
+    // Still loading: the list passed who this conversation is with.
+    return params.name ?? '';
+  }, [data.messages, isOwn, service, params.name]);
 
   // Raw email address of the other party (for contact profile + no-reply check).
   const correspondentAddress = useMemo(() => {
@@ -194,12 +196,12 @@ export default function ThreadScreen() {
         return message.senderAddress;
       }
     }
-    return data.messages[0]?.to[0]?.address ?? '';
-  }, [data.messages, isOwn]);
+    return data.messages[0]?.to[0]?.address ?? params.address ?? '';
+  }, [data.messages, isOwn, params.address]);
 
   const noReply = correspondentAddress.length > 0 && isNoReplyAddress(correspondentAddress);
 
-  const subject = data.messages[data.messages.length - 1]?.subject || '(Sans objet)';
+  const subject = data.messages[data.messages.length - 1]?.subject?.trim() ?? '';
 
   // Default reply target: the last message that is not ours.
   const defaultReplyTarget = useMemo<Message | undefined>(() => {
@@ -369,11 +371,13 @@ export default function ThreadScreen() {
         // Give the text back so nothing is lost.
         setDraft(input.body);
         setPicked(input.attachments ?? []);
-        Alert.alert(
+        showAlert(
           result.status === 'ambiguous' ? 'Envoi incertain' : "Échec de l'envoi",
           result.status === 'ambiguous'
             ? 'Vérifiez le dossier Envoyés avant de renvoyer.'
             : (result.error ?? "Le message n'a pas pu être envoyé."),
+          undefined,
+          { icon: result.status === 'ambiguous' ? 'help-outline' : 'error-outline' },
         );
       }
     } finally {
@@ -493,7 +497,7 @@ export default function ThreadScreen() {
       icon: 'delete-outline',
       label: 'Supprimer',
       onPress: () =>
-        Alert.alert('Supprimer ?', 'Les emails selectionnes iront dans la corbeille.', [
+        showAlert('Supprimer ?', 'Les emails selectionnes iront dans la corbeille.', [
           { text: 'Annuler', style: 'cancel' },
           {
             text: 'Supprimer',
@@ -525,7 +529,7 @@ export default function ThreadScreen() {
 
   const onUnsubscribe = () => {
     if (!unsubscribe) return;
-    Alert.alert(
+    showAlert(
       'Se désabonner ?',
       unsubscribe.url
         ? `La page de désabonnement de ${hostOf(unsubscribe.url) ?? 'l’expéditeur'} va s’ouvrir.`
@@ -559,6 +563,7 @@ export default function ThreadScreen() {
             })(),
         },
       ],
+      { icon: 'unsubscribe' },
     );
   };
 
@@ -683,14 +688,14 @@ export default function ThreadScreen() {
         <AppBar title={String(selected.size)} onBack={clearSelection} actions={selectionActions} />
       ) : (
         <AppBar
-          title={correspondent || subject}
-          subtitle={subject}
+          title={correspondent || subject || ' '}
+          subtitle={subject || (data.messages.length > 0 ? 'Sans objet' : undefined)}
           onBack={goBack}
           onTitlePress={openContactProfile}
           leading={
             <Pressable onPress={openContactProfile} accessibilityLabel="Voir le profil">
               <Avatar
-                name={correspondent || subject}
+                name={correspondent || subject || '?'}
                 size={38}
                 imageUri={service.getContactPhoto(correspondentAddress)}
               />
@@ -783,14 +788,6 @@ export default function ThreadScreen() {
           </View>
         ) : null}
 
-        {undoSend.pending ? (
-          <UndoSnackbar
-            message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
-            onUndo={undoSend.cancel}
-            testID="undo-send"
-          />
-        ) : null}
-
         {noReply ? (
           <View
             style={[
@@ -829,6 +826,12 @@ export default function ThreadScreen() {
                 : null
             }
             onCancelReply={() => setReplyTo(null)}
+            pendingSend={
+              undoSend.pending
+                ? { seconds: UNDO_SEND_SECONDS, secondsLeft: undoSend.pending.secondsLeft }
+                : null
+            }
+            onStopSend={undoSend.cancel}
             bottomInset={keyboardShown ? 0 : insets.bottom}
           />
         )}

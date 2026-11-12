@@ -20,11 +20,14 @@ import {
   updateFolderSyncCursor,
   upsertFolder,
   upsertMessage,
+  deleteMessage,
+  listSentPlaceholders,
   upsertThread,
 } from '@/data/repositories';
 import type { Database } from '@/data/db/database';
 import type { Account, Attachment, Folder, Message, Thread } from '@/domain/models';
 import { deterministicId } from '@/domain/ids';
+import { findSentEcho, SENT_ECHO_WINDOW_MS } from '@/domain/sent-echo';
 import { normalizeSubject } from '@/domain/subject';
 import { htmlToText, sanitizeHtml } from '@/domain/sanitize';
 import { computeThreadKey, parseMessageIds, scopedThreadId, threadKeyOf } from '@/domain/threading';
@@ -279,7 +282,26 @@ export class SyncEngine {
       listUnsubscribePost: remote.listUnsubscribePost ?? null,
     };
 
-    const isNew = (await getMessage(this.db, message.id)) === null;
+    // Our own sent mail coming back from the server replaces the local copy.
+    let replaced: Message | null = null;
+    if (remote.senderAddress.toLowerCase() === account.emailAddress.toLowerCase()) {
+      const placeholders = await listSentPlaceholders(
+        this.db,
+        account.id,
+        account.emailAddress,
+        remote.receivedAt,
+        SENT_ECHO_WINDOW_MS,
+      );
+      const index = findSentEcho(placeholders, { ...remote, bodyText });
+      const echo = index >= 0 ? placeholders[index] : null;
+      if (echo && echo.id !== message.id) {
+        replaced = await getMessage(this.db, echo.id);
+        await deleteMessage(this.db, echo.id);
+        if (echo.threadId !== threadId) await recomputeThreadAggregates(this.db, echo.threadId);
+      }
+    }
+
+    const isNew = replaced === null && (await getMessage(this.db, message.id)) === null;
     await upsertMessage(this.db, message);
     if (remote.attachments) {
       const attachments = toLocalAttachments(message.id, remote.attachments);
@@ -303,7 +325,7 @@ export class SyncEngine {
   private messageId(accountId: string, folderId: string, remote: RemoteMessage): string {
     const id = parseMessageIds(remote.messageIdHeader)[0];
     if (id) {
-      return `msg_${deterministicId(accountId, id)}`;
+      return localMessageId(accountId, id);
     }
     return `msg_${deterministicId(accountId, folderId, String(remote.remoteUid))}`;
   }
@@ -319,4 +341,9 @@ export class SyncEngine {
     }
     return normalized;
   }
+}
+
+/** Local row id of a mail known by its Message-ID (shared by sync and sent copies). */
+export function localMessageId(accountId: string, messageId: string): string {
+  return `msg_${deterministicId(accountId, messageId)}`;
 }

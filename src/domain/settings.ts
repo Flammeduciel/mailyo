@@ -34,6 +34,8 @@ export interface AppSettings {
   offlineStarredAttachments: boolean;
   /** Real-time delivery of new mail (see RealtimeMode). */
   realtimeMode: RealtimeMode;
+  /** The first-launch permission walkthrough has been shown. */
+  permissionsIntroDone: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   blockRemoteImages: true,
   offlineStarredAttachments: false,
   realtimeMode: 'idle',
+  permissionsIntroDone: false,
 };
 
 const SETTING_KEYS = {
@@ -60,6 +63,7 @@ const SETTING_KEYS = {
   blockRemoteImages: 'privacy.blockRemoteImages',
   offlineStarredAttachments: 'attachments.offlineStarred',
   realtimeMode: 'notification.realtimeMode',
+  permissionsIntroDone: 'app.permissionsIntroDone',
 } as const;
 
 const REALTIME_MODES: readonly RealtimeMode[] = ['off', 'idle', 'relay'];
@@ -140,6 +144,10 @@ export function parseAppSettings(raw: Record<string, string>): AppSettings {
     )
       ? (raw[SETTING_KEYS.realtimeMode] as RealtimeMode)
       : DEFAULT_SETTINGS.realtimeMode,
+    permissionsIntroDone: parseBoolean(
+      raw[SETTING_KEYS.permissionsIntroDone],
+      DEFAULT_SETTINGS.permissionsIntroDone,
+    ),
   };
 }
 
@@ -156,5 +164,6 @@ export function serializeAppSettings(settings: AppSettings): Record<string, stri
     [SETTING_KEYS.blockRemoteImages]: settings.blockRemoteImages ? 'true' : 'false',
     [SETTING_KEYS.offlineStarredAttachments]: settings.offlineStarredAttachments ? 'true' : 'false',
     [SETTING_KEYS.realtimeMode]: settings.realtimeMode,
+    [SETTING_KEYS.permissionsIntroDone]: settings.permissionsIntroDone ? 'true' : 'false',
   };
 }

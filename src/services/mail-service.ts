@@ -42,6 +42,8 @@ import {
   getMessage,
   getCorrespondence,
   listCorrespondents,
+  listSentPlaceholders,
+  listSyncedFrom,
   listMailingSenders,
   listMessagesMissingUnsubscribe,
   moveMessageToFolder,
@@ -93,7 +95,9 @@ import type {
 } from '@/domain/models';
 import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
 import { parseListUnsubscribe } from '@/domain/html-privacy';
-import { createId, deterministicId } from '@/domain/ids';
+import { createId } from '@/domain/ids';
+import { findSentEcho, SENT_ECHO_WINDOW_MS } from '@/domain/sent-echo';
+import { mailbox, MAILBOXES, type MailboxCount, type MailboxId } from '@/domain/mailboxes';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
 import { normalizeSubject } from '@/domain/subject';
@@ -136,7 +140,12 @@ import { buildPushConfig, isRealtimeCapable } from '@/realtime/push-config';
 import type { ImapAccountConfig, ImapCredentialStore } from '@/providers/imap/credentials';
 import { ImapMailProvider } from '@/providers/imap/imap-provider';
 import { ProviderRegistry } from '@/providers/registry';
-import { SyncEngine, toLocalAttachments, type SyncProgress } from '@/sync/sync-engine';
+import {
+  localMessageId,
+  SyncEngine,
+  toLocalAttachments,
+  type SyncProgress,
+} from '@/sync/sync-engine';
 
 const THREADING_VERSION_KEY = 'threading.version';
 const THREADING_VERSION = '2';
@@ -796,6 +805,7 @@ export class MailService {
       this.syncRun = this.runSyncAll((progress) => {
         for (const listener of this.syncListeners) listener(progress);
       })
+        .then(() => this.removeSentEchoes())
         .then(() => this.refreshNames())
         .finally(() => {
           this.syncRun = null;
@@ -803,6 +813,34 @@ export class MailService {
         });
     }
     return this.syncRun;
+  }
+
+  /**
+   * Drop local copies of sent mail whose server copy is already stored (left
+   * over from before echoes were matched at sync time). Cheap: only rows
+   * without a server UID are considered.
+   */
+  async removeSentEchoes(): Promise<number> {
+    let removed = 0;
+    for (const account of await listAccounts(this.db)) {
+      const placeholders = await listSentPlaceholders(this.db, account.id, account.emailAddress);
+      if (placeholders.length === 0) continue;
+      const oldest = Math.min(...placeholders.map((p) => p.receivedAt)) - SENT_ECHO_WINDOW_MS;
+      const synced = await listSyncedFrom(this.db, account.id, account.emailAddress, oldest);
+      const pending = [...placeholders];
+      const touched = new Set<string>();
+      for (const remote of synced) {
+        const index = findSentEcho(pending, remote);
+        if (index < 0) continue;
+        const [echo] = pending.splice(index, 1);
+        if (echo.id === remote.id) continue;
+        await deleteMessage(this.db, echo.id);
+        touched.add(echo.threadId);
+        removed += 1;
+      }
+      for (const threadId of touched) await recomputeThreadAggregates(this.db, threadId);
+    }
+    return removed;
   }
 
   private syncRun: Promise<void> | null = null;
@@ -1060,6 +1098,26 @@ export class MailService {
   /** Conversation counts for the filter chips (Toutes, Non lus, Pièces jointes, Spam). */
   async conversationCounts(options?: ListThreadSummariesOptions): Promise<ConversationCounts> {
     return countThreadSummaries(this.db, { includeArchived: false, ...options });
+  }
+
+  /** Conversations of a drawer mailbox. */
+  async listMailbox(id: MailboxId, limit = 200): Promise<ThreadSummary[]> {
+    const { query } = mailbox(id);
+    return this.listConversations({ includeArchived: false, ...query, limit });
+  }
+
+  /** Total and unread conversations per drawer mailbox. */
+  async countMailboxes(): Promise<Record<MailboxId, MailboxCount>> {
+    const result = {} as Record<MailboxId, MailboxCount>;
+    for (const box of MAILBOXES) {
+      const counts = await countThreadSummaries(this.db, { includeArchived: false, ...box.query });
+      // The chip counts leave the filter out: the spam box reads its own column.
+      result[box.id] =
+        box.query.filter === 'spam'
+          ? { total: counts.spam, unread: counts.spam }
+          : { total: counts.all, unread: counts.unread };
+    }
+    return result;
   }
 
   /**
@@ -1420,7 +1478,11 @@ export class MailService {
       });
     }
 
-    const sentId = `${account.id}::sent::${deterministicId(messageIdHeader)}`;
+    // Same id the sync gives the server copy, so it updates this row in place.
+    const sentId = localMessageId(
+      account.id,
+      parseMessageIds(messageIdHeader)[0] ?? messageIdHeader,
+    );
     await upsertMessage(this.db, {
       id: sentId,
       accountId: account.id,
@@ -1534,6 +1596,11 @@ export class MailService {
 
   async presentTestNotification(soundId: string | null): Promise<void> {
     await this.notifier?.presentTest(soundId);
+  }
+
+  /** Create the notification channels without asking for the permission. */
+  async configureNotificationChannels(): Promise<void> {
+    await this.notifier?.configure();
   }
 
   async ensureNotificationsConfigured(): Promise<boolean> {

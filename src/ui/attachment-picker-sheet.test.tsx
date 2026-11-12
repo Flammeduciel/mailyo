@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -34,10 +34,10 @@ describe('AttachmentPickerSheet', () => {
     expect(onPick).toHaveBeenLastCalledWith('document');
   });
 
-  it('closes from the backdrop', () => {
+  it('closes from the backdrop once the sheet has slid away', async () => {
     const onClose = jest.fn();
     const screen = renderSheet({ visible: true, onPick: jest.fn(), onClose });
     fireEvent.press(screen.getByLabelText('Fermer'));
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

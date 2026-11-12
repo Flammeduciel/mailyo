@@ -26,6 +26,8 @@ export interface SettingRowProps {
   description?: string;
   /** Short current value shown on the right ("Clair", "3 Mo"). */
   detail?: string;
+  /** Colour of `detail` when it is a status. */
+  detailTone?: 'success' | 'danger';
   value?: boolean;
   onValueChange?: (value: boolean) => void;
   onPress?: () => void;
@@ -43,6 +45,7 @@ export function SettingRow({
   label,
   description,
   detail,
+  detailTone,
   value,
   onValueChange,
   onPress,
@@ -90,7 +93,13 @@ export function SettingRow({
       </View>
 
       {detail ? (
-        <AppText variant="caption" color="textMuted" numberOfLines={1} style={styles.detail}>
+        <AppText
+          variant="caption"
+          weight={detailTone ? 'semibold' : 'regular'}
+          color={detailTone ?? 'textMuted'}
+          numberOfLines={1}
+          style={styles.detail}
+        >
           {detail}
         </AppText>
       ) : null}

@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
@@ -9,6 +9,7 @@ import { blockRemoteImages, deceptiveLinkDomain, hostOf } from '@/domain/html-pr
 import { AppText } from './AppText';
 import { buildEmailDocument, FIT_SCRIPT, READER_SCRIPT } from './html-document';
 import { openLink } from './open-link';
+import { showAlert } from './SheetHost';
 import { Radius, Spacing, useAppTheme } from './theme';
 import { useResolvedScheme } from './theme-preference';
 
@@ -30,7 +31,7 @@ export function confirmAndOpenLink(href: string, text = ''): void {
     return;
   }
   const shown = deceptiveLinkDomain(text, href);
-  Alert.alert(
+  showAlert(
     shown ? 'Lien suspect' : 'Ouvrir ce lien ?',
     shown
       ? `Le texte affiche « ${shown} » mais le lien mène à « ${host} ». C’est souvent un signe d’hameçonnage.`
@@ -43,7 +44,7 @@ export function confirmAndOpenLink(href: string, text = ''): void {
         onPress: () => void openLink(href),
       },
     ],
-    { cancelable: true },
+    { icon: shown ? 'gpp-maybe' : 'open-in-new' },
   );
 }
 

@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Account, NotificationRule } from '@/domain/models';
@@ -12,6 +12,7 @@ import { DEFAULT_SETTINGS } from '@/domain/settings';
 import { realtimeTransports } from '@/realtime/use-realtime';
 import type { RealtimeStatus } from '@/realtime/transport';
 import { useApp } from '@/state/app-context';
+import { usePermissions } from '@/state/use-permissions';
 import { useServiceQuery } from '@/state/use-service-query';
 import { formatFileSize } from '@/domain/attachments';
 import {
@@ -24,6 +25,8 @@ import {
   SettingsGroup,
   Spacing,
   useAppTheme,
+  showAlert,
+  showChoice,
 } from '@/ui';
 
 interface SettingsData {
@@ -40,17 +43,43 @@ const INITIAL: SettingsData = {
   settings: DEFAULT_SETTINGS,
 };
 
-const CONTENT_MODES: { value: AppSettings['contentMode']; label: string }[] = [
-  { value: 'full', label: 'Complet' },
-  { value: 'sender', label: 'Expéditeur seul' },
-  { value: 'hidden', label: 'Masqué' },
+const CONTENT_MODES: {
+  value: AppSettings['contentMode'];
+  label: string;
+  description: string;
+  icon: string;
+}[] = [
+  {
+    value: 'full',
+    label: 'Complet',
+    description: 'Expéditeur, objet et début du message',
+    icon: 'notes',
+  },
+  {
+    value: 'sender',
+    label: 'Expéditeur seul',
+    description: 'Sans l’objet ni le texte',
+    icon: 'person-outline',
+  },
+  {
+    value: 'hidden',
+    label: 'Masqué',
+    description: '« Nouveau message » uniquement',
+    icon: 'visibility-off',
+  },
 ];
 
-const THEMES: { value: AppSettings['theme']; label: string }[] = [
-  { value: 'system', label: 'Système' },
-  { value: 'light', label: 'Clair' },
-  { value: 'dark', label: 'Sombre' },
-];
+const THEMES: { value: AppSettings['theme']; label: string; description?: string; icon: string }[] =
+  [
+    {
+      value: 'system',
+      label: 'Système',
+      description: 'Suit le réglage du téléphone',
+      icon: 'brightness-auto',
+    },
+    { value: 'light', label: 'Clair', icon: 'light-mode' },
+    { value: 'dark', label: 'Sombre', icon: 'dark-mode' },
+  ];
 
 const AUTO_PREVIEW: { value: string; label: string; short: string }[] = [
   { value: '0', label: 'Jamais', short: 'Jamais' },
@@ -85,18 +114,14 @@ function shortOf(options: { value: string; short: string }[], value: string): st
   return options.find((option) => option.value === value)?.short ?? value;
 }
 
-/** Choice dialog (Android supports up to three buttons, enough for these settings). */
+/** Choice sheet with the current value ticked. */
 function choose<T extends string>(
   title: string,
-  options: { value: T; label: string }[],
+  options: { value: T; label: string; description?: string; icon?: string }[],
+  current: T,
   onPick: (value: T) => void,
 ) {
-  Alert.alert(
-    title,
-    undefined,
-    options.map((option) => ({ text: option.label, onPress: () => onPick(option.value) })),
-    { cancelable: true },
-  );
+  showChoice(title, options, current, onPick);
 }
 
 export default function SettingsScreen() {
@@ -157,7 +182,7 @@ export default function SettingsScreen() {
 
   const confirmSignOut = useCallback(
     (account: Account) => {
-      Alert.alert(
+      showAlert(
         'Se déconnecter',
         `Déconnecter ${account.emailAddress} ? L’accès de MailYo à ce compte est révoqué et ses mails sont effacés de ce téléphone (ils restent dans Gmail).`,
         [
@@ -174,12 +199,14 @@ export default function SettingsScreen() {
             },
           },
         ],
+        { icon: 'logout' },
       );
     },
     [service, reload, invalidate],
   );
 
   const primary = data.accounts[0];
+  const permissions = usePermissions(data.settings.realtimeMode === 'idle');
 
   return (
     <SafeAreaView
@@ -251,13 +278,38 @@ export default function SettingsScreen() {
           />
         </SettingsGroup>
 
+        <SettingsGroup
+          title="Autorisations"
+          footer={
+            permissions.missingVital
+              ? 'Une autorisation essentielle manque : des mails peuvent arriver en retard ou sans notification.'
+              : 'MailYo a tout ce qu’il faut pour vous prévenir à l’arrivée d’un mail.'
+          }
+        >
+          {permissions.states
+            .filter((state) => state.granted !== null)
+            .map((state) => (
+              <SettingRow
+                key={state.id}
+                icon={state.icon}
+                tone={state.granted ? 'green' : state.vital ? 'rose' : 'gray'}
+                label={state.label}
+                description={state.description}
+                detail={state.granted ? 'Accordée' : 'Non accordée'}
+                detailTone={state.granted ? 'success' : state.vital ? 'danger' : undefined}
+                onPress={state.granted ? undefined : () => void permissions.request(state.id)}
+                testID={`settings-permission-${state.id}`}
+              />
+            ))}
+        </SettingsGroup>
+
         <SettingsGroup title="Affichage">
           <SettingRow
             icon="contrast"
             tone="violet"
             label="Thème"
             detail={labelOf(THEMES, theme)}
-            onPress={() => choose('Choisir le thème', THEMES, (value) => void setTheme(value))}
+            onPress={() => choose('Thème', THEMES, theme, (value) => void setTheme(value))}
             testID="settings-theme"
           />
           <SettingRow
@@ -287,24 +339,17 @@ export default function SettingsScreen() {
             onValueChange={(enabled) => updateSettings({ realtimeMode: enabled ? 'idle' : 'off' })}
             testID="settings-realtime"
           />
-          {data.settings.realtimeMode === 'idle' && realtime && !realtime.batteryUnrestricted ? (
-            <SettingRow
-              icon="battery-alert"
-              tone="rose"
-              label="Ne pas restreindre la batterie"
-              description="Recommandé : sinon certains téléphones coupent la connexion"
-              onPress={() => idleTransport.openBatterySettings()}
-              testID="settings-battery"
-            />
-          ) : null}
           <SettingRow
             icon="notifications-none"
             tone="indigo"
             label="Contenu affiché"
             detail={labelOf(CONTENT_MODES, data.settings.contentMode)}
             onPress={() =>
-              choose('Contenu des notifications', CONTENT_MODES, (contentMode) =>
-                updateSettings({ contentMode }),
+              choose(
+                'Contenu des notifications',
+                CONTENT_MODES,
+                data.settings.contentMode,
+                (contentMode) => updateSettings({ contentMode }),
               )
             }
             testID="settings-content-mode"
@@ -381,8 +426,11 @@ export default function SettingsScreen() {
             label="Aperçu des images"
             detail={shortOf(AUTO_PREVIEW, String(data.settings.autoPreviewMaxMb))}
             onPress={() =>
-              choose('Aperçu automatique des images', AUTO_PREVIEW, (value) =>
-                updateSettings({ autoPreviewMaxMb: Number(value) }),
+              choose(
+                'Aperçu automatique des images',
+                AUTO_PREVIEW,
+                String(data.settings.autoPreviewMaxMb),
+                (value) => updateSettings({ autoPreviewMaxMb: Number(value) }),
               )
             }
             testID="settings-auto-preview"
@@ -393,8 +441,11 @@ export default function SettingsScreen() {
             label="Alerte données mobiles"
             detail={shortOf(CELLULAR_CONFIRM, String(data.settings.cellularConfirmMb))}
             onPress={() =>
-              choose('Confirmer en données mobiles', CELLULAR_CONFIRM, (value) =>
-                updateSettings({ cellularConfirmMb: Number(value) }),
+              choose(
+                'Confirmer en données mobiles',
+                CELLULAR_CONFIRM,
+                String(data.settings.cellularConfirmMb),
+                (value) => updateSettings({ cellularConfirmMb: Number(value) }),
               )
             }
             testID="settings-cellular"
@@ -417,7 +468,7 @@ export default function SettingsScreen() {
             label="Vider le cache"
             detail={formatFileSize(cacheBytes)}
             onPress={() =>
-              Alert.alert('Vider le cache ?', 'Les fichiers seront retéléchargés si besoin.', [
+              showAlert('Vider le cache ?', 'Les fichiers seront retéléchargés si besoin.', [
                 { text: 'Annuler', style: 'cancel' },
                 {
                   text: 'Vider',

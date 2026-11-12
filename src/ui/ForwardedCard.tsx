@@ -52,7 +52,7 @@ export function ForwardedCard({
         </View>
       </View>
       <AppText weight="semibold" numberOfLines={2}>
-        {message.subject || '(Sans objet)'}
+        {message.subject || 'Sans objet'}
       </AppText>
       {preview ? (
         <AppText variant="body" color="textSecondary" numberOfLines={6}>

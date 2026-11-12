@@ -7,7 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppProvider, useApp } from '@/state/app-context';
-import { AppText, Button, Screen, Spacing, useResolvedScheme } from '@/ui';
+import { AppText, Button, Screen, SheetHost, Spacing, useResolvedScheme } from '@/ui';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,9 +50,12 @@ function AppShell() {
           <Stack.Screen name="rules/edit" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="trash" options={{ headerShown: false }} />
+          <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="mailbox/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="open-mail" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
       )}
+      <SheetHost />
     </ThemeProvider>
   );
 }

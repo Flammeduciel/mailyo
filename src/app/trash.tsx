@@ -134,7 +134,7 @@ export default function TrashScreen() {
                       {formatDate(item.remote.receivedAt)}
                     </AppText>
                   </View>
-                  <AppText numberOfLines={1}>{item.remote.subject || '(Sans objet)'}</AppText>
+                  <AppText numberOfLines={1}>{item.remote.subject || 'Sans objet'}</AppText>
                   <AppText variant="caption" color="textSecondary" numberOfLines={1}>
                     {multipleAccounts ? `${item.accountAddress} · ` : ''}
                     {preview}

@@ -91,6 +91,7 @@ export function ConversationRow({
   const { lastMessage } = thread;
   const senderName = thread.contact.name || thread.contact.address;
   const preview = previewText(lastMessage.bodyText);
+  const subjectText = lastMessage.subject.trim();
 
   return (
     <Pressable
@@ -175,10 +176,16 @@ export function ConversationRow({
             numberOfLines={1}
             style={[styles.preview, { color: isUnread ? colors.text : colors.textSecondary }]}
           >
-            <Text style={isUnread ? styles.subjectUnread : styles.subject}>
-              {lastMessage.subject || '(Sans objet)'}
-            </Text>
-            {preview ? ` · ${preview}` : ''}
+            {subjectText ? (
+              <Text style={isUnread ? styles.subjectUnread : styles.subject}>{subjectText}</Text>
+            ) : null}
+            {subjectText && preview ? ' · ' : ''}
+            {preview}
+            {!subjectText && !preview ? (
+              <Text style={[styles.placeholder, { color: colors.textMuted }]}>
+                {thread.hasAttachments ? 'Pièce jointe' : 'Message sans texte'}
+              </Text>
+            ) : null}
           </Text>
           <View style={styles.icons}>
             {thread.isPinned ? (
@@ -257,6 +264,9 @@ const styles = StyleSheet.create({
   },
   subject: {
     fontWeight: '500',
+  },
+  placeholder: {
+    fontStyle: 'italic',
   },
   subjectUnread: {
     fontWeight: '700',

@@ -11,7 +11,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -28,7 +27,9 @@ import type {
   MailCategory,
   ThreadSummary,
 } from '@/domain/models';
+import { AppDrawer } from '@/screens/AppDrawer';
 import { useApp } from '@/state/app-context';
+import { usePermissions } from '@/state/use-permissions';
 import { useServiceQuery } from '@/state/use-service-query';
 import {
   AppBar,
@@ -45,6 +46,8 @@ import {
   useAppTheme,
   type AppBarAction,
   type FilterChipOption,
+  showAlert,
+  IconButton,
 } from '@/ui';
 
 const PAGE_SIZE = 30;
@@ -116,6 +119,8 @@ export function ConversationListScreen({
 }: ConversationListScreenProps) {
   const colors = useAppTheme();
   const { service, refresh, invalidate, sync } = useApp();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { missingVital } = usePermissions(service.getSettings().realtimeMode === 'idle');
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [actusCategory, setActusCategory] = useState<ActusCategory>('all');
   const category = tab === 'actus' && actusCategory !== 'all' ? actusCategory : undefined;
@@ -232,7 +237,15 @@ export function ConversationListScreen({
       // Something unread, or a single subject: straight into that conversation.
       // The subject list only shows when everything has been read.
       if (group.threads.length === 1 || group.unreadCount > 0) {
-        router.push(`/thread/${firstToOpen(group).id}`);
+        const thread = firstToOpen(group);
+        router.push({
+          pathname: '/thread/[id]',
+          params: {
+            id: thread.id,
+            name: thread.contact.name || thread.contact.address,
+            address: thread.contact.address,
+          },
+        });
         return;
       }
       router.push({
@@ -289,7 +302,7 @@ export function ConversationListScreen({
       icon: 'delete-outline',
       label: 'Supprimer',
       onPress: () =>
-        Alert.alert(
+        showAlert(
           `Supprimer ${selectedThreads.length} conversation${selectedThreads.length > 1 ? 's' : ''} ?`,
           'Les emails seront placés dans la corbeille.',
           [
@@ -334,7 +347,11 @@ export function ConversationListScreen({
         })(),
     },
     { label: 'Corbeille', onPress: () => router.push('/trash') },
-    { label: 'Paramètres', onPress: () => router.push('/settings') },
+    {
+      label: 'Paramètres',
+      onPress: () => router.push('/settings'),
+      alert: missingVital ? 'Autorisation à accorder' : undefined,
+    },
   ];
 
   // « Corbeille » is a shortcut to its own screen, not a list filter.
@@ -367,6 +384,18 @@ export function ConversationListScreen({
           title={title}
           variant={tab === 'discussions' ? 'brand' : 'regular'}
           onBack={archived ? () => router.back() : undefined}
+          leading={
+            archived ? undefined : (
+              <IconButton
+                icon="menu"
+                accessibilityLabel="Boîtes et catégories"
+                onPress={() => setDrawerOpen(true)}
+                size={24}
+                testID="list-drawer"
+              />
+            )
+          }
+          onTitlePress={archived ? undefined : () => setDrawerOpen(true)}
           actions={[
             ...(archived
               ? []
@@ -382,6 +411,7 @@ export function ConversationListScreen({
               icon: 'more-vert',
               label: 'Plus d’options',
               onPress: () => setMenuOpen(true),
+              alert: missingVital,
               testID: 'list-menu',
             },
           ]}
@@ -393,18 +423,6 @@ export function ConversationListScreen({
         keyExtractor={(item) => item.key}
         ListHeaderComponent={
           <View>
-            {sync && groups.length > 0 && !archived ? (
-              <View style={[styles.syncBar, { backgroundColor: colors.primaryContainer }]}>
-                <SyncRing ratio={sync.ratio} size={30} strokeWidth={3} showLabel={false} />
-                <AppText variant="caption" weight="semibold" style={styles.syncText}>
-                  Récupération de vos emails…
-                  {sync.stored > 0 ? ` ${sync.stored} reçus` : ''}
-                </AppText>
-                <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
-                  {Math.round(sync.ratio * 100)} %
-                </AppText>
-              </View>
-            ) : null}
             {archived ? null : (
               <SearchPill onPress={() => router.push('/search')} testID="list-search" />
             )}
@@ -514,9 +532,27 @@ export function ConversationListScreen({
           )
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+          <RefreshControl
+            // The ring above the compose button shows the sync: no second spinner.
+            refreshing={refreshing && !sync}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+          />
         }
       />
+
+      {sync && groups.length > 0 && !archived && !selecting ? (
+        <View
+          style={[
+            styles.syncFloat,
+            { backgroundColor: colors.surface, borderColor: colors.separator },
+          ]}
+          accessibilityLabel={`Synchronisation ${Math.round(sync.ratio * 100)} %`}
+          testID="list-sync-ring"
+        >
+          <SyncRing ratio={sync.ratio} size={40} strokeWidth={3} />
+        </View>
+      ) : null}
 
       {selecting || archived ? null : (
         <Fab
@@ -528,6 +564,11 @@ export function ConversationListScreen({
       )}
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
+      <AppDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        permissionAlert={missingVital}
+      />
     </SafeAreaView>
   );
 }
@@ -536,18 +577,18 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  syncBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: 24,
-  },
-  syncText: {
-    flex: 1,
+  syncFloat: {
+    position: 'absolute',
+    right: Spacing.lg + 6,
+    bottom: Spacing.lg + 56 + Spacing.md,
+    padding: 3,
+    borderRadius: 25,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 3,
+    shadowColor: '#0C0E16',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
   },
   syncEmpty: {
     alignItems: 'center',

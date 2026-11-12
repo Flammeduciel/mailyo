@@ -21,7 +21,7 @@ import type { PickedAttachment } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
 import { pickFrom, type AttachmentSource } from '@/state/pick-attachments';
 import { useServiceQuery } from '@/state/use-service-query';
-import { useUndoSend } from '@/state/use-undo-send';
+import { UNDO_SEND_SECONDS, useUndoSend } from '@/state/use-undo-send';
 import {
   AppBar,
   AppText,
@@ -32,7 +32,7 @@ import {
   Radius,
   RecipientField,
   Spacing,
-  UndoSnackbar,
+  SendCountdown,
   useAppTheme,
 } from '@/ui';
 
@@ -264,7 +264,7 @@ export default function ComposeScreen() {
             <View style={[styles.resume, { backgroundColor: colors.primaryContainer }]}>
               <MaterialIcons name="edit-note" size={20} color={colors.primary} />
               <AppText variant="caption" style={styles.flex} numberOfLines={2}>
-                Brouillon : {resumable.subject || '(Sans objet)'}
+                Brouillon : {resumable.subject || 'Sans objet'}
               </AppText>
               <Button label="Reprendre" variant="ghost" onPress={() => resumeDraft(resumable)} />
               <Pressable onPress={() => setDismissedResume(true)} accessibilityLabel="Ignorer">
@@ -403,14 +403,6 @@ export default function ComposeScreen() {
           )}
         </ScrollView>
 
-        {undoSend.pending ? (
-          <UndoSnackbar
-            message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
-            onUndo={undoSend.cancel}
-            testID="undo-send"
-          />
-        ) : null}
-
         {picking ? null : (
           <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
             <Pressable
@@ -426,23 +418,37 @@ export default function ComposeScreen() {
               </AppText>
             </Pressable>
             <View style={styles.flex} />
-            <Pressable
-              onPress={onSend}
-              disabled={!canSend}
-              style={[
-                styles.send,
-                { backgroundColor: colors.primary, opacity: canSend ? 1 : 0.45 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Envoyer"
-              accessibilityState={{ disabled: !canSend }}
-              testID="compose-send"
-            >
-              <AppText variant="body" weight="semibold" style={{ color: colors.onPrimary }}>
-                {sending ? 'Envoi…' : 'Envoyer'}
-              </AppText>
-              <MaterialIcons name="send" size={18} color={colors.onPrimary} />
-            </Pressable>
+            {undoSend.pending ? (
+              <View style={styles.pendingSend}>
+                <AppText variant="caption" color="textSecondary">
+                  Envoi dans {undoSend.pending.secondsLeft} s
+                </AppText>
+                <SendCountdown
+                  seconds={UNDO_SEND_SECONDS}
+                  secondsLeft={undoSend.pending.secondsLeft}
+                  onStop={undoSend.cancel}
+                  size={44}
+                />
+              </View>
+            ) : (
+              <Pressable
+                onPress={onSend}
+                disabled={!canSend}
+                style={[
+                  styles.send,
+                  { backgroundColor: colors.primary, opacity: canSend ? 1 : 0.45 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Envoyer"
+                accessibilityState={{ disabled: !canSend }}
+                testID="compose-send"
+              >
+                <AppText variant="body" weight="semibold" style={{ color: colors.onPrimary }}>
+                  {sending ? 'Envoi…' : 'Envoyer'}
+                </AppText>
+                <MaterialIcons name="send" size={18} color={colors.onPrimary} />
+              </Pressable>
+            )}
           </View>
         )}
       </KeyboardAvoidingView>
@@ -461,6 +467,11 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  pendingSend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
   form: {
     paddingHorizontal: Spacing.lg,

@@ -80,7 +80,7 @@ export function shouldRenderHtml(
 /** First lines of a message's own text, for quote blocks and reply previews. */
 export function messageSnippet(message: Pick<Message, 'bodyText' | 'subject'>): string {
   const body = splitQuotedText(message.bodyText).body.replace(/\s+/g, ' ').trim();
-  return body || message.subject || '(Message vide)';
+  return body || message.subject || 'Message sans texte';
 }
 
 export function MessageBubble({

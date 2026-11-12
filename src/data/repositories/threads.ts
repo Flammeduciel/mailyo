@@ -9,6 +9,7 @@ import type {
   ConversationFilter,
   ConversationTab,
   EmailAddress,
+  FolderRole,
   MailCategory,
   Thread,
   ThreadSummary,
@@ -151,6 +152,10 @@ export interface ListThreadSummariesOptions {
   /** One Gmail category inside a tab (e.g. Promotions inside « Actus »). */
   category?: MailCategory;
   filter?: ConversationFilter;
+  /** Only threads holding a message in a folder of this role (e.g. 'sent'). */
+  folderRole?: FolderRole;
+  /** Only starred threads (any tab). */
+  starredOnly?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -184,6 +189,14 @@ function buildConditions(
   if (options?.category) {
     conditions.push(`${THREAD_CATEGORY} = ?`);
     params.push(options.category);
+  }
+  if (options?.folderRole) {
+    conditions.push(`EXISTS (SELECT 1 FROM messages m JOIN folders f ON f.id = m.folder_id
+       WHERE m.thread_id = t.id AND f.role = ?)`);
+    params.push(options.folderRole);
+  }
+  if (options?.starredOnly) {
+    conditions.push(IS_STARRED);
   }
   if (includeFilter) {
     if (options?.filter === 'unread') {

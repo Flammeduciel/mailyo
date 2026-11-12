@@ -1,5 +1,7 @@
 import { Redirect } from 'expo-router';
 
+import { useApp } from '@/state/app-context';
+
 /**
  * Entry route.
  *
@@ -9,5 +11,10 @@ import { Redirect } from 'expo-router';
  * keeps first-run onboarding in one place.
  */
 export default function Index() {
+  const { service } = useApp();
+  // First launch: ask for notifications and battery before the inbox.
+  if (!service.getSettings().permissionsIntroDone) {
+    return <Redirect href="/welcome" />;
+  }
   return <Redirect href="/discussions" />;
 }

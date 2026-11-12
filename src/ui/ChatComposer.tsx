@@ -5,6 +5,7 @@ import { formatFileSize } from '@/domain/attachments';
 
 import { AppText } from './AppText';
 import { IconButton } from './IconButton';
+import { SendCountdown } from './SendCountdown';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
 
 export interface ReplyPreview {
@@ -25,6 +26,9 @@ export interface ChatComposerProps {
   attachments?: { filename: string; sizeBytes: number }[];
   onAttach?: () => void;
   onRemoveAttachment?: (index: number) => void;
+  /** A sent mail is waiting out its undo delay: the send button becomes a stop ring. */
+  pendingSend?: { seconds: number; secondsLeft: number } | null;
+  onStopSend?: () => void;
 }
 
 /**
@@ -42,6 +46,8 @@ export function ChatComposer({
   attachments = [],
   onAttach,
   onRemoveAttachment,
+  pendingSend,
+  onStopSend,
 }: ChatComposerProps) {
   const colors = useAppTheme();
   const canSend = (value.trim().length > 0 || attachments.length > 0) && !sending;
@@ -114,23 +120,31 @@ export function ChatComposer({
           ) : null}
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Envoyer"
-        disabled={!canSend}
-        onPress={onSend}
-        testID="thread-send"
-        style={({ pressed }) => [
-          styles.send,
-          { backgroundColor: colors.fab, opacity: canSend ? (pressed ? 0.85 : 1) : 0.55 },
-        ]}
-      >
-        {sending ? (
-          <ActivityIndicator color={colors.onFab} />
-        ) : (
-          <MaterialIcons name="send" size={22} color={colors.onFab} />
-        )}
-      </Pressable>
+      {pendingSend ? (
+        <SendCountdown
+          seconds={pendingSend.seconds}
+          secondsLeft={pendingSend.secondsLeft}
+          onStop={() => onStopSend?.()}
+        />
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Envoyer"
+          disabled={!canSend}
+          onPress={onSend}
+          testID="thread-send"
+          style={({ pressed }) => [
+            styles.send,
+            { backgroundColor: colors.fab, opacity: canSend ? (pressed ? 0.85 : 1) : 0.55 },
+          ]}
+        >
+          {sending ? (
+            <ActivityIndicator color={colors.onFab} />
+          ) : (
+            <MaterialIcons name="send" size={22} color={colors.onFab} />
+          )}
+        </Pressable>
+      )}
     </View>
   );
 }

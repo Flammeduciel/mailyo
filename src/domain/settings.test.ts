@@ -17,6 +17,7 @@ describe('app settings', () => {
       blockRemoteImages: false,
       offlineStarredAttachments: true,
       realtimeMode: 'off' as const,
+      permissionsIntroDone: true,
     };
     expect(parseAppSettings(serializeAppSettings(settings))).toEqual(settings);
   });
