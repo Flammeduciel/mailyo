@@ -422,3 +422,66 @@ describe('buildPushConfig', () => {
     expect(config.accounts).toEqual([]);
   });
 });
+
+describe('Trash and notification targets', () => {
+  async function service() {
+    const db = await createMigratedDatabase();
+    const credentials = new MemoryCredentials();
+    const present = jest.fn(async () => undefined);
+    const native = fakeNative({
+      fetchMessages: jest.fn(async (_imap, folder: string) => ({
+        uidValidity: 7,
+        messages:
+          folder === 'INBOX'
+            ? [nativeMessage(2, { fromName: '' }), nativeMessage(1)]
+            : folder === 'Trash'
+              ? [nativeMessage(40, { subject: 'Supprimé', date: 40_000 })]
+              : [],
+      })),
+    });
+    const mail = new MailService({
+      db,
+      imapCredentials: credentials,
+      imapNative: () => native,
+      notifier: { present } as unknown as Notifier,
+    });
+    await mail.updateSettings({ realtimeMode: 'off' });
+    const account = await mail.connectImapAccount({ emailAddress: 'moi@yahoo.fr', config: CONFIG });
+    await mail.syncAll();
+    return { mail, account, native, present };
+  }
+
+  it('lists the server trash and moves a mail back to the inbox', async () => {
+    const { mail, native } = await service();
+    const trash = await mail.listTrash();
+    expect(trash.map((item) => item.remote.subject)).toEqual(['Supprimé']);
+    expect(trash[0].senderDisplayName).toBe('Claire');
+
+    await mail.restoreFromTrash(trash[0]);
+    expect(native.calls).toContainEqual(['move', 'Trash', 40, 'INBOX']);
+  });
+
+  it('points notifications at their conversation', async () => {
+    const { mail, account, present } = await service();
+    const [thread] = await mail.listConversations();
+    const calls = present.mock.calls as unknown as [unknown, string][];
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0][1]).toMatch(/^\/open-mail\?thread=/);
+    const found = await mail.findThreadForNotification({
+      accountId: account.id,
+      messageIdHeader: '<m1@x.fr>',
+    });
+    expect(found).not.toBeNull();
+    expect(
+      await mail.findThreadForNotification({ accountId: account.id, from: 'CLAIRE@x.fr' }),
+    ).toBe(thread.id);
+  });
+
+  it('fills a sender without a display name from their other mails', async () => {
+    const { mail } = await service();
+    const [thread] = await mail.listConversations();
+    const messages = await mail.openThread(thread.id);
+    expect(messages.every((message) => message.senderName === 'Claire')).toBe(true);
+    expect(thread.contact.name).toBe('Claire');
+  });
+});

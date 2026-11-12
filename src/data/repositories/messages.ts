@@ -5,6 +5,7 @@
  * with a safe fallback so a corrupt row never throws into the UI.
  */
 
+import type { NameRow } from '@/domain/names';
 import type { Database, SqlValue } from '@/data/db/database';
 import type { EmailAddress, MailCategory, Message, SyncState } from '@/domain/models';
 import { repairMojibake } from '@/domain/mojibake';
@@ -531,4 +532,47 @@ export async function searchMessages(
     params,
   );
   return rows.map(mapMessage);
+}
+
+/** Names seen in stored mail (sender, To, Cc), oldest first, for the name book. */
+export async function listNameRows(db: Database): Promise<NameRow[]> {
+  const rows = await db.getAllAsync<{
+    sender_name: string;
+    sender_address: string;
+    to_json: string;
+    cc_json: string;
+  }>('SELECT sender_name, sender_address, to_json, cc_json FROM messages ORDER BY received_at ASC');
+  return rows.map((row) => ({
+    senderName: repairMojibake(row.sender_name),
+    senderAddress: row.sender_address,
+    to: parseAddresses(row.to_json),
+    cc: parseAddresses(row.cc_json),
+  }));
+}
+
+/** Thread of a mail by Message-ID, else the latest thread with that sender. */
+export async function findThreadIdForMail(
+  db: Database,
+  input: { accountId?: string | null; messageIdHeader?: string | null; from?: string | null },
+): Promise<string | null> {
+  const account = input.accountId ? ' AND account_id = ?' : '';
+  const accountParams: SqlValue[] = input.accountId ? [input.accountId] : [];
+  if (input.messageIdHeader) {
+    const id = input.messageIdHeader.trim();
+    const bare = id.replace(/^<|>$/g, '');
+    const row = await db.getFirstAsync<{ thread_id: string }>(
+      `SELECT thread_id FROM messages WHERE message_id_header IN (?, ?, ?)${account} LIMIT 1`,
+      [id, bare, `<${bare}>`, ...accountParams],
+    );
+    if (row) return row.thread_id;
+  }
+  if (input.from) {
+    const row = await db.getFirstAsync<{ thread_id: string }>(
+      `SELECT thread_id FROM messages WHERE lower(sender_address) = ?${account}
+       ORDER BY received_at DESC LIMIT 1`,
+      [input.from.trim().toLowerCase(), ...accountParams],
+    );
+    if (row) return row.thread_id;
+  }
+  return null;
 }

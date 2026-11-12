@@ -247,6 +247,36 @@ export class GmailApiProvider implements MailProvider {
     await this.request(`/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
   }
 
+  async listTrash(limit: number): Promise<RemoteMessage[]> {
+    const ids = await this.listIds('TRASH', null, limit);
+    const result: RemoteMessage[] = [];
+    for (let i = 0; i < ids.length; i += FETCH_CONCURRENCY) {
+      const batch = await Promise.all(
+        ids.slice(i, i + FETCH_CONCURRENCY).map((id) => this.getMessage(id)),
+      );
+      for (const message of batch) {
+        const remote = gmailMessageToRemote(message, 'TRASH');
+        this.gmailIds.set(remote.remoteUid, message.id);
+        result.push(remote);
+      }
+    }
+    return result.sort((a, b) => b.receivedAt - a.receivedAt);
+  }
+
+  /**
+   * `untrash` gives the mail its labels back. It is usually older than the sync
+   * cursor, so it is returned for direct storage in the inbox (or Sent).
+   */
+  async restoreFromTrash(message: RemoteMessage): Promise<RemoteMessage | null> {
+    const gmailId = await this.resolveGmailId(message.remoteUid);
+    const restored = (await this.requestJson(`/messages/${gmailId}/untrash`, {
+      method: 'POST',
+    })) as { labelIds?: string[] };
+    const labels = restored.labelIds ?? [];
+    const folder = labels.includes('INBOX') ? 'INBOX' : labels.includes('SENT') ? 'SENT' : null;
+    return folder ? { ...message, folderRemoteId: folder } : null;
+  }
+
   async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {
     await this.modifyLabels(
       remoteUid,

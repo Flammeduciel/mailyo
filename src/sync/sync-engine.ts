@@ -210,6 +210,14 @@ export class SyncEngine {
     return remotes.length;
   }
 
+  /** Store mail fetched outside the regular sync (e.g. restored from the trash). Never notifies. */
+  async storeMessages(account: Account, folder: Folder, remotes: RemoteMessage[]): Promise<void> {
+    const knownThreads = await this.buildKnownThreadMap(account.id);
+    for (const remote of [...remotes].sort((a, b) => a.remoteUid - b.remoteUid)) {
+      await this.persistMessage(account, folder, remote, knownThreads);
+    }
+  }
+
   private async persistMessage(
     account: Account,
     folder: Folder,

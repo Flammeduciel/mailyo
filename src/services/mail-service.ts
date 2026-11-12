@@ -33,7 +33,7 @@ import {
   listDrafts as listDraftsRows,
   upsertDraft,
 } from '@/data/repositories/drafts';
-import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
+import { getFolderByRole, listFolders, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
   deleteMessage,
@@ -56,7 +56,10 @@ import {
   setMessageRead,
   setMessageStarred,
   upsertMessage,
+  listNameRows,
+  findThreadIdForMail,
 } from '@/data/repositories/messages';
+import { meaningfulName, NameBook } from '@/domain/names';
 import {
   deleteRule as deleteRuleRow,
   listRules as listRulesRepo,
@@ -114,6 +117,7 @@ import type {
   MailProvider,
   OutgoingMessage,
   OAuthTokens,
+  RemoteMessage,
   SendResult,
   TokenStore,
 } from '@/providers/types';
@@ -193,6 +197,13 @@ export interface ConnectOAuthAccountInput {
   tokens: OAuthTokens;
 }
 
+export interface TrashedMail {
+  accountId: string;
+  accountAddress: string;
+  senderDisplayName: string;
+  remote: RemoteMessage;
+}
+
 export interface MailServiceOptions {
   db: Database;
   registry?: ProviderRegistry;
@@ -235,6 +246,8 @@ export class MailService {
   private connectQueue: Promise<unknown> = Promise.resolve();
   /** When the app last came on screen; null while it is in the background. */
   private foregroundSince: number | null = null;
+  /** Best known name per address (see domain/names). */
+  private nameBook = new NameBook();
 
   constructor(options: MailServiceOptions) {
     this.db = options.db;
@@ -266,6 +279,7 @@ export class MailService {
     const rawSettings = await getAllSettings(this.db);
     this.settings = parseAppSettings(rawSettings);
     this.loadContactPhotoCache(rawSettings[CONTACT_PHOTOS_KEY]);
+    await this.refreshNames();
     await this.removeDuplicateAccounts();
     if (rawSettings[THREADING_VERSION_KEY] !== THREADING_VERSION) {
       await this.rethreadStoredMail();
@@ -361,8 +375,12 @@ export class MailService {
       .filter((c) => !isNoReplyAddress(c.address))
       .map((c) => {
         seen.add(c.address.toLowerCase());
-        const saved = this.contactDetails.get(c.address.toLowerCase())?.name;
-        return { name: saved || c.name, address: c.address, count: c.count, lastAt: c.lastAt };
+        return {
+          name: this.displayName(c.address, c.name),
+          address: c.address,
+          count: c.count,
+          lastAt: c.lastAt,
+        };
       });
     for (const [address, details] of this.contactDetails) {
       if (!seen.has(address) && details.saved && !isNoReplyAddress(address)) {
@@ -668,7 +686,8 @@ export class MailService {
   }
 
   async listConversations(options?: ListThreadSummariesOptions): Promise<ThreadSummary[]> {
-    return listThreadSummaries(this.db, { includeArchived: false, ...options });
+    const threads = await listThreadSummaries(this.db, { includeArchived: false, ...options });
+    return threads.map((thread) => this.withContactName(thread));
   }
 
   /**
@@ -695,6 +714,51 @@ export class MailService {
       }
     }
     return fetched > 0;
+  }
+
+  /**
+   * Mail in the trash of every account, newest first. Read live from the
+   * server (deleted mail is not kept on the phone).
+   */
+  async listTrash(limitPerAccount = 50): Promise<TrashedMail[]> {
+    const result: TrashedMail[] = [];
+    for (const account of await listAccounts(this.db)) {
+      const provider = this.registry.get(account.id);
+      if (!provider?.listTrash) continue;
+      try {
+        for (const remote of await provider.listTrash(limitPerAccount)) {
+          result.push({
+            accountId: account.id,
+            accountAddress: account.emailAddress,
+            senderDisplayName:
+              this.displayName(remote.senderAddress, remote.senderName) || remote.senderAddress,
+            remote,
+          });
+        }
+      } catch (error) {
+        console.warn(`[MailService] trash unavailable for ${account.emailAddress}`, error);
+      }
+    }
+    return result.sort((a, b) => b.remote.receivedAt - a.remote.receivedAt);
+  }
+
+  /** Put a trashed mail back in the inbox; it reappears in its conversation. */
+  async restoreFromTrash(item: TrashedMail): Promise<void> {
+    const provider = this.registry.get(item.accountId);
+    const account = (await listAccounts(this.db)).find((a) => a.id === item.accountId);
+    if (!provider?.restoreFromTrash || !account) {
+      throw new Error('Restauration impossible pour ce compte.');
+    }
+    const toStore = await provider.restoreFromTrash(item.remote);
+    if (toStore) {
+      const folders = await listFolders(this.db, account.id);
+      const folder = folders.find((f) => f.remoteFolderId === toStore.folderRemoteId);
+      if (folder) {
+        const engine = new SyncEngine({ db: this.db, provider, now: this.now });
+        await engine.storeMessages(account, folder, [toStore]);
+        await this.refreshNames();
+      }
+    }
   }
 
   async setThreadPinned(threadId: string, pinned: boolean): Promise<void> {
@@ -731,10 +795,12 @@ export class MailService {
     if (!this.syncRun) {
       this.syncRun = this.runSyncAll((progress) => {
         for (const listener of this.syncListeners) listener(progress);
-      }).finally(() => {
-        this.syncRun = null;
-        this.syncListeners.clear();
-      });
+      })
+        .then(() => this.refreshNames())
+        .finally(() => {
+          this.syncRun = null;
+          this.syncListeners.clear();
+        });
     }
     return this.syncRun;
   }
@@ -783,7 +849,49 @@ export class MailService {
   async openThread(threadId: string): Promise<Message[]> {
     const messages = await listMessagesByThread(this.db, threadId);
     await this.markThreadRead(threadId, true);
-    return messages;
+    // A mail without a display name borrows the one the person uses elsewhere.
+    return messages.map((message) =>
+      meaningfulName(message.senderName, message.senderAddress)
+        ? message
+        : { ...message, senderName: this.displayName(message.senderAddress) },
+    );
+  }
+
+  /**
+   * Name to show for an address: saved contact, then the person's own From
+   * name, then `headerName`, then To/Cc names, then Google « other contacts ».
+   * Empty when nothing is known (callers show the address).
+   */
+  displayName(address: string, headerName?: string | null): string {
+    const details = this.contactDetails.get(address.toLowerCase());
+    return this.nameBook.resolve(address, {
+      headerName,
+      savedName: details?.saved ? details.name : null,
+      otherName: details && !details.saved ? details.name : null,
+    });
+  }
+
+  /**
+   * The conversation a notification points to: the thread of the mail
+   * (Message-ID), else the latest conversation with its sender.
+   */
+  async findThreadForNotification(input: {
+    accountId?: string | null;
+    messageIdHeader?: string | null;
+    from?: string | null;
+  }): Promise<string | null> {
+    return findThreadIdForMail(this.db, input);
+  }
+
+  private withContactName(thread: ThreadSummary): ThreadSummary {
+    const name = this.displayName(thread.contact.address, thread.contact.name);
+    return name === thread.contact.name
+      ? thread
+      : { ...thread, contact: { ...thread.contact, name } };
+  }
+
+  private async refreshNames(): Promise<void> {
+    this.nameBook = NameBook.fromRows(await listNameRows(this.db));
   }
 
   /** Attachments of a conversation, grouped by message id. */
@@ -1417,7 +1525,10 @@ export class MailService {
         now: new Date(this.now()),
         contentMode: this.settings.contentMode,
       });
-      await this.notifier.present(decision);
+      await this.notifier.present(
+        decision,
+        `/open-mail?thread=${encodeURIComponent(message.threadId)}`,
+      );
     }
   }
 

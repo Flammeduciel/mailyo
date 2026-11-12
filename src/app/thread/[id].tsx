@@ -177,12 +177,14 @@ export default function ThreadScreen() {
     for (let i = data.messages.length - 1; i >= 0; i -= 1) {
       const message = data.messages[i];
       if (!isOwn(message)) {
-        return message.senderName || message.senderAddress;
+        return (
+          service.displayName(message.senderAddress, message.senderName) || message.senderAddress
+        );
       }
     }
     const first = data.messages[0]?.to[0];
-    return first ? first.name || first.address : '';
-  }, [data.messages, isOwn]);
+    return first ? service.displayName(first.address, first.name) || first.address : '';
+  }, [data.messages, isOwn, service]);
 
   // Raw email address of the other party (for contact profile + no-reply check).
   const correspondentAddress = useMemo(() => {
@@ -868,11 +870,7 @@ export default function ThreadScreen() {
         <ContactSheet
           visible
           onClose={() => setSheetPerson(null)}
-          name={
-            service.getContactDetails(sheetPerson.address)?.name ||
-            sheetPerson.name ||
-            sheetPerson.address
-          }
+          name={service.displayName(sheetPerson.address, sheetPerson.name) || sheetPerson.address}
           address={sheetPerson.address}
           photoUri={service.getContactPhoto(sheetPerson.address)}
           details={service.getContactDetails(sheetPerson.address)}

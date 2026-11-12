@@ -333,10 +333,12 @@ export function ConversationListScreen({
           invalidate();
         })(),
     },
+    { label: 'Corbeille', onPress: () => router.push('/trash') },
     { label: 'Paramètres', onPress: () => router.push('/settings') },
   ];
 
-  const chips: FilterChipOption<ConversationFilter>[] = [
+  // « Corbeille » is a shortcut to its own screen, not a list filter.
+  const chips: FilterChipOption<ConversationFilter | 'trash'>[] = [
     { value: 'all', label: 'Toutes', count: data.counts.all || undefined },
     {
       value: 'unread',
@@ -351,6 +353,7 @@ export function ConversationListScreen({
       count: data.counts.attachments || undefined,
     },
     { value: 'spam', label: 'Spam', icon: 'report', count: data.counts.spam || undefined },
+    ...(archived ? [] : [{ value: 'trash' as const, label: 'Corbeille', icon: 'delete-outline' }]),
   ];
 
   const empty = EMPTY_COPY[archived ? 'archived' : (tab ?? 'discussions')];
@@ -419,7 +422,11 @@ export function ConversationListScreen({
                 }}
               />
             ) : null}
-            <FilterChips options={chips} value={filter} onChange={onFilterChange} />
+            <FilterChips
+              options={chips}
+              value={filter}
+              onChange={(next) => (next === 'trash' ? router.push('/trash') : onFilterChange(next))}
+            />
             {tab === 'discussions' && data.archivedCount > 0 && filter === 'all' ? (
               <Pressable
                 accessibilityRole="button"

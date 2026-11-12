@@ -54,7 +54,8 @@ export interface AppContextValue {
   applyRealtime: () => Promise<void>;
 }
 
-const AppContext = createContext<AppContextValue | null>(null);
+/** Exported for tests and the screenshot harness (fake services). */
+export const AppContext = createContext<AppContextValue | null>(null);
 
 export interface SyncStatus {
   /** 0..1 */

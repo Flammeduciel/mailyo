@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -29,6 +30,7 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import javax.mail.AuthenticationFailedException
 import javax.mail.FetchProfile
+import javax.mail.internet.MimeMessage
 import javax.mail.Flags
 import javax.mail.Folder
 import javax.mail.Message
@@ -185,7 +187,32 @@ class MailPushService : Service() {
     return if (start < end) hour in start until end else hour >= start || hour < end
   }
 
-  private fun notifyMail(account: PushAccount, uid: Long, from: String, subject: String) {
+  /** Tapping opens the conversation of this mail (route `open-mail` in the app). */
+  private fun openMailIntent(account: PushAccount, requestCode: Int, messageId: String?, from: String?): PendingIntent? {
+    val uri = Uri.Builder().scheme("mailyo").authority("open-mail")
+      .appendQueryParameter("account", account.id)
+      .apply {
+        if (!messageId.isNullOrBlank()) appendQueryParameter("mid", messageId)
+        if (!from.isNullOrBlank()) appendQueryParameter("from", from)
+      }
+      .build()
+    val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(packageName)
+      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    if (intent.resolveActivity(packageManager) == null) return launchIntent()
+    return PendingIntent.getActivity(
+      this, requestCode, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+  }
+
+  private fun notifyMail(
+    account: PushAccount,
+    uid: Long,
+    from: String,
+    subject: String,
+    messageId: String?,
+    fromAddress: String?,
+  ) {
+    val id = (account.id + ":" + uid).hashCode()
     val (title, text) = when (config.contentMode) {
       "hidden" -> "MailYo" to "Nouveau message"
       "sender" -> from to "Nouveau message"
@@ -200,9 +227,8 @@ class MailPushService : Service() {
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setAutoCancel(true)
       .setSilent(inQuietHours())
-      .setContentIntent(launchIntent())
+      .setContentIntent(openMailIntent(account, id, messageId, fromAddress))
       .build()
-    val id = (account.id + ":" + uid).hashCode()
     runCatching { getSystemService(NotificationManager::class.java).notify(id, notification) }
   }
 
@@ -353,7 +379,14 @@ class MailPushService : Service() {
         if (sender?.address.equals(account.email, ignoreCase = true)) continue
         fresh += 1
         if (!appInForeground) {
-          notifyMail(account, uid, sender?.personal ?: sender?.address ?: "Nouveau message", message.subject ?: "")
+          notifyMail(
+            account,
+            uid,
+            sender?.personal ?: sender?.address ?: "Nouveau message",
+            message.subject ?: "",
+            (message as? MimeMessage)?.messageID,
+            sender?.address,
+          )
         }
       }
       store.setLastSeenUid(account.id, lastSeen)

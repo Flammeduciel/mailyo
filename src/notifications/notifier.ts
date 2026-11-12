@@ -33,7 +33,12 @@ export interface NotificationApi {
     },
   ): Promise<void>;
   scheduleNotificationAsync(request: {
-    content: { title: string; body: string; sound?: string | null };
+    content: {
+      title: string;
+      body: string;
+      sound?: string | null;
+      data?: Record<string, unknown>;
+    };
     trigger: null;
   }): Promise<string>;
 }
@@ -96,7 +101,7 @@ export class Notifier {
   }
 
   /** Present a resolved decision immediately. No-op when it should not notify. */
-  async present(decision: NotificationDecision): Promise<void> {
+  async present(decision: NotificationDecision, url?: string): Promise<void> {
     if (!decision.notify) {
       return;
     }
@@ -105,6 +110,8 @@ export class Notifier {
         title: decision.title,
         body: decision.body,
         sound: soundNameFor(decision.soundId),
+        // Where a tap leads (see app/_layout.tsx and app/open-mail.tsx).
+        ...(url ? { data: { url } } : {}),
       },
       trigger: null,
     });
