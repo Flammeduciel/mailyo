@@ -125,3 +125,44 @@ export function parseQuoteBlock(quoted: string): QuoteBlock {
     .trimEnd();
   return { author, address, date, text };
 }
+
+/**
+ * A message that is nothing but a quote (someone replied without writing,
+ * or forwarded inline): returns the quote so it can be shown as a quote card
+ * instead of raw "> " lines; null otherwise.
+ */
+export function quoteOnlyText(text: string): string | null {
+  const source = (text ?? '').replace(/\r\n/g, '\n').trim();
+  if (!source) return null;
+  if (splitQuotedText(source).quoted) return null;
+  const attribution = ATTRIBUTION.exec(source);
+  if (attribution && attribution.index + attribution[1].length === 0) return source;
+  const lines = source.split('\n').filter((line) => line.trim().length > 0);
+  return lines.length > 0 && lines.every((line) => line.trim().startsWith('>')) ? source : null;
+}
+
+function normalizeForMatch(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * The message of the conversation a quote comes from: the latest one whose own
+ * text starts the quoted text (quotes reflow lines, so spaces are ignored).
+ */
+export function findQuotedMessage<T extends { id: string; bodyText: string }>(
+  quoted: string,
+  messages: T[],
+  excludeId?: string,
+): T | null {
+  const block = parseQuoteBlock(quoted);
+  const quotedOwn = normalizeForMatch(splitQuotedText(block.text).body);
+  if (quotedOwn.length < 4) return null;
+  const probe = quotedOwn.slice(0, 60);
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const candidate = messages[i];
+    if (candidate.id === excludeId) continue;
+    const own = normalizeForMatch(splitQuotedText(candidate.bodyText).body);
+    if (own && (own.startsWith(probe) || probe.startsWith(own.slice(0, 60)))) return candidate;
+  }
+  return null;
+}

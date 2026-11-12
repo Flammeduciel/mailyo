@@ -66,6 +66,7 @@ import {
 import {
   deleteEmptyThreads,
   getThread,
+  countByCategory,
   countThreadSummaries,
   isThreadSpam,
   listThreadSummaries,
@@ -81,6 +82,7 @@ import type {
   Account,
   Attachment,
   Draft,
+  MailCategory,
   Message,
   NotificationRule,
   ProviderId,
@@ -909,6 +911,13 @@ export class MailService {
 
   async isThreadSpam(threadId: string): Promise<boolean> {
     return isThreadSpam(this.db, threadId);
+  }
+
+  /** Conversations per Gmail category (Promotions, Réseaux sociaux…) for the sub-filters. */
+  async categoryCounts(
+    options?: ListThreadSummariesOptions,
+  ): Promise<Partial<Record<MailCategory, number>>> {
+    return countByCategory(this.db, { includeArchived: false, ...options });
   }
 
   /** Conversation counts for the filter chips (Toutes, Non lus, Pièces jointes, Spam). */

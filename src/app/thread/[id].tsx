@@ -19,7 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Correspondence } from '@/data/repositories/messages';
 import { copyChanges, joinNames } from '@/domain/copies';
 import type { Attachment, EmailAddress, Message } from '@/domain/models';
-import { splitQuotedText } from '@/domain/quote';
+import { findQuotedMessage, splitQuotedText } from '@/domain/quote';
 import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
@@ -303,6 +303,12 @@ export default function ThreadScreen() {
       setTimeout(() => setHighlighted(null), 1500);
     },
     [rows],
+  );
+
+  // Tapping a quoted history scrolls to the message it quotes, when it is here.
+  const findQuoted = useCallback(
+    (quoted: string) => findQuotedMessage(quoted, data.messages)?.id ?? null,
+    [data.messages],
   );
 
   // ----------------------------------------------------------------- actions
@@ -648,6 +654,7 @@ export default function ThreadScreen() {
           quoted={parents.get(message.id)?.adjacent ? undefined : parents.get(message.id)?.quote}
           parentInThread={parents.has(message.id)}
           onQuotePress={jumpTo}
+          findQuoted={findQuoted}
           attachments={data.attachments[message.id]}
           onOpenAttachment={openAttachment}
           resolveAttachment={resolveAttachment}

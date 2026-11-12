@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { tidyPlainText } from '@/domain/plain-text';
 import { parseQuoteBlock, splitQuotedText } from '@/domain/quote';
@@ -14,6 +14,8 @@ export interface QuotedHistoryProps {
   /** Text colour of the bubble it sits in. */
   textColor: string;
   depth?: number;
+  /** Jump to the quoted message in the conversation, when it is there. */
+  onPress?: () => void;
 }
 
 const MAX_DEPTH = 4;
@@ -22,7 +24,7 @@ const MAX_DEPTH = 4;
  * Quoted history as cards: « Euloge Ngouma · sam. 6 juin 2026, 16:06 » over
  * the quoted text, without the "> " markers; older quotes nest inside.
  */
-export function QuotedHistory({ text, textColor, depth = 0 }: QuotedHistoryProps) {
+export function QuotedHistory({ text, textColor, depth = 0, onPress }: QuotedHistoryProps) {
   const colors = useAppTheme();
   const block = parseQuoteBlock(text);
   const inner =
@@ -30,7 +32,16 @@ export function QuotedHistory({ text, textColor, depth = 0 }: QuotedHistoryProps
   const own = tidyPlainText(inner.body).trim();
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.quoteBackground }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityHint={onPress ? 'Aller au message cité' : undefined}
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: colors.quoteBackground, opacity: pressed ? 0.7 : 1 },
+      ]}
+    >
       <View
         style={[
           styles.bar,
@@ -62,8 +73,16 @@ export function QuotedHistory({ text, textColor, depth = 0 }: QuotedHistoryProps
         {inner.quoted ? (
           <QuotedHistory text={inner.quoted} textColor={textColor} depth={depth + 1} />
         ) : null}
+        {onPress ? (
+          <View style={styles.goto}>
+            <AppText variant="caption" weight="semibold" style={{ color: colors.link }}>
+              Voir le message
+            </AppText>
+            <MaterialIcons name="arrow-upward" size={14} color={colors.link} />
+          </View>
+        ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -84,5 +103,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
   author: { flexShrink: 1 },
   date: { flexShrink: 1 },
+  goto: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-end' },
   text: { fontSize: FontSize.sm, lineHeight: 19, opacity: 0.9 },
 });

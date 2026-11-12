@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { Attachment, EmailAddress, Message } from '@/domain/models';
 import { tidyPlainText } from '@/domain/plain-text';
-import { splitQuotedText } from '@/domain/quote';
+import { quoteOnlyText, splitQuotedText } from '@/domain/quote';
 
 import { AppText } from './AppText';
 import { AttachmentList } from './AttachmentList';
@@ -32,6 +32,8 @@ export interface MessageBubbleProps {
   /** The replied-to message is in the conversation, so the quoted history is redundant. */
   parentInThread?: boolean;
   onQuotePress?: (parentId: string) => void;
+  /** Finds the message a quoted history comes from; returns its id when it is in the thread. */
+  findQuoted?: (quoted: string) => string | null;
   attachments?: Attachment[];
   onOpenAttachment?: (attachment: Attachment) => void;
   resolveAttachment?: (attachmentId: string) => Promise<Attachment>;
@@ -88,6 +90,7 @@ export function MessageBubble({
   quoted,
   parentInThread = Boolean(quoted),
   onQuotePress,
+  findQuoted,
   attachments = [],
   onOpenAttachment,
   resolveAttachment,
@@ -109,6 +112,18 @@ export function MessageBubble({
   const html = shouldRenderHtml(message);
   const split = useMemo(() => splitQuotedText(message.bodyText), [message.bodyText]);
   const bodyText = useMemo(() => tidyPlainText(split.body).trim(), [split.body]);
+  // A reply that is only a quote: shown as a quote card, never as raw "> ".
+  const quoteOnly = useMemo(
+    () => (html ? null : quoteOnlyText(message.bodyText)),
+    [html, message.bodyText],
+  );
+  const historyText = quoteOnly ?? split.quoted;
+  const historyTarget = useMemo(
+    () => (historyText && findQuoted ? findQuoted(historyText) : null),
+    [historyText, findQuoted],
+  );
+  const openHistoryTarget = historyTarget ? () => onQuotePress?.(historyTarget) : undefined;
+  const historyOpen = Boolean(quoteOnly) || (showHistory && Boolean(split.quoted));
   const textColor = isOwn ? colors.bubbleOutgoingText : colors.bubbleIncomingText;
 
   return (
@@ -130,6 +145,8 @@ export function MessageBubble({
           html && styles.bubbleWide,
           attachments.length > 0 && !html ? styles.bubbleAttachments : null,
           quoted && !html ? styles.bubbleQuoting : null,
+          // A definite width: Android clips text measured in a shrink-to-fit bubble.
+          historyOpen && !html ? styles.bubbleHistory : null,
           isOwn
             ? { backgroundColor: colors.bubbleOutgoing, borderTopRightRadius: Radius.sm / 2 }
             : { backgroundColor: colors.bubbleIncoming, borderTopLeftRadius: Radius.sm / 2 },
@@ -169,8 +186,11 @@ export function MessageBubble({
           />
         ) : (
           <>
+            {quoteOnly ? (
+              <QuotedHistory text={quoteOnly} textColor={textColor} onPress={openHistoryTarget} />
+            ) : null}
             {/* A mail that only carries files has no text: no empty line above them. */}
-            {bodyText.length > 0 ? (
+            {!quoteOnly && bodyText.length > 0 ? (
               <RichText style={{ color: textColor }}>{bodyText}</RichText>
             ) : null}
             {/* The parent is already in the conversation: no need to unfold it again. */}
@@ -181,7 +201,13 @@ export function MessageBubble({
                     {showHistory ? 'Masquer l’historique' : '••• Historique'}
                   </AppText>
                 </Pressable>
-                {showHistory ? <QuotedHistory text={split.quoted} textColor={textColor} /> : null}
+                {showHistory ? (
+                  <QuotedHistory
+                    text={split.quoted}
+                    textColor={textColor}
+                    onPress={openHistoryTarget}
+                  />
+                ) : null}
               </>
             ) : null}
           </>
@@ -270,6 +296,9 @@ const styles = StyleSheet.create({
   },
   bubbleAttachments: {
     minWidth: '70%',
+  },
+  bubbleHistory: {
+    width: '86%',
   },
   // A short reply must not squeeze the quoted message into an unreadable sliver.
   bubbleQuoting: {

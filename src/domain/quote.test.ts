@@ -1,5 +1,5 @@
 import { linkify } from '@/domain/linkify';
-import { parseQuoteBlock, splitQuotedText } from '@/domain/quote';
+import { findQuotedMessage, parseQuoteBlock, quoteOnlyText, splitQuotedText } from '@/domain/quote';
 
 describe('splitQuotedText with French no-break spaces', () => {
   it('detects a wrapped Gmail attribution with a no-break space before the colon', () => {
@@ -90,5 +90,30 @@ describe('parseQuoteBlock', () => {
       date: null,
       text: 'juste\nune citation',
     });
+  });
+});
+
+describe('quote-only messages and quote targets', () => {
+  const quote =
+    "Le jeu. 5 nov. 2026 à 17:43, Jonathan Matondo <j@gmail.com> a écrit :\n\n> C'est comment cousin on valide ta proposition fais l'effort de nous\n> envoyer le lien en ligne\n>";
+
+  it('detects a message made only of a quote', () => {
+    expect(quoteOnlyText(quote)).toBe(quote);
+    expect(quoteOnlyText('> a\n> b')).toBe('> a\n> b');
+    expect(quoteOnlyText('Bien reçu')).toBeNull();
+    expect(quoteOnlyText(`Bien reçu\n\n${quote}`)).toBeNull();
+  });
+
+  it('finds the quoted message in the conversation, despite reflowed lines', () => {
+    const messages = [
+      {
+        id: 'a',
+        bodyText:
+          "C'est comment cousin on valide ta proposition fais l'effort de nous envoyer le lien en ligne",
+      },
+      { id: 'b', bodyText: `Bien reçu\n\n${quote}` },
+    ];
+    expect(findQuotedMessage(quote, messages, 'b')?.id).toBe('a');
+    expect(findQuotedMessage('> autre chose', messages)).toBeNull();
   });
 });

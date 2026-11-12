@@ -234,6 +234,22 @@ describe('MailService', () => {
     ]);
   });
 
+  it('filters « Actus » by Gmail category and counts each one', async () => {
+    const { service, db } = await bootstrap();
+    await db.runAsync(
+      "UPDATE messages SET category = 'promotions' WHERE sender_address LIKE '%lefilvert%'",
+    );
+    await db.runAsync(
+      "UPDATE messages SET category = 'social' WHERE sender_address LIKE '%orange%'",
+    );
+
+    expect(await service.categoryCounts({ tab: 'actus' })).toEqual({ promotions: 1, social: 1 });
+    const promos = await service.listConversations({ tab: 'actus', category: 'promotions' });
+    expect(promos.map((t) => t.contact.address)).toEqual(['lettre@lefilvert.example']);
+    expect(await service.listConversations({ tab: 'actus', category: 'updates' })).toEqual([]);
+    expect((await service.conversationCounts({ tab: 'actus', category: 'social' })).all).toBe(1);
+  });
+
   it('finds messages with the FTS index', async () => {
     const { service } = await bootstrap();
 

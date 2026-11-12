@@ -22,7 +22,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { firstToOpen, groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
 import type { ConversationCounts } from '@/data/repositories/threads';
-import type { ConversationFilter, ConversationTab, ThreadSummary } from '@/domain/models';
+import type {
+  ConversationFilter,
+  ConversationTab,
+  MailCategory,
+  ThreadSummary,
+} from '@/domain/models';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import {
@@ -51,9 +56,20 @@ export interface ConversationListScreenProps {
   title: string;
 }
 
+/** Gmail categories reachable inside « Actus » (Groupes = Forums). */
+type ActusCategory = 'all' | 'promotions' | 'social' | 'updates';
+
+const ACTUS_CATEGORIES: { value: ActusCategory; label: string; icon: string }[] = [
+  { value: 'all', label: 'Tout', icon: 'inbox' },
+  { value: 'promotions', label: 'Promotions', icon: 'local-offer' },
+  { value: 'social', label: 'Réseaux sociaux', icon: 'people' },
+  { value: 'updates', label: 'Notifications', icon: 'info-outline' },
+];
+
 interface ListData {
   threads: ThreadSummary[];
   counts: ConversationCounts;
+  byCategory: Partial<Record<MailCategory, number>>;
   unread: number;
   archivedCount: number;
   selfAddresses: string[];
@@ -63,6 +79,7 @@ interface ListData {
 const INITIAL: ListData = {
   threads: [],
   counts: { all: 0, unread: 0, attachments: 0, spam: 0 },
+  byCategory: {},
   unread: 0,
   archivedCount: 0,
   selfAddresses: [],
@@ -100,6 +117,8 @@ export function ConversationListScreen({
   const colors = useAppTheme();
   const { service, refresh, invalidate, sync } = useApp();
   const [filter, setFilter] = useState<ConversationFilter>('all');
+  const [actusCategory, setActusCategory] = useState<ActusCategory>('all');
+  const category = tab === 'actus' && actusCategory !== 'all' ? actusCategory : undefined;
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -108,9 +127,12 @@ export function ConversationListScreen({
   const exhausted = useRef(false);
 
   const { data, reload } = useServiceQuery<ListData>(async (mailService) => {
-    const [threads, counts, archivedThreads, accounts] = await Promise.all([
-      mailService.listConversations({ tab, filter, archivedOnly: archived, limit }),
-      mailService.conversationCounts({ tab, archivedOnly: archived }),
+    const [threads, counts, byCategory, archivedThreads, accounts] = await Promise.all([
+      mailService.listConversations({ tab, category, filter, archivedOnly: archived, limit }),
+      mailService.conversationCounts({ tab, category, archivedOnly: archived }),
+      tab === 'actus'
+        ? mailService.categoryCounts({ tab, archivedOnly: archived })
+        : Promise.resolve({}),
       tab === 'discussions'
         ? mailService.listConversations({ archivedOnly: true })
         : Promise.resolve([]),
@@ -119,6 +141,7 @@ export function ConversationListScreen({
     return {
       threads,
       counts,
+      byCategory,
       unread: counts.unread,
       archivedCount: archivedThreads.length,
       selfAddresses: accounts.map((account) => account.emailAddress.toLowerCase()),
@@ -141,7 +164,7 @@ export function ConversationListScreen({
       return;
     }
     void reload();
-  }, [limit, filter, reload]);
+  }, [limit, filter, actusCategory, reload]);
 
   // Changing filter restarts from the first page.
   const onFilterChange = useCallback((next: ConversationFilter) => {
@@ -382,6 +405,20 @@ export function ConversationListScreen({
             {archived ? null : (
               <SearchPill onPress={() => router.push('/search')} testID="list-search" />
             )}
+            {tab === 'actus' ? (
+              <FilterChips
+                options={ACTUS_CATEGORIES.map((option) => ({
+                  ...option,
+                  count:
+                    option.value === 'all' ? undefined : data.byCategory[option.value] || undefined,
+                }))}
+                value={actusCategory}
+                onChange={(next) => {
+                  setActusCategory(next);
+                  setLimit(PAGE_SIZE);
+                }}
+              />
+            ) : null}
             <FilterChips options={chips} value={filter} onChange={onFilterChange} />
             {tab === 'discussions' && data.archivedCount > 0 && filter === 'all' ? (
               <Pressable

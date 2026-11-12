@@ -148,6 +148,8 @@ export interface ListThreadSummariesOptions {
   /** Only archived threads. */
   archivedOnly?: boolean;
   tab?: ConversationTab;
+  /** One Gmail category inside a tab (e.g. Promotions inside « Actus »). */
+  category?: MailCategory;
   filter?: ConversationFilter;
   limit?: number;
   offset?: number;
@@ -178,6 +180,10 @@ function buildConditions(
       `(${THREAD_CATEGORY} IN (${categories.map(() => '?').join(', ')}) OR ${IS_SPAM})`,
     );
     params.push(...categories);
+  }
+  if (options?.category) {
+    conditions.push(`${THREAD_CATEGORY} = ?`);
+    params.push(options.category);
   }
   if (includeFilter) {
     if (options?.filter === 'unread') {
@@ -232,6 +238,21 @@ export async function countThreadSummaries(
     attachments: row?.attachments ?? 0,
     spam: row?.spam ?? 0,
   };
+}
+
+/** Conversations per Gmail category in a tab (sub-filter counts). Spam is left out. */
+export async function countByCategory(
+  db: Database,
+  options?: ListThreadSummariesOptions,
+): Promise<Partial<Record<MailCategory, number>>> {
+  const { conditions, params } = buildConditions({ ...options, category: undefined }, false);
+  conditions.push(`NOT ${IS_SPAM}`);
+  const rows = await db.getAllAsync<{ category: MailCategory; count: number }>(
+    `SELECT ${THREAD_CATEGORY} AS category, COUNT(*) AS count FROM threads t
+      WHERE ${conditions.join(' AND ')} GROUP BY 1`,
+    params,
+  );
+  return Object.fromEntries(rows.map((row) => [row.category, row.count]));
 }
 
 export async function listThreadSummaries(
