@@ -79,3 +79,4 @@ export {
 } from './AttachmentPickerSheet';
 export { ServiceLogo, type ServiceLogoProps } from './ServiceLogo';
 export { ForwardedCard, type ForwardedCardProps } from './ForwardedCard';
+export { QuotedHistory, type QuotedHistoryProps } from './QuotedHistory';
