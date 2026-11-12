@@ -60,6 +60,67 @@ class MailyoImapModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("MailyoImap")
 
+    /** New mail seen by the real-time service: { accountId, count }. */
+    Events("onNewMail")
+
+    OnCreate {
+      MailPushService.onNewMail = { accountId, count ->
+        sendEvent("onNewMail", mapOf("accountId" to accountId, "count" to count))
+      }
+    }
+
+    OnDestroy {
+      MailPushService.onNewMail = null
+    }
+
+    /**
+     * Start (or update) « Notifications instantanées » with the accounts to
+     * watch. The configuration is stored encrypted so the service survives
+     * reboots; an empty account list stops it.
+     */
+    Function("startPush") { configJson: String ->
+      val context = requireContext()
+      val config = PushConfig.parse(configJson)
+      val store = PushConfigStore(context)
+      store.save(config)
+      if (config.accounts.isEmpty()) {
+        MailPushService.stop(context)
+      } else {
+        MailPushService.start(context)
+      }
+      true
+    }
+
+    Function("stopPush") {
+      val context = requireContext()
+      PushConfigStore(context).clear()
+      MailPushService.stop(context)
+      true
+    }
+
+    /** The app tells the service whether it is on screen (then the app notifies). */
+    Function("setAppForeground") { foreground: Boolean ->
+      MailPushService.appInForeground = foreground
+      true
+    }
+
+    Function("pushStatus") {
+      val context = requireContext()
+      mapOf(
+        "running" to MailPushService.running,
+        "accounts" to PushConfigStore(context).load().accounts.map { it.email },
+        "batteryUnrestricted" to isIgnoringBatteryOptimizations(context),
+      )
+    }
+
+    /** Opens the system screen where MailYo can be exempted from battery optimisation. */
+    Function("openBatterySettings") {
+      val context = requireContext()
+      val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+      runCatching { context.startActivity(intent) }.isSuccess
+    }
+
     /** Log in to IMAP and SMTP; throws AUTH / CONNECT errors with a readable message. */
     AsyncFunction("testConnection") Coroutine { imap: ServerConfig, smtp: ServerConfig ->
       io {
@@ -234,6 +295,15 @@ class MailyoImapModule : Module() {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  private fun requireContext(): android.content.Context =
+    appContext.reactContext?.applicationContext
+      ?: throw MailError("NO_CONTEXT", "Application Android indisponible")
+
+  private fun isIgnoringBatteryOptimizations(context: android.content.Context): Boolean {
+    val power = context.getSystemService(android.os.PowerManager::class.java) ?: return false
+    return power.isIgnoringBatteryOptimizations(context.packageName)
+  }
 
   private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) {
     try {

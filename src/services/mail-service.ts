@@ -127,7 +127,8 @@ import {
   writeAttachmentToCache,
   type AttachmentWriter,
 } from '@/services/attachment-files';
-import type { MailyoImapNative } from '../../modules/mailyo-imap';
+import type { MailyoImapNative, PushConfig } from '../../modules/mailyo-imap';
+import { buildPushConfig, isRealtimeCapable } from '@/realtime/push-config';
 import type { ImapAccountConfig, ImapCredentialStore } from '@/providers/imap/credentials';
 import { ImapMailProvider } from '@/providers/imap/imap-provider';
 import { ProviderRegistry } from '@/providers/registry';
@@ -232,6 +233,8 @@ export class MailService {
   private contactDetails = new Map<string, ContactDetails>();
   private contactPhotosFetchedAt = 0;
   private connectQueue: Promise<unknown> = Promise.resolve();
+  /** When the app last came on screen; null while it is in the background. */
+  private foregroundSince: number | null = null;
 
   constructor(options: MailServiceOptions) {
     this.db = options.db;
@@ -294,6 +297,32 @@ export class MailService {
     this.registry.register(demo.account.id, demo.provider);
     await this.syncAll();
     return demo.account;
+  }
+
+  /**
+   * On screen, the app notifies the mail its own syncs bring in. In the
+   * background, accounts watched by « Notifications instantanées » are notified
+   * by the native service — the app stays quiet so nothing rings twice.
+   */
+  setAppForeground(foreground: boolean): void {
+    if (!foreground) {
+      this.foregroundSince = null;
+    } else if (this.foregroundSince === null) {
+      this.foregroundSince = this.now();
+    }
+  }
+
+  /** Configuration for the real-time service (empty account list when it is off). */
+  async getPushConfig(): Promise<PushConfig> {
+    const credentials = this.imapCredentials;
+    const tokens = this.tokenStore;
+    return buildPushConfig({
+      accounts: await listAccounts(this.db),
+      settings: this.settings,
+      loadImapConfig: (id) => (credentials ? credentials.load(id) : Promise.resolve(null)),
+      loadTokens: (id) => (tokens ? tokens.load(id) : Promise.resolve(null)),
+      gmailClientId: this.gmailClientId,
+    });
   }
 
   async listAccounts(): Promise<Account[]> {
@@ -1358,9 +1387,17 @@ export class MailService {
     if (!this.notifier || messages.length === 0) {
       return;
     }
+    const watched = this.settings.realtimeMode === 'idle' && isRealtimeCapable(account);
+    if (watched && this.foregroundSince === null) {
+      return;
+    }
     const rules = await listRulesRepo(this.db, account.id);
     const spamFolder = await getFolderByRole(this.db, account.id, 'spam');
     for (const message of messages) {
+      // Arrived while the app was in the background: already rung by the service.
+      if (watched && this.foregroundSince !== null && message.receivedAt < this.foregroundSince) {
+        continue;
+      }
       // Spam is visible in the list (flagged) but never rings.
       if (
         message.isRead ||

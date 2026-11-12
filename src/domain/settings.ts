@@ -5,6 +5,14 @@
 
 import type { NotificationContentMode, QuietHours } from '@/domain/models';
 
+/**
+ * How new mail reaches the phone while MailYo is closed:
+ * - 'off': periodic background sync only (Android decides when, ~15 min or more);
+ * - 'idle': « Notifications instantanées », a permanent IMAP connection (Android service);
+ * - 'relay': provider push through a MailYo relay server — reserved, not available yet.
+ */
+export type RealtimeMode = 'off' | 'idle' | 'relay';
+
 export interface AppSettings {
   /** Require Face ID / fingerprint before showing the app. */
   biometricLock: boolean;
@@ -24,6 +32,8 @@ export interface AppSettings {
   blockRemoteImages: boolean;
   /** Keep attachments of starred mails available offline. */
   offlineStarredAttachments: boolean;
+  /** Real-time delivery of new mail (see RealtimeMode). */
+  realtimeMode: RealtimeMode;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -36,6 +46,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cellularConfirmMb: 10,
   blockRemoteImages: true,
   offlineStarredAttachments: false,
+  realtimeMode: 'idle',
 };
 
 const SETTING_KEYS = {
@@ -48,7 +59,10 @@ const SETTING_KEYS = {
   cellularConfirmMb: 'attachments.cellularConfirmMb',
   blockRemoteImages: 'privacy.blockRemoteImages',
   offlineStarredAttachments: 'attachments.offlineStarred',
+  realtimeMode: 'notification.realtimeMode',
 } as const;
+
+const REALTIME_MODES: readonly RealtimeMode[] = ['off', 'idle', 'relay'];
 
 function parseNumber(raw: string | undefined, fallback: number): number {
   const value = raw === undefined ? NaN : Number(raw);
@@ -121,6 +135,11 @@ export function parseAppSettings(raw: Record<string, string>): AppSettings {
       raw[SETTING_KEYS.offlineStarredAttachments],
       DEFAULT_SETTINGS.offlineStarredAttachments,
     ),
+    realtimeMode: (REALTIME_MODES as readonly string[]).includes(
+      raw[SETTING_KEYS.realtimeMode] ?? '',
+    )
+      ? (raw[SETTING_KEYS.realtimeMode] as RealtimeMode)
+      : DEFAULT_SETTINGS.realtimeMode,
   };
 }
 
@@ -136,5 +155,6 @@ export function serializeAppSettings(settings: AppSettings): Record<string, stri
     [SETTING_KEYS.cellularConfirmMb]: String(settings.cellularConfirmMb),
     [SETTING_KEYS.blockRemoteImages]: settings.blockRemoteImages ? 'true' : 'false',
     [SETTING_KEYS.offlineStarredAttachments]: settings.offlineStarredAttachments ? 'true' : 'false',
+    [SETTING_KEYS.realtimeMode]: settings.realtimeMode,
   };
 }

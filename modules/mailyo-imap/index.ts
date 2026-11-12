@@ -97,6 +97,41 @@ export interface MailyoImapNative {
     sentFolder: string | null,
   ): Promise<boolean>;
   disconnect(imap: ServerConfig): Promise<boolean>;
+
+  // « Notifications instantanées » (IMAP IDLE foreground service)
+  /** JSON of the push configuration (accounts + notification prefs); empty list stops it. */
+  startPush(configJson: string): boolean;
+  stopPush(): boolean;
+  setAppForeground(foreground: boolean): boolean;
+  pushStatus(): { running: boolean; accounts: string[]; batteryUnrestricted: boolean };
+  openBatterySettings(): boolean;
+  addListener(
+    event: 'onNewMail',
+    listener: (event: { accountId: string; count: number }) => void,
+  ): { remove: () => void };
+}
+
+/** One mailbox watched by the real-time service. */
+export interface PushAccountConfig {
+  id: string;
+  email: string;
+  host: string;
+  port: number;
+  security: 'ssl' | 'starttls' | 'none';
+  username: string;
+  password?: string | null;
+  oauthAccessToken?: string | null;
+  oauthRefreshToken?: string | null;
+  oauthClientId?: string | null;
+  oauthExpiresAt?: number;
+}
+
+export interface PushConfig {
+  accounts: PushAccountConfig[];
+  contentMode: 'full' | 'sender' | 'hidden';
+  /** Quiet hours, -1 when off. */
+  quietStart: number;
+  quietEnd: number;
 }
 
 let cached: MailyoImapNative | null = null;

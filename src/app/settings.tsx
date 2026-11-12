@@ -8,6 +8,8 @@ import type { Account, NotificationRule } from '@/domain/models';
 import { describePermissions, type PermissionTag } from '@/domain/permissions';
 import type { AppSettings } from '@/domain/settings';
 import { DEFAULT_SETTINGS } from '@/domain/settings';
+import { realtimeTransports } from '@/realtime/use-realtime';
+import type { RealtimeStatus } from '@/realtime/transport';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import { formatFileSize } from '@/domain/attachments';
@@ -51,6 +53,19 @@ const CELLULAR_CONFIRM: { value: string; label: string }[] = [
   { value: '10', label: 'Au-delà de 10 Mo' },
 ];
 
+function describeRealtime(enabled: boolean, status: RealtimeStatus | null): string {
+  if (!enabled) {
+    return 'Désactivées · les mails sont relevés environ toutes les 15 min, quand Android le permet';
+  }
+  if (status?.running && status.accounts.length > 0) {
+    const count = status.accounts.length;
+    return `Connexion permanente active · ${count} compte${count > 1 ? 's' : ''} surveillé${
+      count > 1 ? 's' : ''
+    } · le mail sonne dès son arrivée`;
+  }
+  return 'Le mail sonne dès son arrivée (connexion permanente, petite notification fixe)';
+}
+
 function labelOf<T extends string>(options: { value: T; label: string }[], value: T): string {
   return options.find((option) => option.value === value)?.label ?? value;
 }
@@ -71,7 +86,8 @@ function choose<T extends string>(
 
 export default function SettingsScreen() {
   const colors = useAppTheme();
-  const { service, biometricsAvailable, setTheme, theme, invalidate } = useApp();
+  const { service, biometricsAvailable, setTheme, theme, invalidate, applyRealtime } = useApp();
+  const { idle: idleTransport } = realtimeTransports();
 
   const { data, reload } = useServiceQuery<SettingsData>(async (mailService) => {
     const [accounts, rules] = await Promise.all([
@@ -101,14 +117,27 @@ export default function SettingsScreen() {
     }, [service]),
   );
 
+  const [realtime, setRealtime] = useState<RealtimeStatus | null>(null);
+  const refreshRealtimeStatus = useCallback(() => {
+    if (!idleTransport.isAvailable()) return;
+    idleTransport
+      .status()
+      .then(setRealtime)
+      .catch(() => setRealtime(null));
+  }, [idleTransport]);
+  useFocusEffect(refreshRealtimeStatus);
+
   const updateSettings = useCallback(
     (patch: Partial<AppSettings>) => {
       void (async () => {
         await service.updateSettings(patch);
         await reload();
+        // Notification preferences and the mode are applied by the native service too.
+        await applyRealtime();
+        setTimeout(refreshRealtimeStatus, 800);
       })();
     },
-    [service, reload],
+    [service, reload, applyRealtime, refreshRealtimeStatus],
   );
 
   const confirmSignOut = useCallback(
@@ -231,6 +260,29 @@ export default function SettingsScreen() {
         />
         <SettingRow
           icon="bolt"
+          label="Notifications instantanées"
+          description={describeRealtime(data.settings.realtimeMode === 'idle', realtime)}
+          value={data.settings.realtimeMode === 'idle'}
+          onValueChange={(enabled) => updateSettings({ realtimeMode: enabled ? 'idle' : 'off' })}
+          testID="settings-realtime"
+        />
+        {data.settings.realtimeMode === 'idle' && realtime && !realtime.batteryUnrestricted ? (
+          <SettingRow
+            icon="battery-alert"
+            label="Ne pas restreindre la batterie"
+            description="Recommandé : sans cela, certains téléphones coupent la connexion et les mails arrivent en retard"
+            onPress={() => idleTransport.openBatterySettings()}
+            testID="settings-battery"
+          />
+        ) : null}
+        <SettingRow
+          icon="cloud-sync"
+          label="Serveur relais (push Gmail / Microsoft)"
+          description="Bientôt disponible · notifications sans connexion permanente, plus économe en batterie"
+          testID="settings-relay"
+        />
+        <SettingRow
+          icon="tune"
           label="Réception en arrière-plan"
           description="Autoriser MailYo à rester actif pour recevoir les emails"
           onPress={() => router.push('/onboarding')}
