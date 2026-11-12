@@ -8,10 +8,12 @@ export interface FabProps {
   accessibilityLabel: string;
   onPress: () => void;
   testID?: string;
+  /** Extra space under it (system navigation bar on screens without a tab bar). */
+  bottomInset?: number;
 }
 
 /** Floating action button, bottom-right, above the tab bar. */
-export function Fab({ icon, accessibilityLabel, onPress, testID }: FabProps) {
+export function Fab({ icon, accessibilityLabel, onPress, testID, bottomInset = 0 }: FabProps) {
   const colors = useAppTheme();
 
   return (
@@ -23,6 +25,7 @@ export function Fab({ icon, accessibilityLabel, onPress, testID }: FabProps) {
       style={({ pressed }) => [
         styles.fab,
         {
+          bottom: Spacing.lg + bottomInset,
           backgroundColor: colors.fab,
           opacity: pressed ? 0.9 : 1,
           transform: [{ scale: pressed ? 0.96 : 1 }],

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { firstToOpen, groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
+import { groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
 import type { ConversationCounts } from '@/data/repositories/threads';
 import type {
   ConversationFilter,
@@ -48,6 +48,7 @@ import {
   type FilterChipOption,
   showAlert,
   IconButton,
+  SubjectsSheet,
 } from '@/ui';
 
 const PAGE_SIZE = 30;
@@ -232,32 +233,29 @@ export function ConversationListScreen({
     [groups, selected],
   );
 
+  const openThread = useCallback((thread: ThreadSummary) => {
+    router.push({
+      pathname: '/thread/[id]',
+      params: {
+        id: thread.id,
+        name: thread.contact.name || thread.contact.address,
+        address: thread.contact.address,
+      },
+    });
+  }, []);
+
+  // Several subjects with this person: a sheet lets you pick the conversation.
+  const [subjectsOf, setSubjectsOf] = useState<ContactGroup | null>(null);
+
   const openGroup = useCallback(
     (group: ContactGroup) => {
-      // Something unread, or a single subject: straight into that conversation.
-      // The subject list only shows when everything has been read.
-      if (group.threads.length === 1 || group.unreadCount > 0) {
-        const thread = firstToOpen(group);
-        router.push({
-          pathname: '/thread/[id]',
-          params: {
-            id: thread.id,
-            name: thread.contact.name || thread.contact.address,
-            address: thread.contact.address,
-          },
-        });
+      if (group.threads.length === 1) {
+        openThread(group.threads[0]);
         return;
       }
-      router.push({
-        pathname: '/contact/[address]',
-        params: {
-          address: group.lead.contact.address,
-          tab: tab ?? '',
-          archived: archived ? '1' : '',
-        },
-      });
+      setSubjectsOf(group);
     },
-    [tab, archived],
+    [openThread],
   );
 
   const runOnSelection = useCallback(
@@ -564,6 +562,16 @@ export function ConversationListScreen({
       )}
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
+      {subjectsOf ? (
+        <SubjectsSheet
+          visible
+          name={subjectsOf.lead.contact.name || subjectsOf.lead.contact.address}
+          threads={subjectsOf.threads}
+          now={data.now}
+          onPick={openThread}
+          onClose={() => setSubjectsOf(null)}
+        />
+      ) : null}
       <AppDrawer
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}

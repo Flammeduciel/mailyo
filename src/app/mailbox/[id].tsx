@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { mailbox, type MailboxId } from '@/domain/mailboxes';
 import type { ThreadSummary } from '@/domain/models';
@@ -25,6 +25,7 @@ export default function MailboxScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const box = mailbox(id);
   const { service, refresh, sync } = useApp();
+  const insets = useSafeAreaInsets();
   const [drawer, setDrawer] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const { missingVital } = usePermissions(service.getSettings().realtimeMode === 'idle');
@@ -98,7 +99,9 @@ export default function MailboxScreen() {
             />
           )
         }
-        contentContainerStyle={data.threads.length === 0 ? styles.emptyList : undefined}
+        contentContainerStyle={
+          data.threads.length === 0 ? styles.emptyList : { paddingBottom: insets.bottom + 96 }
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing && !sync}
@@ -108,6 +111,7 @@ export default function MailboxScreen() {
         }
       />
       <Fab
+        bottomInset={insets.bottom}
         icon="edit"
         accessibilityLabel="Nouveau message"
         onPress={() => router.push('/compose')}

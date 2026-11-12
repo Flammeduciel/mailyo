@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Account, NotificationRule } from '@/domain/models';
@@ -180,6 +180,7 @@ export default function SettingsScreen() {
     [service, reload, applyRealtime, refreshRealtimeStatus],
   );
 
+  const [signingOut, setSigningOut] = useState<string | null>(null);
   const confirmSignOut = useCallback(
     (account: Account) => {
       showAlert(
@@ -192,9 +193,18 @@ export default function SettingsScreen() {
             style: 'destructive',
             onPress: () => {
               void (async () => {
-                await service.signOutAccount(account.id);
-                invalidate();
-                await reload();
+                setSigningOut(account.emailAddress);
+                try {
+                  await service.signOutAccount(account.id);
+                  // The real-time service stops watching the removed account.
+                  await applyRealtime();
+                } finally {
+                  invalidate();
+                  setSigningOut(null);
+                  // Back to the home screen, with nothing of this account left in the stack.
+                  if (router.canDismiss()) router.dismissAll();
+                  router.replace('/discussions');
+                }
               })();
             },
           },
@@ -202,7 +212,7 @@ export default function SettingsScreen() {
         { icon: 'logout' },
       );
     },
-    [service, reload, invalidate],
+    [service, invalidate, applyRealtime],
   );
 
   const primary = data.accounts[0];
@@ -519,6 +529,17 @@ export default function SettingsScreen() {
           </AppText>
         </View>
       </ScrollView>
+      <Modal visible={signingOut !== null} transparent animationType="fade" statusBarTranslucent>
+        <View style={[styles.overlay, { backgroundColor: colors.scrim }]}>
+          <View style={[styles.overlayCard, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator color={colors.primary} />
+            <AppText weight="semibold">Déconnexion…</AppText>
+            <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+              {signingOut}
+            </AppText>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -571,6 +592,19 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 18,
     lineHeight: 24,
+  },
+  overlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayCard: {
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    borderRadius: Radius.lg,
+    minWidth: 220,
   },
   about: {
     alignItems: 'center',
