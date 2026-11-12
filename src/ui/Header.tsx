@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { AppText } from './AppText';
 import { IconButton } from './IconButton';
-import { Radius, Spacing, useAppTheme } from './theme';
+import { FontSize, Spacing, useAppTheme } from './theme';
 
 export interface HeaderProps {
   title: string;
@@ -12,24 +12,23 @@ export interface HeaderProps {
   subtitle?: string;
 }
 
+/** Sub-screen header, same look as `AppBar`: back arrow, left-aligned title, actions. */
 export function Header({ title, onBack, right, subtitle }: HeaderProps) {
   const colors = useAppTheme();
 
   return (
-    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-      <View style={styles.side}>
-        {onBack ? (
-          <IconButton
-            icon="chevron-left"
-            accessibilityLabel="Retour"
-            onPress={onBack}
-            testID="header-back"
-          />
-        ) : null}
-      </View>
-
-      <View style={styles.center}>
-        <AppText variant="subtitle" weight="semibold" numberOfLines={1}>
+    <View style={[styles.header, { backgroundColor: colors.background }]}>
+      {onBack ? (
+        <IconButton
+          icon="arrow-back"
+          accessibilityLabel="Retour"
+          onPress={onBack}
+          size={24}
+          testID="header-back"
+        />
+      ) : null}
+      <View style={[styles.titles, !onBack && styles.inset]}>
+        <AppText weight="semibold" numberOfLines={1} style={styles.title}>
           {title}
         </AppText>
         {subtitle ? (
@@ -38,32 +37,34 @@ export function Header({ title, onBack, right, subtitle }: HeaderProps) {
           </AppText>
         ) : null}
       </View>
-
-      <View style={[styles.side, styles.right]}>{right}</View>
+      {right ? <View style={styles.right}>{right}</View> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomLeftRadius: Radius.md,
-    borderBottomRightRadius: Radius.md,
+    paddingHorizontal: Spacing.xs,
+    gap: Spacing.xs,
   },
-  side: {
-    minWidth: Spacing.xxl,
-    flexDirection: 'row',
-    alignItems: 'center',
+  titles: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  inset: {
+    paddingLeft: Spacing.md,
+  },
+  title: {
+    fontSize: FontSize.lg,
+    lineHeight: 24,
+    letterSpacing: -0.2,
   },
   right: {
-    justifyContent: 'flex-end',
-  },
-  center: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingRight: Spacing.sm,
   },
 });

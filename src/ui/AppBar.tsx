@@ -94,7 +94,7 @@ export function AppBar({
 
 const styles = StyleSheet.create({
   bar: {
-    minHeight: 60,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.xs,
@@ -108,12 +108,14 @@ const styles = StyleSheet.create({
     paddingLeft: Spacing.md,
   },
   brand: {
-    fontSize: FontSize.xl + 2,
+    fontSize: 26,
     lineHeight: 32,
+    letterSpacing: -0.6,
   },
   regular: {
     fontSize: FontSize.lg,
     lineHeight: 24,
+    letterSpacing: -0.2,
   },
   actions: {
     flexDirection: 'row',

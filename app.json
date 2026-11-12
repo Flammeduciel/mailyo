@@ -51,7 +51,10 @@
         {
           "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 160
+          "imageWidth": 160,
+          "dark": {
+            "backgroundColor": "#101217"
+          }
         }
       ],
       "expo-sqlite",
@@ -60,6 +63,7 @@
         "expo-notifications",
         {
           "defaultChannel": "mailyo-inbox",
+          "color": "#3A4CD1",
           "sounds": [
             "./assets/sounds/soft.wav",
             "./assets/sounds/chime.wav",

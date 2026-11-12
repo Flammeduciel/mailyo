@@ -25,7 +25,9 @@ export function EmptyState({
 
   return (
     <View style={styles.container} testID={testID}>
-      <MaterialIcons name={icon as any} size={FontSize.xxl} color={colors.textMuted} />
+      <View style={[styles.medallion, { backgroundColor: colors.primaryContainer }]}>
+        <MaterialIcons name={icon as any} size={FontSize.xxl} color={colors.primary} />
+      </View>
       <AppText variant="subtitle" weight="semibold" style={styles.title}>
         {title}
       </AppText>
@@ -53,6 +55,15 @@ const styles = StyleSheet.create({
   },
   description: {
     textAlign: 'center',
+    maxWidth: 300,
+    lineHeight: 21,
+  },
+  medallion: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   action: {
     marginTop: Spacing.md,

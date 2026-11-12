@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from './AppText';
-import { Radius, Spacing } from './theme';
+import { Radius, Spacing, useAppTheme } from './theme';
 
 export interface UndoSnackbarProps {
   message: string;
@@ -11,13 +11,14 @@ export interface UndoSnackbarProps {
 
 /** Dark floating bar with an "Annuler" action. */
 export function UndoSnackbar({ message, onUndo, testID }: UndoSnackbarProps) {
+  const colors = useAppTheme();
   return (
-    <View style={styles.bar} testID={testID}>
-      <AppText variant="body" style={styles.text}>
+    <View style={[styles.bar, { backgroundColor: colors.inverseSurface }]} testID={testID}>
+      <AppText variant="body" style={[styles.text, { color: colors.onInverseSurface }]}>
         {message}
       </AppText>
       <Pressable onPress={onUndo} hitSlop={Spacing.sm} accessibilityRole="button">
-        <AppText variant="body" weight="semibold" style={styles.action}>
+        <AppText variant="body" weight="semibold" style={{ color: colors.inversePrimary }}>
           Annuler
         </AppText>
       </Pressable>
@@ -35,9 +36,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
-    backgroundColor: '#323232',
     elevation: 6,
   },
-  text: { color: '#FFFFFF', flex: 1 },
-  action: { color: '#8AB4F8' },
+  text: { flex: 1 },
 });

@@ -280,13 +280,13 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xs + 2,
     paddingBottom: Spacing.xs,
     paddingHorizontal: Spacing.sm + 2,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg - 2,
     gap: Spacing.xs,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: '#1D2780',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
   },
   // HTML mails take the whole row, Slack-style, so their layout is never cut.
   bubbleWide: {
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   quoteBar: {
-    width: 4,
+    width: 3,
   },
   quoteContent: {
     flex: 1,

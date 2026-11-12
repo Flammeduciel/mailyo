@@ -7,7 +7,7 @@ import { splitQuotedText } from '@/domain/quote';
 import { AppText } from './AppText';
 import { Avatar } from './Avatar';
 import { Badge } from './Badge';
-import { FontSize, Spacing, useAppTheme } from './theme';
+import { FontSize, Radius, Spacing, useAppTheme } from './theme';
 
 export interface ConversationRowProps {
   thread: ThreadSummary;
@@ -31,13 +31,27 @@ function pad(value: number): string {
 }
 
 const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const MONTHS = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
 
 function startOfDay(timestamp: number): number {
   const date = new Date(timestamp);
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-/** HH:MM today, "Hier", the weekday within a week, otherwise DD/MM/YYYY. */
+/** HH:MM today, "Hier", the weekday within a week, "12 janv." this year, else DD/MM/YYYY. */
 export function formatThreadTime(timestamp: number, now: number): string {
   const date = new Date(timestamp);
   const days = Math.round((startOfDay(now) - startOfDay(timestamp)) / 86_400_000);
@@ -49,6 +63,9 @@ export function formatThreadTime(timestamp: number, now: number): string {
   }
   if (days < 7) {
     return WEEKDAYS[date.getDay()];
+  }
+  if (date.getFullYear() === new Date(now).getFullYear()) {
+    return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
   }
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
 }
@@ -95,7 +112,7 @@ export function ConversationRow({
       ]}
     >
       <View>
-        <Avatar name={senderName} size={52} imageUri={photoUri} />
+        <Avatar name={senderName} size={50} imageUri={photoUri} />
         {selected ? (
           <View
             style={[
@@ -121,13 +138,16 @@ export function ConversationRow({
 
       <View style={styles.content}>
         <View style={styles.line}>
-          <AppText weight={isUnread ? 'bold' : 'semibold'} numberOfLines={1} style={styles.name}>
+          <AppText weight={isUnread ? 'bold' : 'medium'} numberOfLines={1} style={styles.name}>
             {senderName}
           </AppText>
           {thread.isSpam ? (
-            <View style={[styles.subjects, { backgroundColor: colors.danger + '22' }]}>
-              <MaterialIcons name="report" size={12} color={colors.danger} />
-              <AppText variant="caption" weight="semibold" style={{ color: colors.danger }}>
+            <View style={[styles.subjects, { backgroundColor: colors.dangerContainer }]}>
+              <AppText
+                variant="caption"
+                weight="semibold"
+                style={[styles.spam, { color: colors.danger }]}
+              >
                 Spam
               </AppText>
             </View>
@@ -144,9 +164,12 @@ export function ConversationRow({
         <View style={styles.line}>
           {isOwnLast ? <MaterialIcons name="done-all" size={16} color={colors.primary} /> : null}
           {thread.hasAttachments ? (
-            <View style={[styles.clip, { backgroundColor: colors.primaryContainer }]}>
-              <MaterialIcons name="attach-file" size={13} color={colors.primary} />
-            </View>
+            <MaterialIcons
+              name="attach-file"
+              size={15}
+              color={colors.textMuted}
+              style={styles.clip}
+            />
           ) : null}
           <Text
             numberOfLines={1}
@@ -176,9 +199,9 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.md - 1,
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.lg,
+    gap: Spacing.md + 2,
   },
   check: {
     position: 'absolute',
@@ -202,7 +225,13 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
-    fontSize: FontSize.md + 2,
+    fontSize: FontSize.md + 1,
+    letterSpacing: -0.1,
+  },
+  spam: {
+    fontSize: 11,
+    lineHeight: 15,
+    letterSpacing: 0.2,
   },
   preview: {
     flex: 1,
@@ -216,20 +245,15 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   clip: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
     transform: [{ rotate: '45deg' }],
   },
   subjects: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 1,
-    borderRadius: 10,
+    borderRadius: Radius.pill,
   },
   subject: {
     fontWeight: '500',

@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import type { Message, ThreadSummary } from '@/domain/models';
 
-import { Avatar } from './Avatar';
+import { Avatar, avatarInitials, avatarTintIndex } from './Avatar';
 import { Button } from './Button';
 import { Chips } from './Chips';
 import { ConversationRow, formatThreadTime } from './ConversationRow';
@@ -146,7 +146,8 @@ describe('ConversationRow', () => {
     expect(formatThreadTime(at(15), NOW)).toBe('08:05');
     expect(formatThreadTime(at(14), NOW)).toBe('Hier');
     expect(formatThreadTime(at(12), NOW)).toBe('lundi');
-    expect(formatThreadTime(at(2), NOW)).toBe('02/01/2026');
+    expect(formatThreadTime(at(2), NOW)).toBe('2 janv.');
+    expect(formatThreadTime(Date.UTC(2025, 5, 3, 12), NOW)).toBe('03/06/2025');
   });
 
   it('hides the badge on read threads', () => {
@@ -243,9 +244,17 @@ describe('Avatar', () => {
     expect(queryByTestId('avatar-placeholder')).toBeNull();
   });
 
-  it('draws no initials without an image, only a neutral placeholder', () => {
-    const { getByTestId, queryByText } = render(<Avatar name="Alice Durand" />);
+  it('draws initials on a tint without an image', () => {
+    const { getByTestId, getByText } = render(<Avatar name="Alice Durand" />);
     expect(getByTestId('avatar-placeholder')).toBeTruthy();
-    expect(queryByText('AD')).toBeNull();
+    expect(getByText('AD')).toBeTruthy();
+  });
+
+  it('uses one letter for a bare address and keeps the tint stable', () => {
+    expect(avatarInitials('bureau@atelier-nord.fr')).toBe('B');
+    expect(avatarInitials('Claire Fontaine')).toBe('CF');
+    expect(avatarInitials('Service Clients Orange')).toBe('SO');
+    expect(avatarInitials('   ')).toBe('?');
+    expect(avatarTintIndex('Claire Fontaine')).toBe(avatarTintIndex('claire fontaine'));
   });
 });

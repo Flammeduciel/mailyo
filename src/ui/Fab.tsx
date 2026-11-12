@@ -22,7 +22,11 @@ export function Fab({ icon, accessibilityLabel, onPress, testID }: FabProps) {
       testID={testID}
       style={({ pressed }) => [
         styles.fab,
-        { backgroundColor: colors.fab, opacity: pressed ? 0.85 : 1 },
+        {
+          backgroundColor: colors.fab,
+          opacity: pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? 0.96 : 1 }],
+        },
       ]}
     >
       <MaterialIcons name={icon as never} size={24} color={colors.onFab} />
@@ -37,13 +41,13 @@ const styles = StyleSheet.create({
     bottom: Spacing.lg,
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    elevation: 4,
+    shadowColor: '#1D2780',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
   },
 });

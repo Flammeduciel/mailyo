@@ -24,9 +24,9 @@ export interface ButtonProps {
 
 const TEXT_COLORS: Record<ButtonVariant, keyof AppColors> = {
   primary: 'onPrimary',
-  secondary: 'text',
+  secondary: 'onPrimaryContainer',
   ghost: 'primary',
-  danger: 'onPrimary',
+  danger: 'danger',
 };
 
 export function Button({
@@ -44,9 +44,9 @@ export function Button({
 
   const backgroundStyles: Record<ButtonVariant, StyleProp<ViewStyle>> = {
     primary: { backgroundColor: colors.primary },
-    secondary: { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderWidth: 1 },
+    secondary: { backgroundColor: colors.primaryContainer },
     ghost: { backgroundColor: 'transparent' },
-    danger: { backgroundColor: colors.danger },
+    danger: { backgroundColor: colors.dangerContainer },
   };
 
   return (
@@ -67,7 +67,13 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'secondary' || variant === 'ghost' ? colors.primary : colors.onPrimary}
+          color={
+            variant === 'primary'
+              ? colors.onPrimary
+              : variant === 'danger'
+                ? colors.danger
+                : colors.primary
+          }
           testID={testID ? `${testID}-loading` : undefined}
         />
       ) : (
@@ -86,7 +92,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
-    borderRadius: Radius.md,
+    borderRadius: Radius.pill,
     gap: Spacing.sm,
   },
   fullWidth: {

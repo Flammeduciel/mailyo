@@ -32,8 +32,8 @@ export function BottomTabBar({ state, descriptors, navigation, insets, meta }: B
       style={[
         styles.bar,
         {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.separator,
           paddingBottom: Math.max(insets.bottom, Spacing.sm),
         },
       ]}
@@ -80,7 +80,12 @@ export function BottomTabBar({ state, descriptors, navigation, insets, meta }: B
                 color={focused ? colors.onPrimaryContainer : colors.textSecondary}
               />
               {routeMeta.badge ? (
-                <View style={[styles.badge, { backgroundColor: colors.unreadBadge }]}>
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: colors.unreadBadge, borderColor: colors.surface },
+                  ]}
+                >
                   <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
                     {routeMeta.badge > 99 ? '99+' : routeMeta.badge}
                   </Text>
@@ -90,7 +95,11 @@ export function BottomTabBar({ state, descriptors, navigation, insets, meta }: B
             <AppText
               variant="caption"
               weight={focused ? 'bold' : 'medium'}
-              style={{ color: focused ? colors.text : colors.textSecondary }}
+              style={{
+                color: focused ? colors.text : colors.textSecondary,
+                fontSize: 12,
+                letterSpacing: 0.1,
+              }}
             >
               {label}
             </AppText>
@@ -104,7 +113,7 @@ export function BottomTabBar({ state, descriptors, navigation, insets, meta }: B
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   item: {
@@ -124,7 +133,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.pill,
   },
   badge: {
     position: 'absolute',
@@ -133,6 +142,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
+    borderWidth: 2,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',

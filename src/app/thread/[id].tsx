@@ -723,7 +723,7 @@ export default function ThreadScreen() {
         style={[styles.body, { backgroundColor: colors.chatBackground }]}
       >
         {data.isSpam ? (
-          <View style={[styles.spamBar, { backgroundColor: colors.danger + '1A' }]}>
+          <View style={[styles.spamBar, { backgroundColor: colors.dangerContainer }]}>
             <MaterialIcons name="report" size={20} color={colors.danger} />
             <AppText variant="caption" style={styles.filesText}>
               Classé comme spam par Gmail. Méfiez-vous des liens et des pièces jointes.
