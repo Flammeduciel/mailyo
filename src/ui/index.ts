@@ -78,3 +78,4 @@ export {
   type AttachmentSource,
 } from './AttachmentPickerSheet';
 export { ServiceLogo, type ServiceLogoProps } from './ServiceLogo';
+export { ForwardedCard, type ForwardedCardProps } from './ForwardedCard';

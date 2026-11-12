@@ -183,9 +183,12 @@ describe('MessageBubble', () => {
     const { getByText, queryByText } = render(<MessageBubble message={message} isOwn={false} />);
 
     expect(getByText('Oui !')).toBeTruthy();
-    expect(queryByText(/> ok \?/)).toBeNull();
+    expect(queryByText(/ok \?/)).toBeNull();
     fireEvent.press(getByText('••• Historique'));
-    expect(getByText(/> ok \?/)).toBeTruthy();
+    // Shown as a quote card: author on top, text without the "> " markers.
+    expect(getByText('Bob')).toBeTruthy();
+    expect(getByText('ok ?')).toBeTruthy();
+    expect(queryByText(/> ok/)).toBeNull();
   });
 
   it('renders layout-heavy HTML in a web view and simple mail as text', () => {

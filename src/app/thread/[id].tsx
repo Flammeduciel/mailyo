@@ -420,20 +420,10 @@ export default function ThreadScreen() {
     });
   }, []);
 
+  // The original stays out of the editable text: the compose screen shows it as
+  // a card and appends a clean « Message transféré » block when sending.
   const forward = useCallback((message: Message) => {
-    const date = new Date(message.receivedAt).toLocaleString('fr-FR');
-    router.push({
-      pathname: '/compose',
-      params: {
-        subject: /^(fwd|tr)\s*:/i.test(message.subject)
-          ? message.subject
-          : `Tr : ${message.subject}`,
-        body:
-          `\n\n---------- Message transfere ----------\n` +
-          `De : ${message.senderName} <${message.senderAddress}>\nDate : ${date}\n` +
-          `Objet : ${message.subject}\n\n${message.bodyText}`,
-      },
-    });
+    router.push({ pathname: '/compose', params: { forward: message.id } });
   }, []);
 
   const allStarred = selectedMessages.length > 0 && selectedMessages.every((m) => m.isStarred);

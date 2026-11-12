@@ -7,6 +7,7 @@ import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react
 import { blockRemoteImages, deceptiveLinkDomain, hostOf } from '@/domain/html-privacy';
 
 import { AppText } from './AppText';
+import { buildEmailDocument, FIT_SCRIPT, READER_SCRIPT } from './html-document';
 import { openLink } from './open-link';
 import { Radius, Spacing, useAppTheme } from './theme';
 import { useResolvedScheme } from './theme-preference';
@@ -19,98 +20,6 @@ export interface HtmlMessageViewProps {
   /** Keep remote images unloaded until "Afficher les images". */
   blockImages?: boolean;
   testID?: string;
-}
-
-/**
- * Reports the content height to React Native, shrinks wide (fixed 600px)
- * newsletters to the screen width, toggles quoted history on demand and
- * routes link taps through React Native (so they can be checked first).
- * Runs on our own document only: incoming scripts and handlers are already
- * stripped by the sanitiser.
- */
-const MEASURE_SCRIPT = `
-(function () {
-  var post = function (data) { window.ReactNativeWebView.postMessage(JSON.stringify(data)); };
-  function fit() {
-    var body = document.body;
-    if (!body) return;
-    body.style.zoom = 1;
-    var width = document.documentElement.scrollWidth;
-    var viewport = window.innerWidth;
-    if (width > viewport + 2) body.style.zoom = viewport / width;
-    var zoom = parseFloat(body.style.zoom) || 1;
-    var height = Math.ceil(body.scrollHeight * zoom);
-    var hasQuote = !!document.querySelector('.gmail_quote, blockquote[type=cite], #divRplyFwdMsg, .yahoo_quoted, .moz-cite-prefix');
-    post({ type: 'size', height: height, hasQuote: hasQuote, shrunk: zoom < 0.98 });
-  }
-  window.__mailyoToggleQuotes = function () {
-    document.body.classList.toggle('show-quotes');
-    setTimeout(fit, 50);
-  };
-  document.addEventListener('click', function (event) {
-    var link = event.target.closest && event.target.closest('a[href]');
-    if (!link) return;
-    event.preventDefault();
-    post({ type: 'link', href: link.href, text: (link.innerText || '').slice(0, 200) });
-  }, true);
-  window.addEventListener('load', fit);
-  Array.prototype.forEach.call(document.images, function (img) { img.addEventListener('load', fit); });
-  if (window.ResizeObserver) new ResizeObserver(fit).observe(document.body);
-  setTimeout(fit, 30);
-})();
-true;
-`;
-
-/** Full-screen reader: no shrinking, real pinch-zoom and horizontal scroll. */
-const READER_SCRIPT = `
-(function () {
-  document.addEventListener('click', function (event) {
-    var link = event.target.closest && event.target.closest('a[href]');
-    if (!link) return;
-    event.preventDefault();
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', href: link.href, text: (link.innerText || '').slice(0, 200) }));
-  }, true);
-})();
-true;
-`;
-
-function buildDocument(html: string, options: { dark: boolean; reader: boolean }): string {
-  const viewport = options.reader
-    ? 'width=device-width, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes'
-    : 'width=device-width, initial-scale=1, maximum-scale=1';
-  // Mails are designed for white backgrounds: in dark mode the whole page is
-  // inverted, then pictures are inverted back so they keep their colours.
-  const dark = options.dark
-    ? `html { filter: invert(1) hue-rotate(180deg); background: #fff; }
-       img, video, picture, [style*="background-image"] { filter: invert(1) hue-rotate(180deg); }`
-    : '';
-  const shrink = options.reader
-    ? ''
-    : `table { max-width: 100% !important; }
-       table[width], td[width], th[width], div[style*="width"] { width: auto !important; }
-       td, th, div, p, span { max-width: 100%; overflow-wrap: anywhere; }`;
-  return `<!DOCTYPE html><html><head>
-<meta name="viewport" content="${viewport}">
-<style>
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { margin: 0; background: #fff; }
-  body { padding: 12px 14px; color: #1f2328; font-family: sans-serif; font-size: 15px;
-         line-height: 1.45; word-wrap: break-word; overflow-wrap: anywhere; }
-  a { color: #0b6bcb; word-break: break-word; overflow-wrap: anywhere; }
-  img { max-width: 100% !important; height: auto !important; }
-  img[data-mailyo-src] { display: none; }
-  table { border-collapse: collapse; }
-  ${shrink}
-  pre { white-space: pre-wrap; }
-  blockquote { margin: 0 0 0 8px; padding-left: 8px; border-left: 3px solid rgba(127,127,127,.4); }
-  .gmail_quote, blockquote[type=cite], #divRplyFwdMsg, #divRplyFwdMsg ~ *, .yahoo_quoted,
-  .moz-cite-prefix, .moz-cite-prefix ~ blockquote { display: none; }
-  body.show-quotes .gmail_quote, body.show-quotes blockquote[type=cite],
-  body.show-quotes #divRplyFwdMsg, body.show-quotes #divRplyFwdMsg ~ *,
-  body.show-quotes .yahoo_quoted, body.show-quotes .moz-cite-prefix,
-  body.show-quotes .moz-cite-prefix ~ blockquote { display: block; }
-  ${dark}
-</style></head><body>${html}</body></html>`;
 }
 
 /** Ask before leaving the app; warn loudly when the link text lies about its target. */
@@ -166,11 +75,11 @@ export function HtmlMessageView({
     [html, blockImages, imagesAllowed],
   );
   const source = useMemo(
-    () => ({ html: buildDocument(prepared.html, { dark, reader: false }), baseUrl: '' }),
+    () => ({ html: buildEmailDocument(prepared.html, { dark, reader: false }), baseUrl: '' }),
     [prepared.html, dark],
   );
   const readerSource = useMemo(
-    () => ({ html: buildDocument(prepared.html, { dark, reader: true }), baseUrl: '' }),
+    () => ({ html: buildEmailDocument(prepared.html, { dark, reader: true }), baseUrl: '' }),
     [prepared.html, dark],
   );
 
@@ -236,7 +145,7 @@ export function HtmlMessageView({
           scrollEnabled={false}
           nestedScrollEnabled={false}
           javaScriptEnabled
-          injectedJavaScript={MEASURE_SCRIPT}
+          injectedJavaScript={FIT_SCRIPT}
           onMessage={onMessage}
           onShouldStartLoadWithRequest={onShouldStartLoad}
           setSupportMultipleWindows={false}

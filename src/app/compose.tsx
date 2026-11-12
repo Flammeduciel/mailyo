@@ -14,7 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatFileSize } from '@/domain/attachments';
 import type { ContactSuggestion } from '@/domain/contacts';
 import { parseAddressList } from '@/domain/mime';
-import type { Draft, EmailAddress } from '@/domain/models';
+import { composeForwardBody, forwardSubject } from '@/domain/forward';
+import type { Attachment, Draft, EmailAddress, Message } from '@/domain/models';
+import { ensureLocalFile } from '@/services/attachment-files';
 import type { PickedAttachment } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
 import { pickFrom, type AttachmentSource } from '@/state/pick-attachments';
@@ -26,6 +28,7 @@ import {
   AttachmentPickerSheet,
   Button,
   ComposeAttachmentCard,
+  ForwardedCard,
   Radius,
   RecipientField,
   Spacing,
@@ -39,7 +42,13 @@ export default function ComposeScreen() {
   const { service, invalidate } = useApp();
   const colors = useAppTheme();
   // Optional prefill, e.g. "Transférer" from a conversation.
-  const params = useLocalSearchParams<{ to?: string; subject?: string; body?: string }>();
+  const params = useLocalSearchParams<{
+    to?: string;
+    subject?: string;
+    body?: string;
+    /** Id of a message to forward. */
+    forward?: string;
+  }>();
   const [toList, setToList] = useState<EmailAddress[]>(() => parseAddressList(params.to ?? ''));
   const [ccRecipients, setCcRecipients] = useState<EmailAddress[]>([]);
   const [ccOpen, setCcOpen] = useState(false);
@@ -52,7 +61,28 @@ export default function ComposeScreen() {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [dismissedResume, setDismissedResume] = useState(false);
   const undoSend = useUndoSend();
-  const prefilled = Boolean(params.to || params.subject || params.body);
+  const prefilled = Boolean(params.to || params.subject || params.body || params.forward);
+
+  // Forwarding: the original is shown as a card and appended when sending.
+  const { data: forwarded } = useServiceQuery<{
+    message: Message;
+    attachments: Attachment[];
+  } | null>(
+    (mailService) =>
+      params.forward
+        ? mailService.getMessageWithAttachments(params.forward)
+        : Promise.resolve(null),
+    null,
+  );
+  const [droppedForwardFiles, setDroppedForwardFiles] = useState<string[]>([]);
+  const forwardFiles = (forwarded?.attachments ?? []).filter(
+    (attachment) => !droppedForwardFiles.includes(attachment.id),
+  );
+  const [subjectFromForward, setSubjectFromForward] = useState(false);
+  if (forwarded && !subjectFromForward) {
+    setSubjectFromForward(true);
+    if (!subject) setSubject(forwardSubject(forwarded.message.subject));
+  }
 
   const to = toList.map((r) => r.address).join(', ');
   const cc = ccRecipients.map((r) => r.address).join(', ');
@@ -62,7 +92,8 @@ export default function ComposeScreen() {
     ccRecipients.length > 0 ||
     subject.trim().length > 0 ||
     body.trim().length > 0 ||
-    picked.length > 0;
+    picked.length > 0 ||
+    Boolean(params.forward);
 
   const { data: accounts } = useServiceQuery((mailService) => mailService.listAccounts(), []);
   const { data: drafts } = useServiceQuery<Draft[]>(async (mailService) => {
@@ -130,13 +161,24 @@ export default function ComposeScreen() {
     setSending(true);
     setError(null);
     try {
+      // The original's files travel with the forward (downloaded if needed).
+      const forwardedFiles: PickedAttachment[] = [];
+      for (const attachment of forwardFiles) {
+        const resolved = await service.resolveAttachment(attachment.id);
+        forwardedFiles.push({
+          uri: await ensureLocalFile(resolved),
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+        });
+      }
       const result = await service.send({
         accountId: account.id,
         to,
         cc,
         subject,
-        body,
-        attachments: picked,
+        body: forwarded ? composeForwardBody(body, forwarded.message) : body,
+        attachments: [...picked, ...forwardedFiles],
       });
       if (result.status === 'sent') {
         const savedId = draftId ?? (saving.current ? await saving.current.catch(() => null) : null);
@@ -150,6 +192,9 @@ export default function ComposeScreen() {
           ? `Statut d'envoi incertain : vérifiez le dossier « Messages envoyés ».`
           : (result.error ?? `L'envoi a échoué.`),
       );
+    } catch (cause) {
+      // e.g. a forwarded attachment that could not be downloaded.
+      setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setSending(false);
     }
@@ -306,6 +351,15 @@ export default function ComposeScreen() {
                 style={[styles.body, { color: colors.text }]}
                 testID="compose-body"
               />
+
+              {forwarded ? (
+                <ForwardedCard
+                  message={forwarded.message}
+                  attachments={forwardFiles}
+                  onRemoveAttachment={(id) => setDroppedForwardFiles((list) => [...list, id])}
+                  photoUri={service.getContactPhoto(forwarded.message.senderAddress)}
+                />
+              ) : null}
 
               {picked.length > 0 ? (
                 <View style={styles.files}>

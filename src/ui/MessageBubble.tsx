@@ -11,6 +11,7 @@ import { AttachmentList } from './AttachmentList';
 import { CopyAvatars } from './CopyAvatars';
 import type { PdfPreviewSource } from './PdfThumbnail';
 import { HtmlMessageView } from './HtmlMessageView';
+import { QuotedHistory } from './QuotedHistory';
 import { RichText } from './RichText';
 import { FontSize, Radius, Spacing, useAppTheme } from './theme';
 
@@ -180,11 +181,7 @@ export function MessageBubble({
                     {showHistory ? 'Masquer l’historique' : '••• Historique'}
                   </AppText>
                 </Pressable>
-                {showHistory ? (
-                  <RichText style={[styles.history, { color: colors.textSecondary }]}>
-                    {tidyPlainText(split.quoted)}
-                  </RichText>
-                ) : null}
+                {showHistory ? <QuotedHistory text={split.quoted} textColor={textColor} /> : null}
               </>
             ) : null}
           </>
@@ -290,10 +287,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.sm,
-  },
-  history: {
-    fontSize: FontSize.sm,
-    lineHeight: 18,
   },
   footer: {
     flexDirection: 'row',

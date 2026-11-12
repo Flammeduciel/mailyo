@@ -18,6 +18,7 @@ import {
 import {
   clearDownloadedAttachmentPaths,
   getAttachment,
+  listAttachmentsByMessage,
   listAttachmentsByThread,
   listStarredRemoteAttachments,
   searchAttachmentsByName,
@@ -614,7 +615,8 @@ export class MailService {
       { ...input.config.smtp, ...auth },
     );
     const existing = (await listAccounts(this.db)).find(
-      (a) => a.provider === 'imap' && a.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
+      (a) =>
+        a.provider === 'imap' && a.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
     );
     const account: Account = existing ?? {
       id: createId('account'),
@@ -856,6 +858,15 @@ export class MailService {
       }
     }
     return downloaded;
+  }
+
+  /** One message and its attachments (forwarding). */
+  async getMessageWithAttachments(
+    messageId: string,
+  ): Promise<{ message: Message; attachments: Attachment[] } | null> {
+    const message = await getMessage(this.db, messageId);
+    if (!message) return null;
+    return { message, attachments: await listAttachmentsByMessage(this.db, messageId) };
   }
 
   async getThreadMessages(threadId: string): Promise<Message[]> {
