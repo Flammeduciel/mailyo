@@ -17,9 +17,21 @@ jest.mock('expo-router', () => {
   };
 });
 
+let mockIntroDone = true;
+jest.mock('@/state/app-context', () => ({
+  useApp: () => ({ service: { getSettings: () => ({ permissionsIntroDone: mockIntroDone }) } }),
+}));
+
 describe('entry route', () => {
   it('redirects to the conversation list', () => {
+    mockIntroDone = true;
     render(<Index />);
     expect(screen.getByTestId('redirect')).toHaveTextContent('/discussions');
+  });
+
+  it('shows the permission welcome on first launch', () => {
+    mockIntroDone = false;
+    render(<Index />);
+    expect(screen.getByTestId('redirect')).toHaveTextContent('/welcome');
   });
 });

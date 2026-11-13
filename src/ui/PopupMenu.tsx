@@ -8,6 +8,8 @@ export interface PopupMenuItem {
   label: string;
   onPress: () => void;
   destructive?: boolean;
+  /** Small red dot + hint (e.g. a missing permission behind « Paramètres »). */
+  alert?: string;
 }
 
 export interface PopupMenuProps {
@@ -40,9 +42,19 @@ export function PopupMenu({ visible, items, onClose }: PopupMenuProps) {
                 pressed && { backgroundColor: colors.surfaceAlt },
               ]}
             >
-              <AppText style={item.destructive ? { color: colors.danger } : undefined}>
-                {item.label}
-              </AppText>
+              <View style={styles.labelRow}>
+                <AppText style={item.destructive ? { color: colors.danger } : undefined}>
+                  {item.label}
+                </AppText>
+                {item.alert ? (
+                  <View style={[styles.dot, { backgroundColor: colors.danger }]} />
+                ) : null}
+              </View>
+              {item.alert ? (
+                <AppText variant="caption" style={{ color: colors.danger }}>
+                  {item.alert}
+                </AppText>
+              ) : null}
             </Pressable>
           ))}
         </View>
@@ -52,6 +64,16 @@ export function PopupMenu({ visible, items, onClose }: PopupMenuProps) {
 }
 
 const styles = StyleSheet.create({
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   menu: {
     position: 'absolute',
     right: Spacing.sm,

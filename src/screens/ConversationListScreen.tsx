@@ -11,7 +11,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -20,10 +19,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { firstToOpen, groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
+import { groupThreadsByContact, type ContactGroup } from '@/domain/grouping';
 import type { ConversationCounts } from '@/data/repositories/threads';
-import type { ConversationFilter, ConversationTab, ThreadSummary } from '@/domain/models';
+import type {
+  ConversationFilter,
+  ConversationTab,
+  MailCategory,
+  ThreadSummary,
+} from '@/domain/models';
+import { AppDrawer } from '@/screens/AppDrawer';
 import { useApp } from '@/state/app-context';
+import { usePermissions } from '@/state/use-permissions';
 import { useServiceQuery } from '@/state/use-service-query';
 import {
   AppBar,
@@ -40,6 +46,9 @@ import {
   useAppTheme,
   type AppBarAction,
   type FilterChipOption,
+  showAlert,
+  IconButton,
+  SubjectsSheet,
 } from '@/ui';
 
 const PAGE_SIZE = 30;
@@ -51,9 +60,20 @@ export interface ConversationListScreenProps {
   title: string;
 }
 
+/** Gmail categories reachable inside « Actus » (Groupes = Forums). */
+type ActusCategory = 'all' | 'promotions' | 'social' | 'updates';
+
+const ACTUS_CATEGORIES: { value: ActusCategory; label: string; icon: string }[] = [
+  { value: 'all', label: 'Tout', icon: 'inbox' },
+  { value: 'promotions', label: 'Promotions', icon: 'local-offer' },
+  { value: 'social', label: 'Réseaux sociaux', icon: 'people' },
+  { value: 'updates', label: 'Notifications', icon: 'info-outline' },
+];
+
 interface ListData {
   threads: ThreadSummary[];
   counts: ConversationCounts;
+  byCategory: Partial<Record<MailCategory, number>>;
   unread: number;
   archivedCount: number;
   selfAddresses: string[];
@@ -63,6 +83,7 @@ interface ListData {
 const INITIAL: ListData = {
   threads: [],
   counts: { all: 0, unread: 0, attachments: 0, spam: 0 },
+  byCategory: {},
   unread: 0,
   archivedCount: 0,
   selfAddresses: [],
@@ -99,7 +120,11 @@ export function ConversationListScreen({
 }: ConversationListScreenProps) {
   const colors = useAppTheme();
   const { service, refresh, invalidate, sync } = useApp();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { missingVital } = usePermissions(service.getSettings().realtimeMode === 'idle');
   const [filter, setFilter] = useState<ConversationFilter>('all');
+  const [actusCategory, setActusCategory] = useState<ActusCategory>('all');
+  const category = tab === 'actus' && actusCategory !== 'all' ? actusCategory : undefined;
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -108,9 +133,12 @@ export function ConversationListScreen({
   const exhausted = useRef(false);
 
   const { data, reload } = useServiceQuery<ListData>(async (mailService) => {
-    const [threads, counts, archivedThreads, accounts] = await Promise.all([
-      mailService.listConversations({ tab, filter, archivedOnly: archived, limit }),
-      mailService.conversationCounts({ tab, archivedOnly: archived }),
+    const [threads, counts, byCategory, archivedThreads, accounts] = await Promise.all([
+      mailService.listConversations({ tab, category, filter, archivedOnly: archived, limit }),
+      mailService.conversationCounts({ tab, category, archivedOnly: archived }),
+      tab === 'actus'
+        ? mailService.categoryCounts({ tab, archivedOnly: archived })
+        : Promise.resolve({}),
       tab === 'discussions'
         ? mailService.listConversations({ archivedOnly: true })
         : Promise.resolve([]),
@@ -119,6 +147,7 @@ export function ConversationListScreen({
     return {
       threads,
       counts,
+      byCategory,
       unread: counts.unread,
       archivedCount: archivedThreads.length,
       selfAddresses: accounts.map((account) => account.emailAddress.toLowerCase()),
@@ -141,7 +170,7 @@ export function ConversationListScreen({
       return;
     }
     void reload();
-  }, [limit, filter, reload]);
+  }, [limit, filter, actusCategory, reload]);
 
   // Changing filter restarts from the first page.
   const onFilterChange = useCallback((next: ConversationFilter) => {
@@ -204,24 +233,29 @@ export function ConversationListScreen({
     [groups, selected],
   );
 
+  const openThread = useCallback((thread: ThreadSummary) => {
+    router.push({
+      pathname: '/thread/[id]',
+      params: {
+        id: thread.id,
+        name: thread.contact.name || thread.contact.address,
+        address: thread.contact.address,
+      },
+    });
+  }, []);
+
+  // Several subjects with this person: a sheet lets you pick the conversation.
+  const [subjectsOf, setSubjectsOf] = useState<ContactGroup | null>(null);
+
   const openGroup = useCallback(
     (group: ContactGroup) => {
-      // Something unread, or a single subject: straight into that conversation.
-      // The subject list only shows when everything has been read.
-      if (group.threads.length === 1 || group.unreadCount > 0) {
-        router.push(`/thread/${firstToOpen(group).id}`);
+      if (group.threads.length === 1) {
+        openThread(group.threads[0]);
         return;
       }
-      router.push({
-        pathname: '/contact/[address]',
-        params: {
-          address: group.lead.contact.address,
-          tab: tab ?? '',
-          archived: archived ? '1' : '',
-        },
-      });
+      setSubjectsOf(group);
     },
-    [tab, archived],
+    [openThread],
   );
 
   const runOnSelection = useCallback(
@@ -266,7 +300,7 @@ export function ConversationListScreen({
       icon: 'delete-outline',
       label: 'Supprimer',
       onPress: () =>
-        Alert.alert(
+        showAlert(
           `Supprimer ${selectedThreads.length} conversation${selectedThreads.length > 1 ? 's' : ''} ?`,
           'Les emails seront placés dans la corbeille.',
           [
@@ -310,10 +344,16 @@ export function ConversationListScreen({
           invalidate();
         })(),
     },
-    { label: 'Paramètres', onPress: () => router.push('/settings') },
+    { label: 'Corbeille', onPress: () => router.push('/trash') },
+    {
+      label: 'Paramètres',
+      onPress: () => router.push('/settings'),
+      alert: missingVital ? 'Autorisation à accorder' : undefined,
+    },
   ];
 
-  const chips: FilterChipOption<ConversationFilter>[] = [
+  // « Corbeille » is a shortcut to its own screen, not a list filter.
+  const chips: FilterChipOption<ConversationFilter | 'trash'>[] = [
     { value: 'all', label: 'Toutes', count: data.counts.all || undefined },
     {
       value: 'unread',
@@ -328,6 +368,7 @@ export function ConversationListScreen({
       count: data.counts.attachments || undefined,
     },
     { value: 'spam', label: 'Spam', icon: 'report', count: data.counts.spam || undefined },
+    ...(archived ? [] : [{ value: 'trash' as const, label: 'Corbeille', icon: 'delete-outline' }]),
   ];
 
   const empty = EMPTY_COPY[archived ? 'archived' : (tab ?? 'discussions')];
@@ -341,6 +382,18 @@ export function ConversationListScreen({
           title={title}
           variant={tab === 'discussions' ? 'brand' : 'regular'}
           onBack={archived ? () => router.back() : undefined}
+          leading={
+            archived ? undefined : (
+              <IconButton
+                icon="menu"
+                accessibilityLabel="Boîtes et catégories"
+                onPress={() => setDrawerOpen(true)}
+                size={24}
+                testID="list-drawer"
+              />
+            )
+          }
+          onTitlePress={archived ? undefined : () => setDrawerOpen(true)}
           actions={[
             ...(archived
               ? []
@@ -356,6 +409,7 @@ export function ConversationListScreen({
               icon: 'more-vert',
               label: 'Plus d’options',
               onPress: () => setMenuOpen(true),
+              alert: missingVital,
               testID: 'list-menu',
             },
           ]}
@@ -367,22 +421,28 @@ export function ConversationListScreen({
         keyExtractor={(item) => item.key}
         ListHeaderComponent={
           <View>
-            {sync && groups.length > 0 && !archived ? (
-              <View style={[styles.syncBar, { backgroundColor: colors.primaryContainer }]}>
-                <SyncRing ratio={sync.ratio} size={30} strokeWidth={3} showLabel={false} />
-                <AppText variant="caption" weight="semibold" style={styles.syncText}>
-                  Récupération de vos emails…
-                  {sync.stored > 0 ? ` ${sync.stored} reçus` : ''}
-                </AppText>
-                <AppText variant="caption" weight="semibold" style={{ color: colors.primary }}>
-                  {Math.round(sync.ratio * 100)} %
-                </AppText>
-              </View>
-            ) : null}
             {archived ? null : (
               <SearchPill onPress={() => router.push('/search')} testID="list-search" />
             )}
-            <FilterChips options={chips} value={filter} onChange={onFilterChange} />
+            {tab === 'actus' ? (
+              <FilterChips
+                options={ACTUS_CATEGORIES.map((option) => ({
+                  ...option,
+                  count:
+                    option.value === 'all' ? undefined : data.byCategory[option.value] || undefined,
+                }))}
+                value={actusCategory}
+                onChange={(next) => {
+                  setActusCategory(next);
+                  setLimit(PAGE_SIZE);
+                }}
+              />
+            ) : null}
+            <FilterChips
+              options={chips}
+              value={filter}
+              onChange={(next) => (next === 'trash' ? router.push('/trash') : onFilterChange(next))}
+            />
             {tab === 'discussions' && data.archivedCount > 0 && filter === 'all' ? (
               <Pressable
                 accessibilityRole="button"
@@ -470,9 +530,27 @@ export function ConversationListScreen({
           )
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+          <RefreshControl
+            // The ring above the compose button shows the sync: no second spinner.
+            refreshing={refreshing && !sync}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+          />
         }
       />
+
+      {sync && groups.length > 0 && !archived && !selecting ? (
+        <View
+          style={[
+            styles.syncFloat,
+            { backgroundColor: colors.surface, borderColor: colors.separator },
+          ]}
+          accessibilityLabel={`Synchronisation ${Math.round(sync.ratio * 100)} %`}
+          testID="list-sync-ring"
+        >
+          <SyncRing ratio={sync.ratio} size={40} strokeWidth={3} />
+        </View>
+      ) : null}
 
       {selecting || archived ? null : (
         <Fab
@@ -484,6 +562,21 @@ export function ConversationListScreen({
       )}
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
+      {subjectsOf ? (
+        <SubjectsSheet
+          visible
+          name={subjectsOf.lead.contact.name || subjectsOf.lead.contact.address}
+          threads={subjectsOf.threads}
+          now={data.now}
+          onPick={openThread}
+          onClose={() => setSubjectsOf(null)}
+        />
+      ) : null}
+      <AppDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        permissionAlert={missingVital}
+      />
     </SafeAreaView>
   );
 }
@@ -492,18 +585,18 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  syncBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: 24,
-  },
-  syncText: {
-    flex: 1,
+  syncFloat: {
+    position: 'absolute',
+    right: Spacing.lg + 6,
+    bottom: Spacing.lg + 56 + Spacing.md,
+    padding: 3,
+    borderRadius: 25,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 3,
+    shadowColor: '#0C0E16',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
   },
   syncEmpty: {
     alignItems: 'center',

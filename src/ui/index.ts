@@ -1,5 +1,5 @@
 export { AppText, type AppTextProps, type AppTextVariant, type AppTextWeight } from './AppText';
-export { Avatar, type AvatarProps } from './Avatar';
+export { Avatar, avatarInitials, avatarTintIndex, type AvatarProps } from './Avatar';
 export { Badge, type BadgeProps } from './Badge';
 export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Card, type CardProps } from './Card';
@@ -23,9 +23,16 @@ export {
 } from './MessageBubble';
 export { Screen, type ScreenProps } from './Screen';
 export { SectionTitle, type SectionTitleProps } from './SectionTitle';
-export { SettingRow, type SettingRowProps } from './SettingRow';
+export {
+  SettingRow,
+  SettingsGroup,
+  type SettingRowProps,
+  type SettingsGroupProps,
+  type SettingTone,
+} from './SettingRow';
 export { TextField, type TextFieldProps } from './TextField';
 export {
+  AvatarTints,
   DarkColors,
   FontSize,
   LightColors,
@@ -78,3 +85,10 @@ export {
   type AttachmentSource,
 } from './AttachmentPickerSheet';
 export { ServiceLogo, type ServiceLogoProps } from './ServiceLogo';
+export { ForwardedCard, type ForwardedCardProps } from './ForwardedCard';
+export { QuotedHistory, type QuotedHistoryProps } from './QuotedHistory';
+export { BottomSheet, type BottomSheetHandle, type BottomSheetProps } from './BottomSheet';
+export { SheetHost, showAlert, showChoice, type SheetButton, type SheetChoice } from './SheetHost';
+export { SendCountdown, type SendCountdownProps } from './SendCountdown';
+export { MailboxDrawer, type DrawerLink, type MailboxDrawerProps } from './MailboxDrawer';
+export { SubjectsSheet, sortSubjects, type SubjectsSheetProps } from './SubjectsSheet';

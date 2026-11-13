@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ConversationTab, ThreadSummary } from '@/domain/models';
@@ -19,6 +19,7 @@ import {
   previewText,
   Spacing,
   useAppTheme,
+  showAlert,
 } from '@/ui';
 
 interface Data {
@@ -64,9 +65,9 @@ export default function ContactSubjectsScreen() {
 
   // Delete one subject without opening it; leave when none is left.
   const confirmDelete = (thread: ThreadSummary) =>
-    Alert.alert(
+    showAlert(
       'Supprimer la conversation ?',
-      `« ${thread.lastMessage.subject || '(Sans objet)'} » ira dans la corbeille.`,
+      `« ${thread.lastMessage.subject || 'Sans objet'} » ira dans la corbeille.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -128,7 +129,7 @@ export default function ContactSubjectsScreen() {
                     numberOfLines={1}
                     style={styles.subject}
                   >
-                    {item.lastMessage.subject || '(Sans objet)'}
+                    {item.lastMessage.subject || 'Sans objet'}
                   </AppText>
                   <AppText
                     variant="caption"
@@ -155,7 +156,7 @@ export default function ContactSubjectsScreen() {
               </View>
               <IconButton
                 icon="delete-outline"
-                accessibilityLabel={`Supprimer « ${item.lastMessage.subject || '(Sans objet)'} »`}
+                accessibilityLabel={`Supprimer « ${item.lastMessage.subject || 'Sans objet'} »`}
                 onPress={() => confirmDelete(item)}
                 size={22}
                 color={colors.textMuted}

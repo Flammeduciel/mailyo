@@ -1,12 +1,13 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppProvider, useApp } from '@/state/app-context';
-import { AppText, Button, Screen, Spacing, useResolvedScheme } from '@/ui';
+import { AppText, Button, Screen, SheetHost, Spacing, useResolvedScheme } from '@/ui';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -26,6 +27,7 @@ export default function RootLayout() {
 function AppShell() {
   const { locked } = useApp();
   const scheme = useResolvedScheme();
+  useOpenTappedNotification(locked);
 
   return (
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -47,10 +49,31 @@ function AppShell() {
           <Stack.Screen name="archived" options={{ headerShown: false }} />
           <Stack.Screen name="rules/edit" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="trash" options={{ headerShown: false }} />
+          <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="mailbox/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="open-mail" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
       )}
+      <SheetHost />
     </ThemeProvider>
   );
+}
+
+/** A tapped app notification opens its conversation (once unlocked). */
+function useOpenTappedNotification(locked: boolean) {
+  const response = Notifications.useLastNotificationResponse();
+  const handled = useRef<string | null>(null);
+  useEffect(() => {
+    if (locked || !response) return;
+    if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+    const id = response.notification.request.identifier;
+    const url = response.notification.request.content.data?.url;
+    if (handled.current === id || typeof url !== 'string' || !url.startsWith('/open-mail')) return;
+    handled.current = id;
+    router.push(url as Href);
+    void Notifications.clearLastNotificationResponseAsync();
+  }, [response, locked]);
 }
 
 function LockScreen() {

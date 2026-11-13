@@ -11,6 +11,8 @@ export interface AppBarAction {
   onPress: () => void;
   color?: string;
   testID?: string;
+  /** Small red dot on the icon (something needs attention behind it). */
+  alert?: boolean;
 }
 
 export interface AppBarProps {
@@ -40,6 +42,7 @@ export function AppBar({
 }: AppBarProps) {
   const colors = useAppTheme();
   const isBrand = variant === 'brand';
+  const bar = backgroundColor ?? colors.background;
 
   return (
     <View style={[styles.bar, { backgroundColor: backgroundColor ?? colors.background }]}>
@@ -77,15 +80,23 @@ export function AppBar({
       </Pressable>
       <View style={styles.actions}>
         {actions.map((action) => (
-          <IconButton
-            key={action.icon + action.label}
-            icon={action.icon}
-            accessibilityLabel={action.label}
-            onPress={action.onPress}
-            color={action.color}
-            size={24}
-            testID={action.testID}
-          />
+          <View key={action.icon + action.label}>
+            <IconButton
+              icon={action.icon}
+              accessibilityLabel={action.alert ? `${action.label} (action requise)` : action.label}
+              onPress={action.onPress}
+              color={action.color}
+              size={24}
+              testID={action.testID}
+            />
+            {action.alert ? (
+              <View
+                pointerEvents="none"
+                testID={action.testID ? `${action.testID}-alert` : undefined}
+                style={[styles.alert, { backgroundColor: colors.danger, borderColor: bar }]}
+              />
+            ) : null}
+          </View>
         ))}
       </View>
     </View>
@@ -94,7 +105,7 @@ export function AppBar({
 
 const styles = StyleSheet.create({
   bar: {
-    minHeight: 60,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.xs,
@@ -108,12 +119,23 @@ const styles = StyleSheet.create({
     paddingLeft: Spacing.md,
   },
   brand: {
-    fontSize: FontSize.xl + 2,
+    fontSize: 26,
     lineHeight: 32,
+    letterSpacing: -0.6,
   },
   regular: {
     fontSize: FontSize.lg,
     lineHeight: 24,
+    letterSpacing: -0.2,
+  },
+  alert: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
   },
   actions: {
     flexDirection: 'row',

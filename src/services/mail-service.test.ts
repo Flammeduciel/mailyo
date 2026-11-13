@@ -72,6 +72,50 @@ describe('MailService', () => {
     expect(threads.some((t) => t.normalizedSubject === 'bonjour')).toBe(true);
   });
 
+  it('keeps one bubble when the server copy of a sent mail comes back', async () => {
+    const { service, db } = await bootstrap();
+    await service.send({
+      accountId: DEMO_ACCOUNT_ID,
+      to: 'rick@example.com',
+      subject: 'Prise de contact',
+      body: 'Ok',
+    });
+    const thread = (await service.listConversations()).find(
+      (t) => t.normalizedSubject === 'prise de contact',
+    )!;
+    const [local] = await service.openThread(thread.id);
+    // Gmail rewrote the Message-ID and the copy carries the quoted history.
+    await upsertMessage(db, {
+      ...local,
+      id: 'msg_server_copy',
+      remoteUid: 4242,
+      messageIdHeader: '<CA123@mail.gmail.com>',
+      bodyText: 'Ok\n\nLe 12 nov. 2026, Rick a écrit :\n> Hello',
+      receivedAt: local.receivedAt + 3_000,
+    });
+
+    expect(await service.removeSentEchoes()).toBe(1);
+    const messages = await service.openThread(thread.id);
+    expect(messages.map((m) => m.id)).toEqual(['msg_server_copy']);
+  });
+
+  it('counts and lists the drawer mailboxes', async () => {
+    const { service } = await bootstrap();
+    const counts = await service.countMailboxes();
+    expect(counts.all.total).toBe(4);
+    expect(counts.all.unread).toBe(2);
+    expect(counts.spam.total).toBe(1);
+    expect(counts.starred.total).toBeGreaterThanOrEqual(1);
+    expect((await service.listMailbox('spam')).map((t) => t.isSpam)).toEqual([true]);
+    await service.send({
+      accountId: DEMO_ACCOUNT_ID,
+      to: 'bob@example.com',
+      subject: 'Devis',
+      body: 'Voici le devis.',
+    });
+    expect((await service.listMailbox('sent')).map((t) => t.normalizedSubject)).toContain('devis');
+  });
+
   it('archives a thread out of the conversation list', async () => {
     const { service } = await bootstrap();
     const [first] = await service.listConversations();
@@ -232,6 +276,22 @@ describe('MailService', () => {
     expect(calls).toEqual([
       { url: 'https://lefilvert.example/desinscription', body: 'List-Unsubscribe=One-Click' },
     ]);
+  });
+
+  it('filters « Actus » by Gmail category and counts each one', async () => {
+    const { service, db } = await bootstrap();
+    await db.runAsync(
+      "UPDATE messages SET category = 'promotions' WHERE sender_address LIKE '%lefilvert%'",
+    );
+    await db.runAsync(
+      "UPDATE messages SET category = 'social' WHERE sender_address LIKE '%orange%'",
+    );
+
+    expect(await service.categoryCounts({ tab: 'actus' })).toEqual({ promotions: 1, social: 1 });
+    const promos = await service.listConversations({ tab: 'actus', category: 'promotions' });
+    expect(promos.map((t) => t.contact.address)).toEqual(['lettre@lefilvert.example']);
+    expect(await service.listConversations({ tab: 'actus', category: 'updates' })).toEqual([]);
+    expect((await service.conversationCounts({ tab: 'actus', category: 'social' })).all).toBe(1);
   });
 
   it('finds messages with the FTS index', async () => {

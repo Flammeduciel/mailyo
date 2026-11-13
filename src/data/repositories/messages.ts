@@ -5,6 +5,7 @@
  * with a safe fallback so a corrupt row never throws into the UI.
  */
 
+import type { NameRow } from '@/domain/names';
 import type { Database, SqlValue } from '@/data/db/database';
 import type { EmailAddress, MailCategory, Message, SyncState } from '@/domain/models';
 import { repairMojibake } from '@/domain/mojibake';
@@ -531,4 +532,132 @@ export async function searchMessages(
     params,
   );
   return rows.map(mapMessage);
+}
+
+/** Names seen in stored mail (sender, To, Cc), oldest first, for the name book. */
+export async function listNameRows(db: Database): Promise<NameRow[]> {
+  const rows = await db.getAllAsync<{
+    sender_name: string;
+    sender_address: string;
+    to_json: string;
+    cc_json: string;
+  }>('SELECT sender_name, sender_address, to_json, cc_json FROM messages ORDER BY received_at ASC');
+  return rows.map((row) => ({
+    senderName: repairMojibake(row.sender_name),
+    senderAddress: row.sender_address,
+    to: parseAddresses(row.to_json),
+    cc: parseAddresses(row.cc_json),
+  }));
+}
+
+/** Thread of a mail by Message-ID, else the latest thread with that sender. */
+export async function findThreadIdForMail(
+  db: Database,
+  input: { accountId?: string | null; messageIdHeader?: string | null; from?: string | null },
+): Promise<string | null> {
+  const account = input.accountId ? ' AND account_id = ?' : '';
+  const accountParams: SqlValue[] = input.accountId ? [input.accountId] : [];
+  if (input.messageIdHeader) {
+    const id = input.messageIdHeader.trim();
+    const bare = id.replace(/^<|>$/g, '');
+    const row = await db.getFirstAsync<{ thread_id: string }>(
+      `SELECT thread_id FROM messages WHERE message_id_header IN (?, ?, ?)${account} LIMIT 1`,
+      [id, bare, `<${bare}>`, ...accountParams],
+    );
+    if (row) return row.thread_id;
+  }
+  if (input.from) {
+    const row = await db.getFirstAsync<{ thread_id: string }>(
+      `SELECT thread_id FROM messages WHERE lower(sender_address) = ?${account}
+       ORDER BY received_at DESC LIMIT 1`,
+      [input.from.trim().toLowerCase(), ...accountParams],
+    );
+    if (row) return row.thread_id;
+  }
+  return null;
+}
+
+export interface SentPlaceholderRow {
+  id: string;
+  threadId: string;
+  messageIdHeader: string | null;
+  senderAddress: string;
+  subject: string;
+  bodyText: string;
+  receivedAt: number;
+}
+
+/**
+ * Local copies of sent mail still waiting for their server copy (no remote UID),
+ * from `address`, dated within `windowMs` of `around` (all of them without `around`).
+ */
+export async function listSentPlaceholders(
+  db: Database,
+  accountId: string,
+  address: string,
+  around?: number,
+  windowMs = 0,
+): Promise<SentPlaceholderRow[]> {
+  const params: SqlValue[] = [accountId, address.toLowerCase()];
+  let range = '';
+  if (around !== undefined) {
+    range = ' AND received_at BETWEEN ? AND ?';
+    params.push(around - windowMs, around + windowMs);
+  }
+  const rows = await db.getAllAsync<{
+    id: string;
+    thread_id: string;
+    message_id_header: string | null;
+    sender_address: string;
+    subject: string;
+    body_text: string;
+    received_at: number;
+  }>(
+    `SELECT id, thread_id, message_id_header, sender_address, subject, body_text, received_at
+       FROM messages
+      WHERE account_id = ? AND remote_uid IS NULL AND lower(sender_address) = ?${range}`,
+    params,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    threadId: row.thread_id,
+    messageIdHeader: row.message_id_header,
+    senderAddress: row.sender_address,
+    subject: row.subject,
+    bodyText: row.body_text,
+    receivedAt: row.received_at,
+  }));
+}
+
+/** Server copies (with a UID) sent by `address`, for the one-time echo cleanup. */
+export async function listSyncedFrom(
+  db: Database,
+  accountId: string,
+  address: string,
+  since: number,
+): Promise<SentPlaceholderRow[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    thread_id: string;
+    message_id_header: string | null;
+    sender_address: string;
+    subject: string;
+    body_text: string;
+    received_at: number;
+  }>(
+    `SELECT id, thread_id, message_id_header, sender_address, subject, body_text, received_at
+       FROM messages
+      WHERE account_id = ? AND remote_uid IS NOT NULL AND lower(sender_address) = ?
+        AND received_at >= ?`,
+    [accountId, address.toLowerCase(), since],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    threadId: row.thread_id,
+    messageIdHeader: row.message_id_header,
+    senderAddress: row.sender_address,
+    subject: row.subject,
+    bodyText: row.body_text,
+    receivedAt: row.received_at,
+  }));
 }

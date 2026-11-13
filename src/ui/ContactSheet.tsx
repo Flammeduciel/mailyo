@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(12, 14, 22, 0.45)',
   },
   sheet: {
     position: 'absolute',

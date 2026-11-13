@@ -19,6 +19,7 @@ import {
 } from 'react';
 
 import { getDatabase } from '@/data/db/instance';
+import { useRealtime } from '@/realtime/use-realtime';
 import { createExpoBiometricAuthenticator } from '@/security';
 import { createAppMailService } from '@/services/create-app-service';
 import type { MailService } from '@/services/mail-service';
@@ -49,9 +50,12 @@ export interface AppContextValue {
   sync: SyncStatus | null;
   /** Refresh the screens without a network round-trip. */
   invalidate: () => void;
+  /** Re-send the real-time configuration (after a settings change). */
+  applyRealtime: () => Promise<void>;
 }
 
-const AppContext = createContext<AppContextValue | null>(null);
+/** Exported for tests and the screenshot harness (fake services). */
+export const AppContext = createContext<AppContextValue | null>(null);
 
 export interface SyncStatus {
   /** 0..1 */
@@ -73,10 +77,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const runSync = useCallback((target: MailService): Promise<void> => {
+    // MailService.syncAll joins a sync already running (polling, wake-ups, pull-to-refresh).
     let lastBump = 0;
     let lastStored = 0;
     setSync({ ratio: 0, stored: 0 });
-    return target
+    const run = target
       .syncAll((progress) => {
         setSync({ ratio: progress.ratio, stored: progress.stored });
         const now = Date.now();
@@ -90,6 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSync(null);
         setRevision((value) => value + 1);
       });
+    return run;
   }, []);
 
   useEffect(() => {
@@ -119,7 +125,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         })
         .catch(() => undefined);
-      await created.ensureNotificationsConfigured();
+      // On first launch the welcome screen asks for the permission, with an explanation.
+      if (created.getSettings().permissionsIntroDone) {
+        await created.ensureNotificationsConfigured();
+      } else {
+        await created.configureNotificationChannels();
+      }
       await runSync(created);
       await registerBackgroundSync();
     })()
@@ -137,6 +148,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [runSync]);
+
+  const { applyRealtime } = useRealtime(service, runSync, revision);
 
   const refresh = useCallback(async () => {
     if (!service) {
@@ -185,8 +198,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh,
       sync,
       invalidate,
+      applyRealtime,
     };
   }, [
+    applyRealtime,
     sync,
     service,
     ready,

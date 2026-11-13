@@ -3,7 +3,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -19,13 +18,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Correspondence } from '@/data/repositories/messages';
 import { copyChanges, joinNames } from '@/domain/copies';
 import type { Attachment, EmailAddress, Message } from '@/domain/models';
-import { splitQuotedText } from '@/domain/quote';
+import { findQuotedMessage, splitQuotedText } from '@/domain/quote';
 import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
 import { useServiceQuery } from '@/state/use-service-query';
 import { useAttachmentActions } from '@/state/use-attachment-actions';
 import { pickFrom, type AttachmentSource } from '@/state/pick-attachments';
-import { useUndoSend } from '@/state/use-undo-send';
+import { UNDO_SEND_SECONDS, useUndoSend } from '@/state/use-undo-send';
 import type { PickedAttachment, SendMessageInput } from '@/services/mail-service';
 import { AttachmentViewer } from '@/ui/AttachmentViewer';
 import { formatFileSize } from '@/domain/attachments';
@@ -39,7 +38,6 @@ import {
   AttachmentPickerSheet,
   PeopleSheet,
   ThreadSkeleton,
-  UndoSnackbar,
   ChatComposer,
   ContactSheet,
   EmptyState,
@@ -52,6 +50,7 @@ import {
   useAppTheme,
   type AppBarAction,
   type QuotedParent,
+  showAlert,
 } from '@/ui';
 
 interface ThreadData {
@@ -110,7 +109,8 @@ function dayLabel(timestamp: number, now: number): string {
 }
 
 export default function ThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; name?: string; address?: string }>();
+  const { id } = params;
   const colors = useAppTheme();
   const insets = useSafeAreaInsets();
   const { service, invalidate } = useApp();
@@ -177,12 +177,16 @@ export default function ThreadScreen() {
     for (let i = data.messages.length - 1; i >= 0; i -= 1) {
       const message = data.messages[i];
       if (!isOwn(message)) {
-        return message.senderName || message.senderAddress;
+        return (
+          service.displayName(message.senderAddress, message.senderName) || message.senderAddress
+        );
       }
     }
     const first = data.messages[0]?.to[0];
-    return first ? first.name || first.address : '';
-  }, [data.messages, isOwn]);
+    if (first) return service.displayName(first.address, first.name) || first.address;
+    // Still loading: the list passed who this conversation is with.
+    return params.name ?? '';
+  }, [data.messages, isOwn, service, params.name]);
 
   // Raw email address of the other party (for contact profile + no-reply check).
   const correspondentAddress = useMemo(() => {
@@ -192,12 +196,12 @@ export default function ThreadScreen() {
         return message.senderAddress;
       }
     }
-    return data.messages[0]?.to[0]?.address ?? '';
-  }, [data.messages, isOwn]);
+    return data.messages[0]?.to[0]?.address ?? params.address ?? '';
+  }, [data.messages, isOwn, params.address]);
 
   const noReply = correspondentAddress.length > 0 && isNoReplyAddress(correspondentAddress);
 
-  const subject = data.messages[data.messages.length - 1]?.subject || '(Sans objet)';
+  const subject = data.messages[data.messages.length - 1]?.subject?.trim() ?? '';
 
   // Default reply target: the last message that is not ours.
   const defaultReplyTarget = useMemo<Message | undefined>(() => {
@@ -305,6 +309,12 @@ export default function ThreadScreen() {
     [rows],
   );
 
+  // Tapping a quoted history scrolls to the message it quotes, when it is here.
+  const findQuoted = useCallback(
+    (quoted: string) => findQuotedMessage(quoted, data.messages)?.id ?? null,
+    [data.messages],
+  );
+
   // ----------------------------------------------------------------- actions
 
   const goBack = () => {
@@ -361,11 +371,13 @@ export default function ThreadScreen() {
         // Give the text back so nothing is lost.
         setDraft(input.body);
         setPicked(input.attachments ?? []);
-        Alert.alert(
+        showAlert(
           result.status === 'ambiguous' ? 'Envoi incertain' : "Échec de l'envoi",
           result.status === 'ambiguous'
             ? 'Vérifiez le dossier Envoyés avant de renvoyer.'
             : (result.error ?? "Le message n'a pas pu être envoyé."),
+          undefined,
+          { icon: result.status === 'ambiguous' ? 'help-outline' : 'error-outline' },
         );
       }
     } finally {
@@ -420,20 +432,10 @@ export default function ThreadScreen() {
     });
   }, []);
 
+  // The original stays out of the editable text: the compose screen shows it as
+  // a card and appends a clean « Message transféré » block when sending.
   const forward = useCallback((message: Message) => {
-    const date = new Date(message.receivedAt).toLocaleString('fr-FR');
-    router.push({
-      pathname: '/compose',
-      params: {
-        subject: /^(fwd|tr)\s*:/i.test(message.subject)
-          ? message.subject
-          : `Tr : ${message.subject}`,
-        body:
-          `\n\n---------- Message transfere ----------\n` +
-          `De : ${message.senderName} <${message.senderAddress}>\nDate : ${date}\n` +
-          `Objet : ${message.subject}\n\n${message.bodyText}`,
-      },
-    });
+    router.push({ pathname: '/compose', params: { forward: message.id } });
   }, []);
 
   const allStarred = selectedMessages.length > 0 && selectedMessages.every((m) => m.isStarred);
@@ -495,7 +497,7 @@ export default function ThreadScreen() {
       icon: 'delete-outline',
       label: 'Supprimer',
       onPress: () =>
-        Alert.alert('Supprimer ?', 'Les emails selectionnes iront dans la corbeille.', [
+        showAlert('Supprimer ?', 'Les emails selectionnes iront dans la corbeille.', [
           { text: 'Annuler', style: 'cancel' },
           {
             text: 'Supprimer',
@@ -527,7 +529,7 @@ export default function ThreadScreen() {
 
   const onUnsubscribe = () => {
     if (!unsubscribe) return;
-    Alert.alert(
+    showAlert(
       'Se désabonner ?',
       unsubscribe.url
         ? `La page de désabonnement de ${hostOf(unsubscribe.url) ?? 'l’expéditeur'} va s’ouvrir.`
@@ -561,6 +563,7 @@ export default function ThreadScreen() {
             })(),
         },
       ],
+      { icon: 'unsubscribe' },
     );
   };
 
@@ -658,6 +661,7 @@ export default function ThreadScreen() {
           quoted={parents.get(message.id)?.adjacent ? undefined : parents.get(message.id)?.quote}
           parentInThread={parents.has(message.id)}
           onQuotePress={jumpTo}
+          findQuoted={findQuoted}
           attachments={data.attachments[message.id]}
           onOpenAttachment={openAttachment}
           resolveAttachment={resolveAttachment}
@@ -684,14 +688,14 @@ export default function ThreadScreen() {
         <AppBar title={String(selected.size)} onBack={clearSelection} actions={selectionActions} />
       ) : (
         <AppBar
-          title={correspondent || subject}
-          subtitle={subject}
+          title={correspondent || subject || ' '}
+          subtitle={subject || (data.messages.length > 0 ? 'Sans objet' : undefined)}
           onBack={goBack}
           onTitlePress={openContactProfile}
           leading={
             <Pressable onPress={openContactProfile} accessibilityLabel="Voir le profil">
               <Avatar
-                name={correspondent || subject}
+                name={correspondent || subject || '?'}
                 size={38}
                 imageUri={service.getContactPhoto(correspondentAddress)}
               />
@@ -724,7 +728,7 @@ export default function ThreadScreen() {
         style={[styles.body, { backgroundColor: colors.chatBackground }]}
       >
         {data.isSpam ? (
-          <View style={[styles.spamBar, { backgroundColor: colors.danger + '1A' }]}>
+          <View style={[styles.spamBar, { backgroundColor: colors.dangerContainer }]}>
             <MaterialIcons name="report" size={20} color={colors.danger} />
             <AppText variant="caption" style={styles.filesText}>
               Classé comme spam par Gmail. Méfiez-vous des liens et des pièces jointes.
@@ -784,14 +788,6 @@ export default function ThreadScreen() {
           </View>
         ) : null}
 
-        {undoSend.pending ? (
-          <UndoSnackbar
-            message={`Envoi dans ${undoSend.pending.secondsLeft} s…`}
-            onUndo={undoSend.cancel}
-            testID="undo-send"
-          />
-        ) : null}
-
         {noReply ? (
           <View
             style={[
@@ -830,6 +826,12 @@ export default function ThreadScreen() {
                 : null
             }
             onCancelReply={() => setReplyTo(null)}
+            pendingSend={
+              undoSend.pending
+                ? { seconds: UNDO_SEND_SECONDS, secondsLeft: undoSend.pending.secondsLeft }
+                : null
+            }
+            onStopSend={undoSend.cancel}
             bottomInset={keyboardShown ? 0 : insets.bottom}
           />
         )}
@@ -871,11 +873,7 @@ export default function ThreadScreen() {
         <ContactSheet
           visible
           onClose={() => setSheetPerson(null)}
-          name={
-            service.getContactDetails(sheetPerson.address)?.name ||
-            sheetPerson.name ||
-            sheetPerson.address
-          }
+          name={service.displayName(sheetPerson.address, sheetPerson.name) || sheetPerson.address}
           address={sheetPerson.address}
           photoUri={service.getContactPhoto(sheetPerson.address)}
           details={service.getContactDetails(sheetPerson.address)}

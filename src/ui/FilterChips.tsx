@@ -39,9 +39,14 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
             testID={`filter-${option.value}`}
-            style={[
+            style={({ pressed }) => [
               styles.chip,
-              { backgroundColor: selected ? colors.primaryContainer : colors.chip },
+              selected
+                ? { backgroundColor: colors.primaryContainer, borderColor: colors.primaryContainer }
+                : {
+                    backgroundColor: pressed ? colors.surfaceAlt : colors.background,
+                    borderColor: colors.border,
+                  },
             ]}
           >
             {option.icon ? (
@@ -53,11 +58,20 @@ export function FilterChips<T extends string>({ options, value, onChange }: Filt
             ) : null}
             <AppText
               variant="caption"
-              weight="medium"
+              weight={selected ? 'semibold' : 'medium'}
               style={{ color: selected ? colors.onPrimaryContainer : colors.chipText }}
             >
-              {option.count ? `${option.label} ${option.count}` : option.label}
+              {option.label}
             </AppText>
+            {option.count ? (
+              <AppText
+                variant="caption"
+                weight="semibold"
+                style={[styles.count, { color: selected ? colors.primary : colors.textMuted }]}
+              >
+                {option.count > 999 ? '999+' : option.count}
+              </AppText>
+            ) : null}
           </Pressable>
         );
       })}
@@ -76,10 +90,14 @@ const styles = StyleSheet.create({
   },
   chip: {
     height: 32,
-    paddingHorizontal: Spacing.md + 2,
+    paddingHorizontal: Spacing.md,
     borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  count: {
+    fontSize: 12,
   },
 });

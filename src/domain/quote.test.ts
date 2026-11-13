@@ -1,5 +1,5 @@
 import { linkify } from '@/domain/linkify';
-import { splitQuotedText } from '@/domain/quote';
+import { findQuotedMessage, parseQuoteBlock, quoteOnlyText, splitQuotedText } from '@/domain/quote';
 
 describe('splitQuotedText with French no-break spaces', () => {
   it('detects a wrapped Gmail attribution with a no-break space before the colon', () => {
@@ -60,5 +60,60 @@ describe('linkify', () => {
     expect(linkify('(https://fr.wikipedia.org/wiki/A_(B))')[1]).toMatchObject({
       text: 'https://fr.wikipedia.org/wiki/A_(B))',
     });
+  });
+});
+
+describe('parseQuoteBlock', () => {
+  it('turns a Gmail attribution and "> " lines into a readable block', () => {
+    const block = parseQuoteBlock(
+      'Le sam. 6 juin 2026, 16:06, Euloge Ngouma - Akieni Academy <\neuloge.ngouma@akieni.com> a écrit :\n\n> Bonjour Flamme,\n>\n> Félicitations !\n> > Ancienne citation\n',
+    );
+    expect(block).toEqual({
+      author: 'Euloge Ngouma - Akieni Academy',
+      address: 'euloge.ngouma@akieni.com',
+      date: 'sam. 6 juin 2026, 16:06',
+      text: 'Bonjour Flamme,\n\nFélicitations !\n> Ancienne citation',
+    });
+  });
+
+  it('parses the English form and quotes without attribution', () => {
+    expect(
+      parseQuoteBlock('On Mon, Jan 5, 2026 at 9:00 AM Bob <bob@x.com> wrote:\n> Hi'),
+    ).toMatchObject({
+      author: 'Bob',
+      address: 'bob@x.com',
+      text: 'Hi',
+    });
+    expect(parseQuoteBlock('> juste\n> une citation')).toEqual({
+      author: null,
+      address: null,
+      date: null,
+      text: 'juste\nune citation',
+    });
+  });
+});
+
+describe('quote-only messages and quote targets', () => {
+  const quote =
+    "Le jeu. 5 nov. 2026 à 17:43, Jonathan Matondo <j@gmail.com> a écrit :\n\n> C'est comment cousin on valide ta proposition fais l'effort de nous\n> envoyer le lien en ligne\n>";
+
+  it('detects a message made only of a quote', () => {
+    expect(quoteOnlyText(quote)).toBe(quote);
+    expect(quoteOnlyText('> a\n> b')).toBe('> a\n> b');
+    expect(quoteOnlyText('Bien reçu')).toBeNull();
+    expect(quoteOnlyText(`Bien reçu\n\n${quote}`)).toBeNull();
+  });
+
+  it('finds the quoted message in the conversation, despite reflowed lines', () => {
+    const messages = [
+      {
+        id: 'a',
+        bodyText:
+          "C'est comment cousin on valide ta proposition fais l'effort de nous envoyer le lien en ligne",
+      },
+      { id: 'b', bodyText: `Bien reçu\n\n${quote}` },
+    ];
+    expect(findQuotedMessage(quote, messages, 'b')?.id).toBe('a');
+    expect(findQuotedMessage('> autre chose', messages)).toBeNull();
   });
 });

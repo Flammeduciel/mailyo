@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { MailingSender } from '@/services/mail-service';
@@ -17,6 +17,7 @@ import {
   Radius,
   Spacing,
   useAppTheme,
+  showAlert,
 } from '@/ui';
 import { openLink } from '@/ui/open-link';
 
@@ -44,16 +45,26 @@ export default function SubscriptionsScreen() {
         await openLink(result.url);
       }
       if (result.kind === 'failed') {
-        Alert.alert('Désabonnement impossible', 'Cet expéditeur ne propose pas de désabonnement.');
+        showAlert(
+          'Désabonnement impossible',
+          'Cet expéditeur ne propose pas de désabonnement.',
+          undefined,
+          { icon: 'block' },
+        );
         return;
       }
-      Alert.alert('Désabonné', `Archiver aussi les mails de ${sender.name || sender.address} ?`, [
-        { text: 'Garder', style: 'cancel' },
-        {
-          text: 'Archiver',
-          onPress: () => void service.archiveSender(sender.address).then(() => invalidate()),
-        },
-      ]);
+      showAlert(
+        'Désabonné',
+        `Archiver aussi les mails de ${sender.name || sender.address} ?`,
+        [
+          { text: 'Garder', style: 'cancel' },
+          {
+            text: 'Archiver',
+            onPress: () => void service.archiveSender(sender.address).then(() => invalidate()),
+          },
+        ],
+        { icon: 'check-circle-outline' },
+      );
       await reload();
     } finally {
       setBusy(null);
@@ -113,12 +124,15 @@ export default function SubscriptionsScreen() {
             ) : (
               <Pressable
                 onPress={() => void unsubscribe(item)}
-                style={[styles.button, { backgroundColor: colors.danger }]}
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: colors.dangerContainer, opacity: pressed ? 0.7 : 1 },
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={`Se désabonner de ${item.name || item.address}`}
                 testID={`unsubscribe-${item.address}`}
               >
-                <AppText variant="caption" weight="semibold" style={styles.buttonText}>
+                <AppText variant="caption" weight="semibold" style={{ color: colors.danger }}>
                   Se désabonner
                 </AppText>
               </Pressable>
@@ -159,10 +173,9 @@ const styles = StyleSheet.create({
   text: { flex: 1 },
   button: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.lg,
+    paddingVertical: Spacing.sm - 2,
+    borderRadius: Radius.pill,
   },
-  buttonText: { color: '#FFFFFF' },
   done: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -151,7 +151,7 @@ export default function SearchScreen() {
               />
               <View style={styles.content}>
                 <AppText variant="body" weight="semibold" numberOfLines={1}>
-                  {item.subject || '(Sans objet)'}
+                  {item.subject || 'Sans objet'}
                 </AppText>
                 <AppText variant="caption" color="textSecondary" numberOfLines={1}>
                   {item.senderName || item.senderAddress}

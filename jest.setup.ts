@@ -54,3 +54,6 @@ jest.mock('expo-video', () => {
     VideoView: View,
   };
 });
+
+// Gesture handler (bottom sheets, side drawer): official Jest mocks.
+require('react-native-gesture-handler/jestSetup');

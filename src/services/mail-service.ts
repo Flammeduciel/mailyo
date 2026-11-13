@@ -18,6 +18,7 @@ import {
 import {
   clearDownloadedAttachmentPaths,
   getAttachment,
+  listAttachmentsByMessage,
   listAttachmentsByThread,
   listStarredRemoteAttachments,
   searchAttachmentsByName,
@@ -32,7 +33,7 @@ import {
   listDrafts as listDraftsRows,
   upsertDraft,
 } from '@/data/repositories/drafts';
-import { getFolderByRole, upsertFolder } from '@/data/repositories/folders';
+import { getFolderByRole, listFolders, upsertFolder } from '@/data/repositories/folders';
 import {
   countUnread,
   deleteMessage,
@@ -41,6 +42,8 @@ import {
   getMessage,
   getCorrespondence,
   listCorrespondents,
+  listSentPlaceholders,
+  listSyncedFrom,
   listMailingSenders,
   listMessagesMissingUnsubscribe,
   moveMessageToFolder,
@@ -55,7 +58,10 @@ import {
   setMessageRead,
   setMessageStarred,
   upsertMessage,
+  listNameRows,
+  findThreadIdForMail,
 } from '@/data/repositories/messages';
+import { meaningfulName, NameBook } from '@/domain/names';
 import {
   deleteRule as deleteRuleRow,
   listRules as listRulesRepo,
@@ -65,6 +71,7 @@ import {
 import {
   deleteEmptyThreads,
   getThread,
+  countByCategory,
   countThreadSummaries,
   isThreadSpam,
   listThreadSummaries,
@@ -80,6 +87,7 @@ import type {
   Account,
   Attachment,
   Draft,
+  MailCategory,
   Message,
   NotificationRule,
   ProviderId,
@@ -87,7 +95,9 @@ import type {
 } from '@/domain/models';
 import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
 import { parseListUnsubscribe } from '@/domain/html-privacy';
-import { createId, deterministicId } from '@/domain/ids';
+import { createId } from '@/domain/ids';
+import { findSentEcho, SENT_ECHO_WINDOW_MS } from '@/domain/sent-echo';
+import { mailbox, MAILBOXES, type MailboxCount, type MailboxId } from '@/domain/mailboxes';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
 import { normalizeSubject } from '@/domain/subject';
@@ -111,6 +121,7 @@ import type {
   MailProvider,
   OutgoingMessage,
   OAuthTokens,
+  RemoteMessage,
   SendResult,
   TokenStore,
 } from '@/providers/types';
@@ -124,11 +135,17 @@ import {
   writeAttachmentToCache,
   type AttachmentWriter,
 } from '@/services/attachment-files';
-import type { MailyoImapNative } from '../../modules/mailyo-imap';
+import type { MailyoImapNative, PushConfig } from '../../modules/mailyo-imap';
+import { buildPushConfig, isRealtimeCapable } from '@/realtime/push-config';
 import type { ImapAccountConfig, ImapCredentialStore } from '@/providers/imap/credentials';
 import { ImapMailProvider } from '@/providers/imap/imap-provider';
 import { ProviderRegistry } from '@/providers/registry';
-import { SyncEngine, toLocalAttachments, type SyncProgress } from '@/sync/sync-engine';
+import {
+  localMessageId,
+  SyncEngine,
+  toLocalAttachments,
+  type SyncProgress,
+} from '@/sync/sync-engine';
 
 const THREADING_VERSION_KEY = 'threading.version';
 const THREADING_VERSION = '2';
@@ -189,6 +206,13 @@ export interface ConnectOAuthAccountInput {
   tokens: OAuthTokens;
 }
 
+export interface TrashedMail {
+  accountId: string;
+  accountAddress: string;
+  senderDisplayName: string;
+  remote: RemoteMessage;
+}
+
 export interface MailServiceOptions {
   db: Database;
   registry?: ProviderRegistry;
@@ -211,6 +235,9 @@ export interface MailServiceOptions {
   attachmentReader?: (uri: string) => Promise<string>;
 }
 
+/** Longest wait for Google to revoke the token when signing out. */
+const REVOKE_TIMEOUT_MS = 5000;
+
 export class MailService {
   private readonly db: Database;
   private readonly registry: ProviderRegistry;
@@ -229,6 +256,10 @@ export class MailService {
   private contactDetails = new Map<string, ContactDetails>();
   private contactPhotosFetchedAt = 0;
   private connectQueue: Promise<unknown> = Promise.resolve();
+  /** When the app last came on screen; null while it is in the background. */
+  private foregroundSince: number | null = null;
+  /** Best known name per address (see domain/names). */
+  private nameBook = new NameBook();
 
   constructor(options: MailServiceOptions) {
     this.db = options.db;
@@ -260,6 +291,7 @@ export class MailService {
     const rawSettings = await getAllSettings(this.db);
     this.settings = parseAppSettings(rawSettings);
     this.loadContactPhotoCache(rawSettings[CONTACT_PHOTOS_KEY]);
+    await this.refreshNames();
     await this.removeDuplicateAccounts();
     if (rawSettings[THREADING_VERSION_KEY] !== THREADING_VERSION) {
       await this.rethreadStoredMail();
@@ -291,6 +323,32 @@ export class MailService {
     this.registry.register(demo.account.id, demo.provider);
     await this.syncAll();
     return demo.account;
+  }
+
+  /**
+   * On screen, the app notifies the mail its own syncs bring in. In the
+   * background, accounts watched by « Notifications instantanées » are notified
+   * by the native service — the app stays quiet so nothing rings twice.
+   */
+  setAppForeground(foreground: boolean): void {
+    if (!foreground) {
+      this.foregroundSince = null;
+    } else if (this.foregroundSince === null) {
+      this.foregroundSince = this.now();
+    }
+  }
+
+  /** Configuration for the real-time service (empty account list when it is off). */
+  async getPushConfig(): Promise<PushConfig> {
+    const credentials = this.imapCredentials;
+    const tokens = this.tokenStore;
+    return buildPushConfig({
+      accounts: await listAccounts(this.db),
+      settings: this.settings,
+      loadImapConfig: (id) => (credentials ? credentials.load(id) : Promise.resolve(null)),
+      loadTokens: (id) => (tokens ? tokens.load(id) : Promise.resolve(null)),
+      gmailClientId: this.gmailClientId,
+    });
   }
 
   async listAccounts(): Promise<Account[]> {
@@ -329,8 +387,12 @@ export class MailService {
       .filter((c) => !isNoReplyAddress(c.address))
       .map((c) => {
         seen.add(c.address.toLowerCase());
-        const saved = this.contactDetails.get(c.address.toLowerCase())?.name;
-        return { name: saved || c.name, address: c.address, count: c.count, lastAt: c.lastAt };
+        return {
+          name: this.displayName(c.address, c.name),
+          address: c.address,
+          count: c.count,
+          lastAt: c.lastAt,
+        };
       });
     for (const [address, details] of this.contactDetails) {
       if (!seen.has(address) && details.saved && !isNoReplyAddress(address)) {
@@ -614,7 +676,8 @@ export class MailService {
       { ...input.config.smtp, ...auth },
     );
     const existing = (await listAccounts(this.db)).find(
-      (a) => a.provider === 'imap' && a.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
+      (a) =>
+        a.provider === 'imap' && a.emailAddress.toLowerCase() === input.emailAddress.toLowerCase(),
     );
     const account: Account = existing ?? {
       id: createId('account'),
@@ -635,7 +698,8 @@ export class MailService {
   }
 
   async listConversations(options?: ListThreadSummariesOptions): Promise<ThreadSummary[]> {
-    return listThreadSummaries(this.db, { includeArchived: false, ...options });
+    const threads = await listThreadSummaries(this.db, { includeArchived: false, ...options });
+    return threads.map((thread) => this.withContactName(thread));
   }
 
   /**
@@ -662,6 +726,51 @@ export class MailService {
       }
     }
     return fetched > 0;
+  }
+
+  /**
+   * Mail in the trash of every account, newest first. Read live from the
+   * server (deleted mail is not kept on the phone).
+   */
+  async listTrash(limitPerAccount = 50): Promise<TrashedMail[]> {
+    const result: TrashedMail[] = [];
+    for (const account of await listAccounts(this.db)) {
+      const provider = this.registry.get(account.id);
+      if (!provider?.listTrash) continue;
+      try {
+        for (const remote of await provider.listTrash(limitPerAccount)) {
+          result.push({
+            accountId: account.id,
+            accountAddress: account.emailAddress,
+            senderDisplayName:
+              this.displayName(remote.senderAddress, remote.senderName) || remote.senderAddress,
+            remote,
+          });
+        }
+      } catch (error) {
+        console.warn(`[MailService] trash unavailable for ${account.emailAddress}`, error);
+      }
+    }
+    return result.sort((a, b) => b.remote.receivedAt - a.remote.receivedAt);
+  }
+
+  /** Put a trashed mail back in the inbox; it reappears in its conversation. */
+  async restoreFromTrash(item: TrashedMail): Promise<void> {
+    const provider = this.registry.get(item.accountId);
+    const account = (await listAccounts(this.db)).find((a) => a.id === item.accountId);
+    if (!provider?.restoreFromTrash || !account) {
+      throw new Error('Restauration impossible pour ce compte.');
+    }
+    const toStore = await provider.restoreFromTrash(item.remote);
+    if (toStore) {
+      const folders = await listFolders(this.db, account.id);
+      const folder = folders.find((f) => f.remoteFolderId === toStore.folderRemoteId);
+      if (folder) {
+        const engine = new SyncEngine({ db: this.db, provider, now: this.now });
+        await engine.storeMessages(account, folder, [toStore]);
+        await this.refreshNames();
+      }
+    }
   }
 
   async setThreadPinned(threadId: string, pinned: boolean): Promise<void> {
@@ -698,12 +807,43 @@ export class MailService {
     if (!this.syncRun) {
       this.syncRun = this.runSyncAll((progress) => {
         for (const listener of this.syncListeners) listener(progress);
-      }).finally(() => {
-        this.syncRun = null;
-        this.syncListeners.clear();
-      });
+      })
+        .then(() => this.removeSentEchoes())
+        .then(() => this.refreshNames())
+        .finally(() => {
+          this.syncRun = null;
+          this.syncListeners.clear();
+        });
     }
     return this.syncRun;
+  }
+
+  /**
+   * Drop local copies of sent mail whose server copy is already stored (left
+   * over from before echoes were matched at sync time). Cheap: only rows
+   * without a server UID are considered.
+   */
+  async removeSentEchoes(): Promise<number> {
+    let removed = 0;
+    for (const account of await listAccounts(this.db)) {
+      const placeholders = await listSentPlaceholders(this.db, account.id, account.emailAddress);
+      if (placeholders.length === 0) continue;
+      const oldest = Math.min(...placeholders.map((p) => p.receivedAt)) - SENT_ECHO_WINDOW_MS;
+      const synced = await listSyncedFrom(this.db, account.id, account.emailAddress, oldest);
+      const pending = [...placeholders];
+      const touched = new Set<string>();
+      for (const remote of synced) {
+        const index = findSentEcho(pending, remote);
+        if (index < 0) continue;
+        const [echo] = pending.splice(index, 1);
+        if (echo.id === remote.id) continue;
+        await deleteMessage(this.db, echo.id);
+        touched.add(echo.threadId);
+        removed += 1;
+      }
+      for (const threadId of touched) await recomputeThreadAggregates(this.db, threadId);
+    }
+    return removed;
   }
 
   private syncRun: Promise<void> | null = null;
@@ -750,7 +890,49 @@ export class MailService {
   async openThread(threadId: string): Promise<Message[]> {
     const messages = await listMessagesByThread(this.db, threadId);
     await this.markThreadRead(threadId, true);
-    return messages;
+    // A mail without a display name borrows the one the person uses elsewhere.
+    return messages.map((message) =>
+      meaningfulName(message.senderName, message.senderAddress)
+        ? message
+        : { ...message, senderName: this.displayName(message.senderAddress) },
+    );
+  }
+
+  /**
+   * Name to show for an address: saved contact, then the person's own From
+   * name, then `headerName`, then To/Cc names, then Google « other contacts ».
+   * Empty when nothing is known (callers show the address).
+   */
+  displayName(address: string, headerName?: string | null): string {
+    const details = this.contactDetails.get(address.toLowerCase());
+    return this.nameBook.resolve(address, {
+      headerName,
+      savedName: details?.saved ? details.name : null,
+      otherName: details && !details.saved ? details.name : null,
+    });
+  }
+
+  /**
+   * The conversation a notification points to: the thread of the mail
+   * (Message-ID), else the latest conversation with its sender.
+   */
+  async findThreadForNotification(input: {
+    accountId?: string | null;
+    messageIdHeader?: string | null;
+    from?: string | null;
+  }): Promise<string | null> {
+    return findThreadIdForMail(this.db, input);
+  }
+
+  private withContactName(thread: ThreadSummary): ThreadSummary {
+    const name = this.displayName(thread.contact.address, thread.contact.name);
+    return name === thread.contact.name
+      ? thread
+      : { ...thread, contact: { ...thread.contact, name } };
+  }
+
+  private async refreshNames(): Promise<void> {
+    this.nameBook = NameBook.fromRows(await listNameRows(this.db));
   }
 
   /** Attachments of a conversation, grouped by message id. */
@@ -858,6 +1040,15 @@ export class MailService {
     return downloaded;
   }
 
+  /** One message and its attachments (forwarding). */
+  async getMessageWithAttachments(
+    messageId: string,
+  ): Promise<{ message: Message; attachments: Attachment[] } | null> {
+    const message = await getMessage(this.db, messageId);
+    if (!message) return null;
+    return { message, attachments: await listAttachmentsByMessage(this.db, messageId) };
+  }
+
   async getThreadMessages(threadId: string): Promise<Message[]> {
     return listMessagesByThread(this.db, threadId);
   }
@@ -900,9 +1091,36 @@ export class MailService {
     return isThreadSpam(this.db, threadId);
   }
 
+  /** Conversations per Gmail category (Promotions, Réseaux sociaux…) for the sub-filters. */
+  async categoryCounts(
+    options?: ListThreadSummariesOptions,
+  ): Promise<Partial<Record<MailCategory, number>>> {
+    return countByCategory(this.db, { includeArchived: false, ...options });
+  }
+
   /** Conversation counts for the filter chips (Toutes, Non lus, Pièces jointes, Spam). */
   async conversationCounts(options?: ListThreadSummariesOptions): Promise<ConversationCounts> {
     return countThreadSummaries(this.db, { includeArchived: false, ...options });
+  }
+
+  /** Conversations of a drawer mailbox. */
+  async listMailbox(id: MailboxId, limit = 200): Promise<ThreadSummary[]> {
+    const { query } = mailbox(id);
+    return this.listConversations({ includeArchived: false, ...query, limit });
+  }
+
+  /** Total and unread conversations per drawer mailbox. */
+  async countMailboxes(): Promise<Record<MailboxId, MailboxCount>> {
+    const result = {} as Record<MailboxId, MailboxCount>;
+    for (const box of MAILBOXES) {
+      const counts = await countThreadSummaries(this.db, { includeArchived: false, ...box.query });
+      // The chip counts leave the filter out: the spam box reads its own column.
+      result[box.id] =
+        box.query.filter === 'spam'
+          ? { total: counts.spam, unread: counts.spam }
+          : { total: counts.all, unread: counts.unread };
+    }
+    return result;
   }
 
   /**
@@ -1263,7 +1481,11 @@ export class MailService {
       });
     }
 
-    const sentId = `${account.id}::sent::${deterministicId(messageIdHeader)}`;
+    // Same id the sync gives the server copy, so it updates this row in place.
+    const sentId = localMessageId(
+      account.id,
+      parseMessageIds(messageIdHeader)[0] ?? messageIdHeader,
+    );
     await upsertMessage(this.db, {
       id: sentId,
       accountId: account.id,
@@ -1338,9 +1560,17 @@ export class MailService {
     if (!this.notifier || messages.length === 0) {
       return;
     }
+    const watched = this.settings.realtimeMode === 'idle' && isRealtimeCapable(account);
+    if (watched && this.foregroundSince === null) {
+      return;
+    }
     const rules = await listRulesRepo(this.db, account.id);
     const spamFolder = await getFolderByRole(this.db, account.id, 'spam');
     for (const message of messages) {
+      // Arrived while the app was in the background: already rung by the service.
+      if (watched && this.foregroundSince !== null && message.receivedAt < this.foregroundSince) {
+        continue;
+      }
       // Spam is visible in the list (flagged) but never rings.
       if (
         message.isRead ||
@@ -1360,12 +1590,20 @@ export class MailService {
         now: new Date(this.now()),
         contentMode: this.settings.contentMode,
       });
-      await this.notifier.present(decision);
+      await this.notifier.present(
+        decision,
+        `/open-mail?thread=${encodeURIComponent(message.threadId)}`,
+      );
     }
   }
 
   async presentTestNotification(soundId: string | null): Promise<void> {
     await this.notifier?.presentTest(soundId);
+  }
+
+  /** Create the notification channels without asking for the permission. */
+  async configureNotificationChannels(): Promise<void> {
+    await this.notifier?.configure();
   }
 
   async ensureNotificationsConfigured(): Promise<boolean> {
@@ -1388,19 +1626,34 @@ export class MailService {
    * block signing out), then delete it and its local mail.
    */
   async signOutAccount(accountId: string): Promise<void> {
+    // Stop syncing it first, and let a sync already running finish: deleting
+    // rows under a running sync used to leave the app stuck.
+    this.registry.remove(accountId);
+    await this.syncRun?.catch(() => undefined);
+
     const tokens = await this.tokenStore?.load(accountId);
     const token = tokens?.refreshToken ?? tokens?.accessToken;
     if (token) {
+      // Best effort, and never more than a few seconds (offline, slow network).
+      const controller = typeof AbortController === 'undefined' ? null : new AbortController();
+      const timer = setTimeout(() => controller?.abort(), REVOKE_TIMEOUT_MS);
       try {
         await (this.fetchImpl ?? fetch)(
           `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            signal: controller?.signal,
+          },
         );
       } catch (cause) {
         console.warn('[MailService] token revocation failed', cause);
+      } finally {
+        clearTimeout(timer);
       }
     }
     await this.deleteAccountData(accountId);
+    await this.refreshNames();
   }
 
   async deleteAccountData(accountId: string): Promise<void> {

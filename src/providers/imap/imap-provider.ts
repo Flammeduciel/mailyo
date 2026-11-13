@@ -188,6 +188,29 @@ export class ImapMailProvider implements MailProvider {
     await this.moveTo(remoteUid, isSpam ? 'spam' : 'inbox');
   }
 
+  async listTrash(limit: number): Promise<RemoteMessage[]> {
+    const trash = (await this.folderRoles()).trash;
+    if (!trash) return [];
+    const { imap } = await this.servers();
+    const { messages } = await this.client.fetchMessages(imap, trash, -1, limit);
+    return messages
+      .map((message) => nativeToRemote(message, trash))
+      .sort((a, b) => b.receivedAt - a.receivedAt);
+  }
+
+  /** Moved back to the inbox: it gets a new UID there, so the next sync fetches it. */
+  async restoreFromTrash(message: RemoteMessage): Promise<RemoteMessage | null> {
+    const roles = await this.folderRoles();
+    const { imap } = await this.servers();
+    await this.client.moveMessage(
+      imap,
+      message.folderRemoteId,
+      message.remoteUid,
+      roles.inbox ?? 'INBOX',
+    );
+    return null;
+  }
+
   async downloadAttachment(remoteUid: number, remotePartId: string): Promise<string> {
     return this.withMessage(remoteUid, (imap, folder) =>
       this.client.downloadAttachment(imap, folder, remoteUid, remotePartId),

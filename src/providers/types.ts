@@ -140,6 +140,14 @@ export interface MailProvider {
   fetchUnsubscribeHeaders?(
     remoteUid: number,
   ): Promise<{ listUnsubscribe: string | null; listUnsubscribePost: string | null }>;
+  /** Newest mails of the provider's trash, newest first (read live, never stored). */
+  listTrash?(limit: number): Promise<RemoteMessage[]>;
+  /**
+   * Move a trashed mail back where it was. Returns the message to store
+   * locally when the regular sync would not bring it back (older than the sync
+   * cursor), or null when the next sync will pick it up.
+   */
+  restoreFromTrash?(message: RemoteMessage): Promise<RemoteMessage | null>;
   /** Attachment list of an already synced message (backfill for older mails). */
   fetchAttachments?(remoteUid: number): Promise<RemoteAttachment[]>;
   /**

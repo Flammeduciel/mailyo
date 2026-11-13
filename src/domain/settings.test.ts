@@ -16,6 +16,8 @@ describe('app settings', () => {
       cellularConfirmMb: 0,
       blockRemoteImages: false,
       offlineStarredAttachments: true,
+      realtimeMode: 'off' as const,
+      permissionsIntroDone: true,
     };
     expect(parseAppSettings(serializeAppSettings(settings))).toEqual(settings);
   });
@@ -46,6 +48,14 @@ describe('app settings', () => {
     expect(raw['notification.defaultSoundId']).toBe('');
     expect(raw['notification.quietHours']).toBe('');
     expect(parseAppSettings(raw)).toMatchObject({ defaultSoundId: null, quietHours: null });
+  });
+
+  it('defaults real-time delivery to IMAP IDLE and ignores unknown modes', () => {
+    expect(DEFAULT_SETTINGS.realtimeMode).toBe('idle');
+    expect(parseAppSettings({ 'notification.realtimeMode': 'relay' }).realtimeMode).toBe('relay');
+    expect(parseAppSettings({ 'notification.realtimeMode': 'carrier-pigeon' }).realtimeMode).toBe(
+      'idle',
+    );
   });
 
   it('ignores unknown content modes and themes', () => {

@@ -259,7 +259,7 @@ export default function ImapLoginScreen() {
           ) : null}
 
           {error ? (
-            <View style={[styles.help, { backgroundColor: colors.danger + '1A' }]}>
+            <View style={[styles.help, { backgroundColor: colors.dangerContainer }]}>
               <MaterialIcons name="error-outline" size={20} color={colors.danger} />
               <AppText variant="caption" style={[styles.flex, { color: colors.danger }]}>
                 {error}

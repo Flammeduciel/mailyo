@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MailYo — Vos mails, aussi simples que vos messages</title>
+  <meta name="description" content="MailYo transforme votre boîte mail en conversations : un fil par personne, des notifications instantanées, les pièces jointes en un coup d’œil. Gmail et IMAP, sans serveur intermédiaire." />
+  <meta name="theme-color" content="#3A4CD1" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#101217" media="(prefers-color-scheme: dark)" />
+  <meta property="og:title" content="MailYo — Vos mails, aussi simples que vos messages" />
+  <meta property="og:description" content="Un fil par personne, des notifications instantanées, et vos mails qui restent chez votre messagerie." />
+  <meta property="og:image" content="assets/icon-512.png" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Icônes (sprite SVG) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-chat" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Zm3 5v2h10V9H7Zm0 4v2h7v-2H7Z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21Z"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path fill="currentColor" d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6h-1.5Z"/></symbol>
+    <symbol id="i-unsub" viewBox="0 0 24 24"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9.1a6 6 0 0 1-.1-1 6 6 0 0 1 9-5.2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Zm-1 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm2 4.5h-4v-1h4v1Z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3Zm-1.06 13.54L7.4 12l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17Z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H8a3 3 0 0 0-3 3v16a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V4a3 3 0 0 0-3-3Zm-2 20h-4v-1h4v1Zm3.25-3H6.75V4h10.5v14Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><path fill="currentColor" d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2Zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2Z"/></symbol>
+    <symbol id="i-server-off" viewBox="0 0 24 24"><path fill="currentColor" d="M3.27 1.44 2 2.72l2.05 2.05A2 2 0 0 0 3 6.5v3A2 2 0 0 0 5 11.5h5.73l2 2H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h13.73l1.55 1.55 1.27-1.27L3.27 1.44ZM7 18.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM19 13.5h-2.17l4 4V15.5a2 2 0 0 0-2-2Zm0-11H7.83l9 9H19a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2Z"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7a5 5 0 0 1 5 5c0 .65-.13 1.26-.36 1.83l2.92 2.92A11.8 11.8 0 0 0 22.99 12C21.26 7.61 17 4.5 12 4.5c-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7ZM2 4.27l2.28 2.28.46.46A11.8 11.8 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27ZM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.55 1.55A5 5 0 0 1 7.53 9.8Zm4.31-.78 3.15 3.15.02-.16a3 3 0 0 0-3-3l-.17.01Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M3.6 2.2c-.37.38-.6.97-.6 1.73v16.14c0 .76.23 1.35.6 1.73l.08.08 9.04-9.04v-.21L3.68 2.12l-.08.08Zm12.13 12.67-3.01-3.01v-.21l3.01-3.01.07.04 3.57 2.03c1.02.58 1.02 1.53 0 2.11l-3.57 2.03-.07.02Zm-.07.04-3.08-3.08-9.08 9.09c.34.36.89.4 1.52.05l10.64-6.06m0-6.17L5.02 2.68c-.63-.36-1.18-.31-1.52.05l9.08 9.08 3.08-3.07Z"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Z"/></symbol>
+  </svg>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="./" aria-label="MailYo, accueil">
+        <img src="assets/icon-512.png" alt="" width="34" height="34" />
+        MailYo
+      </a>
+      <nav class="nav-links" aria-label="Navigation principale">
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#confidentialite">Confidentialité</a>
+        <a href="#questions">Questions</a>
+      </nav>
+      <a class="btn btn-primary btn-small" href="#telecharger">Télécharger</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <span class="eyebrow">
+            <span class="dot"><svg><use href="#i-chat"/></svg></span>
+            La messagerie qui parle comme vous
+          </span>
+          <h1>Vos mails, aussi <span class="accent">simples que vos messages.</span></h1>
+          <p class="lead">
+            MailYo range votre boîte mail en conversations&nbsp;: un fil par personne, des
+            notifications à l’arrivée de chaque mail, les pièces jointes en un coup d’œil.
+            Et vos mails restent chez votre messagerie.
+          </p>
+          <div class="cta-row" id="telecharger">
+            <a class="store" href="#telecharger" aria-label="Bientôt disponible sur Google Play">
+              <svg><use href="#i-play"/></svg>
+              <span><small>Bientôt disponible sur</small>Google Play</span>
+            </a>
+            <a class="btn btn-ghost" href="#fonctionnalites">Découvrir</a>
+          </div>
+          <div class="trust">
+            <span><svg><use href="#i-check"/></svg>Sans serveur intermédiaire</span>
+            <span><svg><use href="#i-check"/></svg>Gmail et IMAP</span>
+            <span><svg><use href="#i-check"/></svg>Plusieurs comptes</span>
+          </div>
+        </div>
+
+        <div class="phones" aria-hidden="true">
+          <!-- Conversation -->
+          <div class="phone phone-back">
+            <div class="screen">
+              <div class="status"><span>9:41</span><span>5G <i></i></span></div>
+              <div class="chat-head">
+                <span class="back"></span>
+                <span class="av t1">CF</span>
+                <div><b>Claire Fontaine</b><small>Réunion d’équipe</small></div>
+              </div>
+              <div class="chat">
+                <span class="day">Aujourd’hui</span>
+                <div class="bubble">
+                  <span class="who">Claire Fontaine</span>
+                  Voici l’ordre du jour de vendredi. Tu confirmes&nbsp;?
+                  <div class="file"><i>PDF</i><div><b>ordre-du-jour.pdf</b><small>13 Ko</small></div></div>
+                  <time>08:30</time>
+                </div>
+                <div class="bubble out">
+                  <span class="quote"><b>Claire Fontaine</b>Voici l’ordre du jour de vendredi…</span>
+                  Je serai là à 10&nbsp;h. À vendredi&nbsp;!
+                  <time>08:55 ✓✓</time>
+                </div>
+                <div class="bubble">
+                  <span class="who">Claire Fontaine</span>
+                  Parfait, je réserve la salle. Merci&nbsp;!
+                  <time>09:02</time>
+                </div>
+              </div>
+              <div class="composer">
+                <div>Message</div>
+                <span class="ring"><svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="17.5"/></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Liste -->
+          <div class="phone phone-front">
+            <div class="screen">
+              <div class="status"><span>9:41</span><span>5G <i></i></span></div>
+              <div class="app-bar"><span class="menu"></span><strong>MailYo</strong><span class="ic"></span></div>
+              <div class="search">Rechercher</div>
+              <div class="chips">
+                <span class="chip on">Toutes <b>24</b></span>
+                <span class="chip">Non lus <b>3</b></span>
+                <span class="chip">Pièces jointes</span>
+              </div>
+              <div class="row unread">
+                <span class="av t1">CF</span>
+                <div class="txt">
+                  <div class="top">Claire Fontaine<time>09:02</time></div>
+                  <div class="sub"><span><b>Réunion d’équipe</b> · Parfait, je réserve…</span><em class="badge">2</em></div>
+                </div>
+              </div>
+              <div class="row">
+                <div><span class="av t2">MD</span><span class="subjects">3 sujets</span></div>
+                <div class="txt">
+                  <div class="top">Marc Dupuis<time>Hier</time></div>
+                  <div class="sub"><span>Devis cuisine · Voici la version…</span></div>
+                </div>
+              </div>
+              <div class="row unread">
+                <span class="av t3">SN</span>
+                <div class="txt">
+                  <div class="top">Sophie N’Gouabi<time>Hier</time></div>
+                  <div class="sub"><span><b>Photos du week-end</b> · 12 photos</span><em class="badge">1</em></div>
+                </div>
+              </div>
+              <div class="row">
+                <span class="av t5">LV</span>
+                <div class="txt">
+                  <div class="top">Le Fil Vert<time>lundi</time></div>
+                  <div class="sub"><span>La lettre du jardin — novembre</span></div>
+                </div>
+              </div>
+              <div class="row">
+                <span class="av t4">SG</span>
+                <div class="txt">
+                  <div class="top"><span>Service Gagnant <em class="spam">Spam</em></span><time>12 nov.</time></div>
+                  <div class="sub"><span>Félicitations, vous avez gagné…</span></div>
+                </div>
+              </div>
+              <div class="row">
+                <span class="av t6">AH</span>
+                <div class="txt">
+                  <div class="top">Agence Horizon<time>10 nov.</time></div>
+                  <div class="sub"><span>✓✓ Relevé d’octobre · Merci, bien reçu</span></div>
+                </div>
+              </div>
+              <span class="fab"><svg><use href="#i-edit"/></svg></span>
+              <div class="tabs">
+                <span class="tab on"><i></i>Discussions</span>
+                <span class="tab"><i></i>Actus</span>
+                <span class="tab"><i></i>Groupes</span>
+                <span class="tab"><i></i>Favoris</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="float-card float-notif">
+            <span class="ico"><img src="assets/icon-512.png" alt="" /></span>
+            <div><b>Claire Fontaine</b><small>Parfait, je réserve la salle. Merci&nbsp;!</small></div>
+          </div>
+          <div class="float-card float-unsub">
+            <span class="ico"><svg><use href="#i-check"/></svg></span>
+            <div><b>Désabonné</b><small>en un seul appui</small></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MESSAGERIES ============ -->
+    <section class="providers" aria-label="Messageries compatibles">
+      <div class="container">
+        <p>Fonctionne avec votre messagerie</p>
+        <ul class="provider-list">
+          <li>Gmail</li><li>Yahoo Mail</li><li>iCloud Mail</li><li>Orange</li><li>Free</li>
+          <li>SFR</li><li>La Poste</li><li>GMX</li><li>Zoho Mail</li><li>OVHcloud</li><li>Fastmail</li><li>Toute adresse IMAP</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ FONCTIONNALITÉS ============ -->
+    <section class="section" id="fonctionnalites">
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Fonctionnalités</span>
+          <h2>Tout ce qui compte, rien qui encombre.</h2>
+          <p>MailYo garde la puissance du mail et lui donne la clarté d’une messagerie.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <span class="tile t1"><svg><use href="#i-chat"/></svg></span>
+            <h3>Un fil par personne</h3>
+            <p>Vos échanges avec chaque contact réunis en bulles, citations comprises. Plusieurs sujets&nbsp;? Choisissez-le d’un geste.</p>
+          </article>
+          <article class="feature">
+            <span class="tile t3"><svg><use href="#i-bolt"/></svg></span>
+            <h3>Notifications instantanées</h3>
+            <p>Le mail sonne dès son arrivée. Touchez la notification&nbsp;: vous êtes directement dans la conversation.</p>
+          </article>
+          <article class="feature">
+            <span class="tile t2"><svg><use href="#i-clip"/></svg></span>
+            <h3>Pièces jointes en clair</h3>
+            <p>Aperçu des photos, PDF et vidéos dans le fil, et une galerie de tous les fichiers échangés avec une personne.</p>
+          </article>
+          <article class="feature">
+            <span class="tile t5"><svg><use href="#i-unsub"/></svg></span>
+            <h3>Désabonnement en un appui</h3>
+            <p>Newsletters et promotions rangées à part dans « Actus ». Une lettre de trop&nbsp;? Un appui et c’est fini.</p>
+          </article>
+          <article class="feature">
+            <span class="tile t4"><svg><use href="#i-eye-off"/></svg></span>
+            <h3>Pixels espions bloqués</h3>
+            <p>Les images distantes restent masquées jusqu’à votre accord, et les liens trompeurs sont signalés avant ouverture.</p>
+          </article>
+          <article class="feature">
+            <span class="tile t6"><svg><use href="#i-search"/></svg></span>
+            <h3>Retrouvez tout</h3>
+            <p>Recherche dans les messages, les expéditeurs et les noms de fichiers, même hors connexion.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SPLIT ============ -->
+    <section class="section section-soft">
+      <div class="container split">
+        <div>
+          <span class="kicker">Pensé pour le pouce</span>
+          <h2>Une boîte mail qui se lit comme une discussion.</h2>
+          <p class="lead">Les gestes que vous connaissez déjà, appliqués à vos mails.</p>
+          <ul class="checklist">
+            <li><span class="ck"><svg><use href="#i-check"/></svg></span><div><b>Glissez pour répondre</b><span>Le message cité s’affiche au-dessus de votre réponse, comme dans une messagerie.</span></div></li>
+            <li><span class="ck"><svg><use href="#i-check"/></svg></span><div><b>Annulez un envoi</b><span>Un anneau de quelques secondes autour du bouton d’envoi&nbsp;: touchez-le pour garder le mail.</span></div></li>
+            <li><span class="ck"><svg><use href="#i-check"/></svg></span><div><b>Gmail comme vous l’aimez</b><span>Principale, Promotions, Réseaux sociaux, Notifications&nbsp;: toutes vos catégories dans le menu latéral.</span></div></li>
+            <li><span class="ck"><svg><use href="#i-check"/></svg></span><div><b>Clair ou sombre</b><span>MailYo suit le thème de votre téléphone, ou celui que vous choisissez.</span></div></li>
+          </ul>
+        </div>
+        <div class="panel" aria-hidden="true">
+          <div class="sheet">
+            <div class="handle"></div>
+            <h4>Google</h4>
+            <small>4 conversations · 1 non lue</small>
+            <div class="row unread"><span class="dot"></span><div class="txt"><div class="top">Alerte de sécurité<time>07:25</time></div><div class="sub"><span>Nouvelle connexion sur Android</span><em class="badge">1</em></div></div></div>
+            <div class="row"><span class="dot off"></span><div class="txt"><div class="top">Partage de données<time>07:24</time></div><div class="sub"><span>Tu as partagé certaines données…</span></div></div></div>
+            <div class="row"><span class="dot off"></span><div class="txt"><div class="top">Bienvenue<time>Hier</time></div><div class="sub"><span>Votre compte est prêt</span></div></div></div>
+            <div class="row"><span class="dot off"></span><div class="txt"><div class="top">Stockage<time>10 nov.</time></div><div class="sub"><span>2 messages · Votre espace…</span></div></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CONFIDENTIALITÉ ============ -->
+    <section class="section" id="confidentialite">
+      <div class="container">
+        <div class="privacy-band">
+          <span class="kicker">Confidentialité</span>
+          <h2>Vos mails ne passent jamais par nous.</h2>
+          <p>MailYo se connecte directement, depuis votre téléphone, à votre messagerie. Il n’y a pas de serveur MailYo entre vous et vos mails&nbsp;: personne d’autre ne les lit, ne les stocke ni ne les analyse.</p>
+          <div class="pillars">
+            <div class="pillar"><svg><use href="#i-server-off"/></svg><b>Aucun serveur intermédiaire</b><span>Vos mails voyagent entre votre téléphone et votre messagerie, et nulle part ailleurs.</span></div>
+            <div class="pillar"><svg><use href="#i-lock"/></svg><b>Accès chiffré sur l’appareil</b><span>Jetons Google et mots de passe IMAP gardés dans le stockage sécurisé d’Android.</span></div>
+            <div class="pillar"><svg><use href="#i-shield"/></svg><b>Ni revente, ni ciblage</b><span>Vos données ne sont jamais vendues, ni utilisées pour de la publicité ou pour entraîner une intelligence artificielle.</span></div>
+          </div>
+          <a class="more" href="confidentialite.html">Lire la politique de confidentialité →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ÉTAPES ============ -->
+    <section class="section section-soft">
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Démarrer</span>
+          <h2>Prêt en une minute.</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><h3>Installez MailYo</h3><p>Téléchargez l’application sur votre téléphone Android.</p></div>
+          <div class="step"><h3>Connectez votre boîte</h3><p>Gmail en un appui avec votre compte Google, ou n’importe quelle adresse IMAP.</p></div>
+          <div class="step"><h3>Discutez</h3><p>Vos mails arrivent en conversations, et sonnent dès leur arrivée.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="section" id="questions">
+      <div class="container">
+        <div class="section-head center">
+          <span class="kicker">Questions</span>
+          <h2>Bon à savoir.</h2>
+        </div>
+        <div class="faq">
+          <details open>
+            <summary>MailYo remplace-t-il mon adresse mail&nbsp;?</summary>
+            <p>Non. MailYo est une application pour lire et envoyer vos mails&nbsp;: votre adresse, vos dossiers et vos mails restent chez votre messagerie (Gmail, Yahoo, Orange…). Vous pouvez continuer à utiliser les autres applications en parallèle.</p>
+          </details>
+          <details>
+            <summary>Pourquoi MailYo demande-t-il l’accès à mon compte Google&nbsp;?</summary>
+            <p>Pour afficher, envoyer, classer et supprimer vos mails Gmail depuis l’application, et pour montrer le nom et la photo de vos contacts. Ces données sont traitées uniquement sur votre téléphone. Vous pouvez retirer l’accès à tout moment depuis MailYo ou depuis votre compte Google.</p>
+          </details>
+          <details>
+            <summary>Mes mails sont-ils envoyés sur un serveur MailYo&nbsp;?</summary>
+            <p>Non. Il n’existe pas de serveur MailYo qui recevrait vos mails. L’application les récupère directement auprès de votre messagerie et les garde sur votre appareil.</p>
+          </details>
+          <details>
+            <summary>Pourquoi l’application demande-t-elle de ne pas restreindre la batterie&nbsp;?</summary>
+            <p>Les notifications instantanées reposent sur une connexion permanente entre votre téléphone et votre messagerie. Certains téléphones coupent les applications en arrière-plan&nbsp;; sans restriction, vos mails sonnent à l’heure.</p>
+          </details>
+          <details>
+            <summary>Puis-je connecter plusieurs adresses&nbsp;?</summary>
+            <p>Oui. Ajoutez autant de comptes que vous voulez, Gmail et IMAP mélangés&nbsp;: leurs conversations se retrouvent dans la même liste.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CTA ============ -->
+    <section class="cta">
+      <div class="container">
+        <img src="assets/icon-512.png" alt="Icône de MailYo" width="88" height="88" />
+        <h2>Vos mails méritent mieux qu’une liste.</h2>
+        <p>Essayez MailYo et retrouvez le plaisir de lire vos mails.</p>
+        <div class="cta-row">
+          <a class="store" href="#telecharger" aria-label="Bientôt disponible sur Google Play">
+            <svg><use href="#i-play"/></svg>
+            <span><small>Bientôt disponible sur</small>Google Play</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />MailYo</a>
+      <nav aria-label="Liens légaux">
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="conditions.html">Conditions d’utilisation</a>
+        <a href="mailto:contact@mailyo.app">Contact</a><!-- À REMPLACER : adresse de contact réelle -->
+      </nav>
+      <span>© 2026 MailYo</span>
+    </div>
+  </footer>
+</body>
+</html>
