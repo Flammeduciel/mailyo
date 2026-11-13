@@ -15,6 +15,19 @@ navigateur.
 
 Aperçu local : ouvrir `index.html` dans un navigateur, ou `npx serve site`.
 
+## Déploiement (Dokploy)
+
+Application, source GitHub, branche `master`, puis :
+
+- Build Path : `/` (racine du repo)
+- Build Type : Dockerfile
+- Docker File : `site/Dockerfile`
+- Docker Context Path : `.`
+- Domaine : port `80`, HTTPS
+- Watch Paths (facultatif) : `site/**`
+
+Test local : `docker build -f site/Dockerfile -t mailyo-site . && docker run -p 8080:80 mailyo-site`.
+
 ## Avant publication
 
 Remplacer les éléments surlignés en jaune (classe `todo`) et l'adresse de contact :
