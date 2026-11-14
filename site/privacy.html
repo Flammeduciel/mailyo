@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Wouah Mail (MailYo)</title>
+  <meta name="description" content="Privacy Policy of the Wouah Mail (MailYo) app: what data is processed, why, where it is stored and how to delete it." />
+  <meta name="theme-color" content="#3A4CD1" />
+  <link rel="alternate" hreflang="en" href="https://wouah-mail.flamme.work/privacy.html" />
+  <link rel="alternate" hreflang="fr" href="https://wouah-mail.flamme.work/confidentialite.html" />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />Wouah Mail</a>
+      <nav class="nav-links" aria-label="Navigation">
+        <a href="./">Home</a>
+        <a href="privacy.html" aria-current="page">Privacy</a>
+        <a href="terms.html">Terms</a>
+      </nav>
+      <span class="lang" aria-label="Language">
+        <a href="confidentialite.html" hreflang="fr">FR</a>
+        <a href="privacy.html" aria-current="true" hreflang="en">EN</a>
+      </span>
+    </div>
+  </header>
+
+  <main>
+    <section class="legal-hero">
+      <div class="container">
+        <span class="kicker">Legal</span>
+        <h1>Privacy Policy</h1>
+        <p>The <strong>Wouah Mail</strong> app for Android (also published as MailYo).</p>
+        <div class="legal-meta">
+          <span>Effective date: <b>November 14, 2026</b></span>
+          <span>Developer: <b>Flamme WASSANGOU</b></span>
+          <span>Contact: <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="container legal">
+      <aside class="toc" aria-label="Contents">
+        <b>Contents</b>
+        <ol>
+          <li><a href="#summary">Summary</a></li>
+          <li><a href="#who">Who we are</a></li>
+          <li><a href="#how">How the app works</a></li>
+          <li><a href="#data">Data processed</a></li>
+          <li><a href="#google">Google API data</a></li>
+          <li><a href="#use">How data is used</a></li>
+          <li><a href="#storage">Storage and security</a></li>
+          <li><a href="#sharing">Sharing and processors</a></li>
+          <li><a href="#website">This website</a></li>
+          <li><a href="#retention">Retention and deletion</a></li>
+          <li><a href="#permissions">Android permissions</a></li>
+          <li><a href="#rights">Your rights</a></li>
+          <li><a href="#children">Children</a></li>
+          <li><a href="#changes">Changes</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ol>
+      </aside>
+
+      <article class="prose">
+        <h2 id="summary">1. Summary</h2>
+        <div class="callout">
+          <p><strong>Wouah Mail never sees your email.</strong> The app connects directly from your phone to your email provider’s servers (Google for Gmail, or your provider’s IMAP/SMTP server). No email, contact or credential passes through, is copied to, or is analysed on any server run by the developer. The developer has no technical means to read your messages.</p>
+        </div>
+        <ul>
+          <li>Your data stays <strong>on your phone</strong> and <strong>with your email provider</strong>.</li>
+          <li>It is <strong>never sold</strong>, never used for <strong>advertising</strong>, and never used to train <strong>artificial intelligence</strong> models.</li>
+          <li>The app contains <strong>no analytics, advertising or tracking SDK</strong>.</li>
+          <li>Signing out of an account <strong>revokes access</strong> and <strong>erases</strong> all of its data from the phone.</li>
+        </ul>
+        <p>This policy explains in detail what data the Wouah Mail application (“the app”) processes, why, where it is kept, with whom it is exchanged, and how you stay in control. It also covers this website (section 9).</p>
+
+        <h2 id="who">2. Who we are</h2>
+        <p>Wouah Mail is developed and published by <strong>Flamme WASSANGOU</strong>, an independent developer based in the <strong>Republic of the Congo</strong> (“the developer”, “we”).</p>
+        <p>For any question about this policy or your data: <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a>.</p>
+        <p>Because your email is processed only on your device, you remain in control of it. Your email provider (Google, Yahoo, Orange…) remains responsible for the data it hosts, under its own privacy policy, for example the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</p>
+
+        <h2 id="how">3. How the app works</h2>
+        <p>Wouah Mail is an <strong>email client</strong>, like the Gmail or Outlook apps: it displays and sends the email of an account you already own. It does not provide email addresses and does not host your email.</p>
+        <ul>
+          <li><strong>Gmail account</strong>: you sign in with Google’s official sign-in (OAuth). The app never sees your Google password; Google gives it an access token limited to the permissions you approve.</li>
+          <li><strong>Other email (IMAP/SMTP)</strong>: you enter your address and password (or app password); the app uses them to connect directly to your provider’s servers.</li>
+          <li><strong>Instant delivery</strong>: to notify you as soon as an email arrives, the app may keep a connection open from your phone to your email provider (an Android foreground service shown by a persistent notification). This connection links your phone directly to your provider, with no intermediary.</li>
+        </ul>
+        <p>The developer operates <strong>no server that receives, relays or stores</strong> users’ email, contacts or credentials.</p>
+
+        <h2 id="data">4. Data processed by the app</h2>
+        <p>Depending on the features you use, the app processes, <strong>only on your phone</strong>:</p>
+        <table class="table">
+          <thead><tr><th>Data</th><th>Source</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Account email address and name</td><td>Google or your input</td><td>Identify the connected account and tell your messages apart from your correspondents’.</td></tr>
+            <tr><td>Email: sender, recipients, cc, subject, body, date, technical headers, attachments</td><td>Your email provider</td><td>Show your conversations, search, reply, forward, open or save an attachment.</td></tr>
+            <tr><td>Email state: read/unread, starred, archived, spam, trash, Gmail categories</td><td>Your email provider</td><td>Organise your conversations as in your mailbox, and apply your actions.</td></tr>
+            <tr><td>Google contacts: name, photo, phone numbers, job title, organisation</td><td>Google (read-only)</td><td>Show the real name and photo of your correspondents, suggest recipients, offer to call a contact.</td></tr>
+            <tr><td>Credentials: Google access token, or IMAP/SMTP address and password</td><td>Google or your input</td><td>Connect to your email account on your behalf.</td></tr>
+            <tr><td>Drafts and files you attach</td><td>You</td><td>Keep an email you are writing and send it.</td></tr>
+            <tr><td>Settings: theme, per-sender ringtones, notification content, attachment preferences, app lock</td><td>You</td><td>Apply your preferences.</td></tr>
+          </tbody>
+        </table>
+        <p>The app <strong>does not collect</strong>: location, advertising ID, list of installed apps, browsing history, phone contacts (other than your Google contacts), usage statistics, or crash reports sent to the developer.</p>
+
+        <h2 id="google">5. Google API data</h2>
+        <p>If you connect a Gmail account, Google’s consent screen asks you to grant Wouah Mail the following permissions. Each one is used only for the feature described.</p>
+        <table class="table">
+          <thead><tr><th>Requested permission</th><th>How Wouah Mail uses it</th></tr></thead>
+          <tbody>
+            <tr><td>Gmail: read, compose, send and permanently delete your email<br /><code>https://mail.google.com/</code></td><td>Show your email as conversations; send your replies and new messages; mark as read or unread, star, archive, report or remove from spam, move to trash and restore, at your request. This permission is also required for instant delivery (Gmail IMAP connection from your phone). The app never deletes an email without an action from you.</td></tr>
+            <tr><td>Email address<br /><code>https://www.googleapis.com/auth/userinfo.email</code></td><td>Know the address of the connected account.</td></tr>
+            <tr><td>Contacts (read-only)<br /><code>https://www.googleapis.com/auth/contacts.readonly</code></td><td>Show the name and photo of your saved contacts; suggest recipients.</td></tr>
+            <tr><td>“Other contacts” (read-only)<br /><code>https://www.googleapis.com/auth/contacts.other.readonly</code></td><td>Recognise people you have already emailed, to show their name and suggest them as recipients.</td></tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          <p><strong>Limited Use.</strong> Wouah Mail’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+        </div>
+        <p>In particular:</p>
+        <ul>
+          <li>Google user data is used <strong>only to provide and improve the user-facing email features</strong> that are visible in the app’s interface and that you use.</li>
+          <li>It is <strong>not transferred to any third party</strong>, except as necessary to provide those features at your request, to comply with applicable law, or as part of a merger, acquisition or sale of assets, after notifying you.</li>
+          <li>It is <strong>never used or transferred for advertising</strong>, including targeted or personalised ads, never sold, and never used to determine creditworthiness or for lending purposes.</li>
+          <li>It is <strong>not used to develop, improve or train</strong> generalised artificial intelligence or machine-learning models.</li>
+          <li><strong>No human reads your data.</strong> The developer has no access to it anyway: it only travels between your phone and Google. The only possible exception: if you voluntarily send us an email to report a problem, we read only that email, with your consent.</li>
+        </ul>
+
+        <h2 id="use">6. How data is used</h2>
+        <p>The data above is used exclusively to:</p>
+        <ul>
+          <li>display, search, organise and send your email;</li>
+          <li>notify you when an email arrives, according to your settings (full content, sender only or hidden; per-sender ringtone);</li>
+          <li>display, download, share or save attachments, at your request;</li>
+          <li>unsubscribe you from a mailing list, at your request;</li>
+          <li>protect your privacy: blocking remote images (tracking pixels), warning about misleading links, biometric app lock.</li>
+        </ul>
+        <p>Your data is not used for any other purpose.</p>
+
+        <h2 id="storage">7. Storage and security</h2>
+        <ul>
+          <li><strong>On your phone only.</strong> Email, contacts, drafts and settings are stored in the app’s private storage (local database), which other apps cannot access.</li>
+          <li><strong>Encrypted credentials.</strong> Google tokens and IMAP/SMTP passwords are kept in Android’s secure storage (encryption backed by the device Keystore).</li>
+          <li><strong>Encrypted connections.</strong> Communications with Google and email servers use encrypted connections (HTTPS, TLS/SSL).</li>
+          <li><strong>Optional lock.</strong> You can require your fingerprint or face to open the app.</li>
+          <li><strong>Backups.</strong> App data follows your Android device’s backup rules; encrypted credentials cannot be restored on another device.</li>
+        </ul>
+
+        <h2 id="sharing">8. Sharing and processors</h2>
+        <p>The developer does not share your data with anyone and uses <strong>no processor</strong> to handle the app’s data. The app’s only network exchanges take place, from your phone, with:</p>
+        <ul>
+          <li><strong>Google</strong> (Gmail, contacts, account sign-in), if you connect Gmail;</li>
+          <li><strong>your email provider’s servers</strong> (IMAP/SMTP), if you connect another address;</li>
+          <li><strong>senders’ websites</strong>, only when you ask: opening a link, loading the images of an email, an unsubscribe page;</li>
+          <li><strong>Google Play</strong>, for installing and updating the app, under Google’s rules.</li>
+        </ul>
+        <p>If a future feature ever required a server (for example a notification relay), it would be optional, described in this policy before it goes live, and would never receive the content of your email.</p>
+
+        <h2 id="website">9. This website</h2>
+        <p>This website (wouah-mail.flamme.work) presents the app and its legal documents. It is <strong>separate from the app</strong>: the app sends it no data.</p>
+        <ul>
+          <li><strong>Hosting</strong>: a virtual private server rented from <strong>Contabo GmbH</strong> (Germany). This server only serves the pages of this website; it does not receive, store or process <strong>any email, contact or credential</strong> of app users.</li>
+          <li><strong>Network</strong>: website traffic goes through <strong>Cloudflare</strong> (protection and performance).</li>
+          <li><strong>Technical logs</strong>: like any website, the server and Cloudflare may temporarily record the IP address, date, requested page and browser, for security and reliability. These logs are not used to identify you or for advertising.</li>
+          <li><strong>No cookies</strong>, no forms, no analytics and no advertising on this website.</li>
+        </ul>
+
+        <h2 id="retention">10. Retention and deletion</h2>
+        <ul>
+          <li>Data stays on your phone for as long as the account is connected in the app.</li>
+          <li><strong>Signing out</strong> of an account (Settings › Accounts) revokes Wouah Mail’s access with Google and erases from the phone all email, contacts, drafts and credentials of that account. Your email remains intact with your provider.</li>
+          <li><strong>Uninstalling</strong> the app erases all of its data from the device.</li>
+          <li>You can also revoke access at any time from your Google Account: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+          <li>The attachment cache can be cleared at any time (Settings › Attachments and storage).</li>
+          <li>As the developer holds no copy of your data, there is nothing to retain or delete on our side. For any question, write to <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a>.</li>
+        </ul>
+
+        <h2 id="permissions">11. Android permissions</h2>
+        <table class="table">
+          <thead><tr><th>Permission</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Notifications, vibration, icon badge</td><td>Tell you when an email arrives and show the unread count.</td></tr>
+            <tr><td>Internet and network state</td><td>Connect to your email account; ask before a large download on mobile data.</td></tr>
+            <tr><td>Foreground service, start at boot</td><td>Keep instant delivery running and restart it after a reboot.</td></tr>
+            <tr><td>Battery optimisation exemption (optional)</td><td>Prevent Android from cutting background delivery.</td></tr>
+            <tr><td>Biometrics (optional)</td><td>Lock the app with your fingerprint or face.</td></tr>
+            <tr><td>Photos, camera, files (on request)</td><td>Attach a photo, video or file to an email, or save an attachment. The app only accesses the items you pick or capture yourself.</td></tr>
+          </tbody>
+        </table>
+        <p>You can withdraw these permissions at any time in Android settings; the related features then stop working.</p>
+
+        <h2 id="rights">12. Your rights</h2>
+        <p>Under applicable law, including Congolese Law No. 29-2019 of October 10, 2019 on the protection of personal data and, for people in the European Union, the General Data Protection Regulation (GDPR), you have rights of access, rectification, erasure, restriction, objection and portability.</p>
+        <p>Because your data is kept on your device and with your email provider, you exercise them directly: by viewing, editing or deleting your email, signing out, or uninstalling the app. For any request or question, write to <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a>; we reply within one month. You may also contact the data protection authority of your country.</p>
+
+        <h2 id="children">13. Children</h2>
+        <p>The app is not intended for children under 13, or for minors below the age required in their country to consent on their own to the processing of their data. The developer does not knowingly collect any data about them.</p>
+
+        <h2 id="changes">14. Changes</h2>
+        <p>This policy may be updated, for example when a feature is added. The date at the top of this page shows the current version. If a change is significant, you will be informed in the app before it applies.</p>
+
+        <h2 id="contact">15. Contact</h2>
+        <p><strong>Flamme WASSANGOU</strong>, developer of Wouah Mail — Republic of the Congo<br />Email: <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a></p>
+        <p>Une version française de cette politique est disponible : <a href="confidentialite.html" hreflang="fr">Politique de confidentialité</a>.</p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />Wouah Mail</a>
+      <nav aria-label="Legal links">
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="confidentialite.html" hreflang="fr">Confidentialité (FR)</a>
+        <a href="mailto:flammewassangou@gmail.com">Contact</a>
+      </nav>
+      <span>© 2026 Flamme WASSANGOU</span>
+    </div>
+  </footer>
+</body>
+</html>
