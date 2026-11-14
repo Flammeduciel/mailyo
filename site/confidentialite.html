@@ -3,22 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Politique de confidentialité — MailYo</title>
-  <meta name="description" content="Comment MailYo traite vos données : vos mails restent sur votre téléphone et chez votre messagerie, sans serveur intermédiaire." />
+  <title>Politique de confidentialité — Wouah Mail (MailYo)</title>
+  <meta name="description" content="Politique de confidentialité de l’application Wouah Mail (MailYo) : quelles données sont traitées, pourquoi, où elles sont stockées et comment les supprimer." />
   <meta name="theme-color" content="#3A4CD1" />
+  <link rel="alternate" hreflang="fr" href="https://wouah-mail.flamme.work/confidentialite.html" />
+  <link rel="alternate" hreflang="en" href="https://wouah-mail.flamme.work/privacy.html" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="nav">
     <div class="container nav-inner">
-      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />MailYo</a>
+      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />Wouah Mail</a>
       <nav class="nav-links" aria-label="Navigation">
         <a href="./">Accueil</a>
         <a href="confidentialite.html" aria-current="page">Confidentialité</a>
         <a href="conditions.html">Conditions</a>
       </nav>
-      <a class="btn btn-primary btn-small" href="./#telecharger">Télécharger</a>
+      <span class="lang" aria-label="Langue">
+        <a href="confidentialite.html" aria-current="true" hreflang="fr">FR</a>
+        <a href="privacy.html" hreflang="en">EN</a>
+      </span>
     </div>
   </header>
 
@@ -27,7 +32,12 @@
       <div class="container">
         <span class="kicker">Document légal</span>
         <h1>Politique de confidentialité</h1>
-        <p>Dernière mise à jour : 13 novembre 2026</p>
+        <p>Application <strong>Wouah Mail</strong> (également publiée sous le nom MailYo) pour Android.</p>
+        <div class="legal-meta">
+          <span>En vigueur au : <b>14 novembre 2026</b></span>
+          <span>Éditeur : <b>Flamme WASSANGOU</b></span>
+          <span>Contact : <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a></span>
+        </div>
       </div>
     </section>
 
@@ -37,11 +47,13 @@
         <ol>
           <li><a href="#essentiel">L’essentiel</a></li>
           <li><a href="#editeur">Qui sommes-nous</a></li>
+          <li><a href="#fonctionnement">Comment fonctionne l’app</a></li>
           <li><a href="#donnees">Données traitées</a></li>
-          <li><a href="#google">Données Google</a></li>
-          <li><a href="#usage">Utilisation</a></li>
+          <li><a href="#google">Données des API Google</a></li>
+          <li><a href="#usage">Finalités</a></li>
           <li><a href="#stockage">Stockage et sécurité</a></li>
-          <li><a href="#partage">Partage</a></li>
+          <li><a href="#partage">Partage et sous-traitants</a></li>
+          <li><a href="#site">Ce site web</a></li>
           <li><a href="#conservation">Conservation et suppression</a></li>
           <li><a href="#autorisations">Autorisations Android</a></li>
           <li><a href="#droits">Vos droits</a></li>
@@ -54,85 +66,119 @@
       <article class="prose">
         <h2 id="essentiel">1. L’essentiel</h2>
         <div class="callout">
-          <p><strong>MailYo n’a pas de serveur qui reçoit vos mails.</strong> L’application se connecte directement, depuis votre téléphone, à votre messagerie (Gmail ou un serveur IMAP). Vos mails, vos contacts et vos identifiants restent sur votre appareil et chez votre messagerie. Nous ne les lisons pas, ne les stockons pas sur nos systèmes, ne les vendons pas et ne les utilisons pas pour de la publicité.</p>
+          <p><strong>Wouah Mail ne voit jamais vos mails.</strong> L’application se connecte directement, depuis votre téléphone, aux serveurs de votre fournisseur de messagerie (Google pour Gmail, ou le serveur IMAP/SMTP de votre fournisseur). Aucun mail, aucun contact et aucun identifiant ne transite par un serveur de l’éditeur, n’y est copié ou n’y est analysé. L’éditeur n’a techniquement aucun moyen de lire vos messages.</p>
         </div>
-        <p>Cette politique explique quelles données l’application MailYo pour Android (« MailYo », « l’application ») utilise, pourquoi, et comment vous gardez la main dessus.</p>
+        <ul>
+          <li>Vos données restent <strong>sur votre téléphone</strong> et <strong>chez votre fournisseur de messagerie</strong>.</li>
+          <li>Elles ne sont <strong>jamais vendues</strong>, ni utilisées pour de la <strong>publicité</strong>, ni pour entraîner une <strong>intelligence artificielle</strong>.</li>
+          <li>L’application ne contient <strong>aucun outil de mesure d’audience, de publicité ou de suivi</strong>.</li>
+          <li>Se déconnecter d’un compte <strong>révoque l’accès</strong> et <strong>efface</strong> du téléphone toutes ses données.</li>
+        </ul>
+        <p>Cette politique décrit en détail quelles données l’application Wouah Mail (« l’application ») traite, pourquoi, où elles sont conservées, avec qui elles sont échangées et comment vous gardez la main dessus. Elle couvre aussi ce site web (section 9).</p>
 
         <h2 id="editeur">2. Qui sommes-nous</h2>
-        <p>MailYo est édité par <span class="todo">[nom de l’éditeur ou de la société]</span>, <span class="todo">[adresse postale]</span>. Pour toute question relative à vos données : <a href="mailto:contact@mailyo.app">contact@mailyo.app</a> <span class="todo">[adresse à confirmer]</span>.</p>
-        <p>Les données de vos mails étant traitées uniquement sur votre appareil, c’est vous qui en gardez la maîtrise. Votre fournisseur de messagerie (Google, Yahoo, Orange…) reste responsable des données qu’il héberge, selon sa propre politique de confidentialité.</p>
+        <p>Wouah Mail est développée et éditée par <strong>Flamme WASSANGOU</strong>, développeur indépendant établi en <strong>République du Congo</strong> (« l’éditeur », « nous »).</p>
+        <p>Pour toute question sur cette politique ou sur vos données : <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a>.</p>
+        <p>Vos mails étant traités uniquement sur votre appareil, vous en gardez la maîtrise. Votre fournisseur de messagerie (Google, Yahoo, Orange…) reste responsable des données qu’il héberge, selon sa propre politique de confidentialité, par exemple les <a href="https://policies.google.com/privacy?hl=fr">Règles de confidentialité de Google</a>.</p>
 
-        <h2 id="donnees">3. Données traitées</h2>
-        <p>Selon les fonctions que vous utilisez, l’application traite sur votre téléphone :</p>
+        <h2 id="fonctionnement">3. Comment fonctionne l’application</h2>
+        <p>Wouah Mail est un <strong>client de messagerie</strong>, comme l’application Gmail ou Outlook : il affiche et envoie les mails d’un compte que vous possédez déjà. Il ne fournit pas d’adresse e-mail et n’héberge pas vos mails.</p>
         <ul>
-          <li><strong>Votre adresse e-mail et le nom associé</strong>, pour identifier le compte connecté.</li>
-          <li><strong>Vos mails</strong> : expéditeur, destinataires, objet, contenu, date, pièces jointes, libellés (boîte de réception, spam, catégories Gmail), état lu/non lu et favori.</li>
-          <li><strong>Vos contacts Google</strong> (si vous connectez Gmail) : nom, photo, numéros de téléphone, fonction et organisation, pour afficher le vrai nom et la photo de vos correspondants et proposer des destinataires.</li>
-          <li><strong>Vos identifiants de connexion</strong> : jeton d’accès Google, ou adresse et mot de passe IMAP/SMTP.</li>
-          <li><strong>Vos réglages</strong> : thème, sonneries par expéditeur, préférences de notification et de pièces jointes.</li>
+          <li><strong>Compte Gmail</strong> : vous vous connectez avec le système de connexion officiel de Google (OAuth). L’application ne voit jamais votre mot de passe Google ; Google lui remet un jeton d’accès, limité aux autorisations que vous acceptez.</li>
+          <li><strong>Autre messagerie (IMAP/SMTP)</strong> : vous saisissez votre adresse et votre mot de passe (ou mot de passe d’application) ; l’application les utilise pour se connecter directement aux serveurs de votre fournisseur.</li>
+          <li><strong>Réception instantanée</strong> : pour vous notifier dès l’arrivée d’un mail, l’application peut garder, depuis votre téléphone, une connexion ouverte avec votre messagerie (service Android signalé par une notification permanente). Cette connexion relie directement votre téléphone à votre fournisseur, sans intermédiaire.</li>
         </ul>
-        <p>MailYo ne collecte <strong>aucune</strong> donnée de localisation, d’identifiant publicitaire, d’historique de navigation ni de statistique d’usage, et n’intègre aucun outil d’analyse ou de publicité tiers.</p>
+        <p>L’éditeur n’exploite <strong>aucun serveur qui reçoit, relaie ou stocke</strong> les mails, contacts ou identifiants des utilisateurs.</p>
 
-        <h2 id="google">4. Données des services Google</h2>
-        <p>Si vous connectez un compte Gmail, MailYo vous demande, via l’écran de consentement de Google, les autorisations suivantes :</p>
+        <h2 id="donnees">4. Données traitées par l’application</h2>
+        <p>Selon les fonctions que vous utilisez, l’application traite, <strong>uniquement sur votre téléphone</strong> :</p>
         <table class="table">
-          <thead><tr><th>Autorisation</th><th>Pourquoi MailYo en a besoin</th></tr></thead>
+          <thead><tr><th>Donnée</th><th>Source</th><th>Pourquoi</th></tr></thead>
           <tbody>
-            <tr><td>Gmail — lire, rédiger, envoyer et supprimer vos e-mails<br /><code>https://mail.google.com/</code></td><td>Afficher vos mails en conversations, envoyer vos réponses et nouveaux messages, archiver, marquer comme lu, signaler comme spam, mettre à la corbeille et restaurer. Cette même autorisation permet aussi la réception instantanée des nouveaux mails depuis votre téléphone.</td></tr>
-            <tr><td>Adresse e-mail<br /><code>userinfo.email</code></td><td>Savoir quel compte est connecté et distinguer vos messages de ceux de vos correspondants.</td></tr>
-            <tr><td>Contacts et « autres contacts »<br /><code>contacts.readonly</code>, <code>contacts.other.readonly</code></td><td>Afficher le nom et la photo de vos correspondants, et suggérer des destinataires quand vous écrivez. Lecture seule : MailYo ne modifie jamais vos contacts.</td></tr>
+            <tr><td>Adresse e-mail et nom du compte</td><td>Google ou votre saisie</td><td>Identifier le compte connecté et distinguer vos messages de ceux de vos correspondants.</td></tr>
+            <tr><td>Mails : expéditeur, destinataires, copie, objet, contenu, date, en-têtes techniques, pièces jointes</td><td>Votre messagerie</td><td>Afficher vos conversations, rechercher, répondre, transférer, ouvrir ou enregistrer une pièce jointe.</td></tr>
+            <tr><td>État des mails : lu/non lu, favori, archivé, spam, corbeille, catégories Gmail</td><td>Votre messagerie</td><td>Classer vos conversations comme dans votre messagerie, et appliquer vos actions.</td></tr>
+            <tr><td>Contacts Google : nom, photo, numéros de téléphone, fonction, organisation</td><td>Google (lecture seule)</td><td>Afficher le vrai nom et la photo de vos correspondants, suggérer des destinataires, proposer d’appeler un contact.</td></tr>
+            <tr><td>Identifiants : jeton d’accès Google, ou adresse et mot de passe IMAP/SMTP</td><td>Google ou votre saisie</td><td>Se connecter à votre messagerie en votre nom.</td></tr>
+            <tr><td>Brouillons et fichiers que vous joignez</td><td>Vous</td><td>Conserver un mail en cours d’écriture et l’envoyer.</td></tr>
+            <tr><td>Réglages : thème, sonneries par expéditeur, contenu des notifications, préférences de pièces jointes, verrouillage</td><td>Vous</td><td>Appliquer vos préférences.</td></tr>
+          </tbody>
+        </table>
+        <p>L’application <strong>ne collecte pas</strong> : localisation, identifiant publicitaire, liste des applications installées, historique de navigation, contacts du téléphone (autres que vos contacts Google), statistiques d’usage, rapports de plantage envoyés à l’éditeur.</p>
+
+        <h2 id="google">5. Données des API Google</h2>
+        <p>Si vous connectez un compte Gmail, l’écran de consentement de Google vous demande d’accorder à Wouah Mail les autorisations suivantes. Chacune n’est utilisée que pour la fonction indiquée.</p>
+        <table class="table">
+          <thead><tr><th>Autorisation demandée</th><th>Utilisation par Wouah Mail</th></tr></thead>
+          <tbody>
+            <tr><td>Gmail : lire, rédiger, envoyer et supprimer définitivement vos e-mails<br /><code>https://mail.google.com/</code></td><td>Afficher vos mails sous forme de conversations ; envoyer vos réponses et nouveaux messages ; marquer comme lu ou non lu, mettre en favori, archiver, signaler ou retirer du spam, mettre à la corbeille et restaurer, à votre demande. Cette autorisation est aussi nécessaire pour la réception instantanée (connexion IMAP de Gmail depuis votre téléphone). L’application ne supprime jamais un mail sans action de votre part.</td></tr>
+            <tr><td>Adresse e-mail<br /><code>https://www.googleapis.com/auth/userinfo.email</code></td><td>Connaître l’adresse du compte connecté.</td></tr>
+            <tr><td>Contacts (lecture seule)<br /><code>https://www.googleapis.com/auth/contacts.readonly</code></td><td>Afficher le nom et la photo de vos contacts enregistrés ; suggérer des destinataires.</td></tr>
+            <tr><td>« Autres contacts » (lecture seule)<br /><code>https://www.googleapis.com/auth/contacts.other.readonly</code></td><td>Reconnaître les personnes avec qui vous avez déjà échangé, pour afficher leur nom et les proposer comme destinataires.</td></tr>
           </tbody>
         </table>
         <div class="callout">
-          <p><strong>Utilisation limitée.</strong> L’utilisation et le transfert, par MailYo, des informations reçues des API Google vers toute autre application respectent les <a href="https://developers.google.com/terms/api-services-user-data-policy">Règles relatives aux données utilisateur des services d’API Google</a>, y compris les exigences d’utilisation limitée (« Limited Use »).</p>
+          <p><strong>Utilisation limitée.</strong> L’utilisation et le transfert, par Wouah Mail, des informations reçues des API Google vers toute autre application respectent les <a href="https://developers.google.com/terms/api-services-user-data-policy">Règles relatives aux données utilisateur des services d’API Google</a> (Google API Services User Data Policy), y compris les exigences d’utilisation limitée (« Limited Use »).</p>
         </div>
-        <p>Concrètement :</p>
+        <p>En particulier :</p>
         <ul>
-          <li>Les données Google sont utilisées <strong>uniquement</strong> pour fournir les fonctions de messagerie visibles dans l’application et que vous utilisez.</li>
-          <li>Elles ne sont <strong>pas transférées</strong> à des tiers, sauf si c’est nécessaire pour fournir ces fonctions, pour respecter la loi, ou dans le cadre d’une fusion ou acquisition avec votre information préalable.</li>
-          <li>Elles ne sont <strong>jamais utilisées pour de la publicité</strong>, ni vendues, ni utilisées pour établir un profil ou évaluer une solvabilité.</li>
-          <li>Elles ne servent <strong>pas à entraîner</strong> des modèles d’intelligence artificielle ou d’apprentissage automatique.</li>
-          <li><strong>Aucun humain ne lit vos données</strong>, sauf avec votre accord explicite pour un message précis (par exemple si vous nous transférez un mail pour signaler un problème), si c’est nécessaire pour la sécurité, ou si la loi l’exige.</li>
+          <li>Les données Google ne servent <strong>qu’à fournir et améliorer les fonctions de messagerie visibles</strong> dans l’interface de l’application et que vous utilisez.</li>
+          <li>Elles ne sont <strong>transférées à aucun tiers</strong>, sauf si c’est nécessaire pour fournir ces fonctions à votre demande, pour se conformer à la loi, ou dans le cadre d’une fusion, acquisition ou cession, après vous en avoir informé.</li>
+          <li>Elles ne sont <strong>jamais utilisées ni transférées pour de la publicité</strong>, y compris ciblée ou personnalisée, ni vendues, ni utilisées pour déterminer une solvabilité ou accorder un crédit.</li>
+          <li>Elles ne servent <strong>pas à développer, améliorer ou entraîner</strong> des modèles d’intelligence artificielle ou d’apprentissage automatique généralistes.</li>
+          <li><strong>Personne ne lit vos données.</strong> L’éditeur n’y a de toute façon pas accès : elles ne quittent votre téléphone que vers Google. Seule exception possible : si vous nous transmettez volontairement un mail pour signaler un problème, nous ne lisons que ce mail, avec votre accord.</li>
         </ul>
 
-        <h2 id="usage">5. Utilisation des données</h2>
+        <h2 id="usage">6. Finalités</h2>
         <p>Les données ci-dessus servent exclusivement à :</p>
         <ul>
           <li>afficher, rechercher, classer et envoyer vos mails ;</li>
-          <li>vous notifier à l’arrivée d’un nouveau mail, selon vos réglages (sonnerie par expéditeur, contenu affiché ou masqué) ;</li>
-          <li>afficher les pièces jointes, les télécharger ou les partager à votre demande ;</li>
-          <li>vous permettre de vous désabonner des listes de diffusion, à votre demande ;</li>
-          <li>protéger votre vie privée : blocage des images distantes (pixels espions), alerte sur les liens trompeurs.</li>
+          <li>vous notifier à l’arrivée d’un mail, selon vos réglages (contenu complet, expéditeur seul ou masqué ; sonnerie par expéditeur) ;</li>
+          <li>afficher, télécharger, partager ou enregistrer les pièces jointes, à votre demande ;</li>
+          <li>vous désabonner d’une liste de diffusion, à votre demande ;</li>
+          <li>protéger votre vie privée : blocage des images distantes (pixels espions), alerte sur les liens trompeurs, verrouillage biométrique.</li>
         </ul>
+        <p>Aucune autre utilisation n’est faite de vos données.</p>
 
-        <h2 id="stockage">6. Stockage et sécurité</h2>
+        <h2 id="stockage">7. Stockage et sécurité</h2>
         <ul>
-          <li><strong>Sur votre téléphone uniquement.</strong> Les mails, contacts et réglages sont stockés dans la base de données privée de l’application, inaccessible aux autres applications.</li>
-          <li><strong>Identifiants chiffrés.</strong> Les jetons Google et les mots de passe IMAP sont conservés dans le stockage sécurisé d’Android (chiffrement adossé au Keystore).</li>
-          <li><strong>Connexions chiffrées.</strong> Les échanges avec Google et les serveurs de messagerie passent par des connexions chiffrées (HTTPS, TLS/SSL).</li>
+          <li><strong>Sur votre téléphone uniquement.</strong> Les mails, contacts, brouillons et réglages sont stockés dans l’espace privé de l’application (base de données locale), inaccessible aux autres applications.</li>
+          <li><strong>Identifiants chiffrés.</strong> Les jetons Google et les mots de passe IMAP/SMTP sont conservés dans le stockage sécurisé d’Android (chiffrement adossé au Keystore de l’appareil).</li>
+          <li><strong>Connexions chiffrées.</strong> Les échanges avec Google et avec les serveurs de messagerie utilisent des connexions chiffrées (HTTPS, TLS/SSL).</li>
           <li><strong>Verrouillage optionnel.</strong> Vous pouvez exiger votre empreinte ou votre visage à l’ouverture de l’application.</li>
+          <li><strong>Sauvegardes.</strong> Les données de l’application suivent les règles de sauvegarde de votre appareil Android ; les identifiants chiffrés ne sont pas restaurables sur un autre appareil.</li>
         </ul>
-        <p>Pour recevoir vos mails instantanément, MailYo peut garder, depuis votre téléphone, une connexion ouverte avec votre messagerie (service Android signalé par une notification permanente). Cette connexion relie directement votre appareil à votre messagerie, sans passer par nous.</p>
 
-        <h2 id="partage">7. Partage des données</h2>
-        <p>MailYo ne partage vos données avec personne. Les seuls échanges réseau de l’application ont lieu avec :</p>
+        <h2 id="partage">8. Partage et sous-traitants</h2>
+        <p>L’éditeur ne partage vos données avec personne et n’a recours à <strong>aucun sous-traitant</strong> pour traiter les données de l’application. Les seuls échanges réseau de l’application ont lieu, depuis votre téléphone, avec :</p>
         <ul>
           <li><strong>Google</strong> (Gmail, contacts, connexion au compte), si vous connectez Gmail ;</li>
-          <li><strong>le serveur de messagerie</strong> que vous avez choisi (IMAP/SMTP), si vous connectez une autre adresse ;</li>
-          <li><strong>les sites des expéditeurs</strong>, uniquement quand vous le demandez : ouverture d’un lien, affichage des images d’un mail, page de désabonnement.</li>
+          <li><strong>les serveurs de votre fournisseur de messagerie</strong> (IMAP/SMTP), si vous connectez une autre adresse ;</li>
+          <li><strong>les sites des expéditeurs</strong>, uniquement quand vous le demandez : ouverture d’un lien, affichage des images d’un mail, page de désabonnement ;</li>
+          <li><strong>Google Play</strong>, pour l’installation et les mises à jour de l’application, selon les règles de Google.</li>
         </ul>
-        <p>Si une fonction future nécessitait un serveur (par exemple un relais de notifications), elle serait facultative, décrite dans cette politique avant sa mise en service, et ne recevrait jamais le contenu de vos mails sans votre accord.</p>
+        <p>Si une fonction future devait nécessiter un serveur (par exemple un relais de notifications), elle serait facultative, décrite dans cette politique avant sa mise en service, et ne recevrait jamais le contenu de vos mails.</p>
 
-        <h2 id="conservation">8. Conservation et suppression</h2>
+        <h2 id="site">9. Ce site web</h2>
+        <p>Ce site (wouah-mail.flamme.work) présente l’application et ses documents légaux. Il est <strong>distinct de l’application</strong> : l’application ne lui envoie aucune donnée.</p>
         <ul>
-          <li>Les données restent sur votre téléphone tant que le compte est connecté dans MailYo.</li>
-          <li><strong>Se déconnecter</strong> d’un compte (Paramètres › Comptes) révoque l’accès de MailYo auprès de Google et efface du téléphone tous les mails, contacts et identifiants de ce compte. Vos mails restent intacts chez votre messagerie.</li>
+          <li><strong>Hébergement</strong> : un serveur privé virtuel loué chez <strong>Contabo GmbH</strong> (Allemagne). Ce serveur sert uniquement les pages de ce site ; il ne reçoit, ne stocke et ne traite <strong>aucun mail, contact ou identifiant</strong> des utilisateurs de l’application.</li>
+          <li><strong>Réseau</strong> : le trafic du site passe par <strong>Cloudflare</strong> (protection et accélération).</li>
+          <li><strong>Journaux techniques</strong> : comme tout site web, le serveur et Cloudflare peuvent enregistrer temporairement l’adresse IP, la date, la page demandée et le navigateur, à des fins de sécurité et de bon fonctionnement. Ces journaux ne sont pas utilisés pour vous identifier ni pour de la publicité.</li>
+          <li><strong>Aucun cookie</strong>, aucun formulaire, aucun outil de mesure d’audience ni publicité sur ce site.</li>
+        </ul>
+
+        <h2 id="conservation">10. Conservation et suppression</h2>
+        <ul>
+          <li>Les données restent sur votre téléphone tant que le compte est connecté dans l’application.</li>
+          <li><strong>Se déconnecter</strong> d’un compte (Paramètres › Comptes) révoque l’accès de Wouah Mail auprès de Google et efface du téléphone tous les mails, contacts, brouillons et identifiants de ce compte. Vos mails restent intacts chez votre fournisseur.</li>
           <li><strong>Désinstaller</strong> l’application efface toutes ses données de l’appareil.</li>
           <li>Vous pouvez aussi retirer l’accès à tout moment depuis votre compte Google : <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
-          <li>Le cache des pièces jointes peut être vidé à tout moment dans Paramètres › Pièces jointes et stockage.</li>
+          <li>Le cache des pièces jointes peut être vidé à tout moment (Paramètres › Pièces jointes et stockage).</li>
+          <li>L’éditeur ne détenant aucune copie de vos données, il n’a rien à conserver ni à supprimer de son côté. Pour toute question, écrivez à <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a>.</li>
         </ul>
 
-        <h2 id="autorisations">9. Autorisations Android</h2>
+        <h2 id="autorisations">11. Autorisations Android</h2>
         <table class="table">
           <thead><tr><th>Autorisation</th><th>Usage</th></tr></thead>
           <tbody>
@@ -141,34 +187,38 @@
             <tr><td>Service de premier plan, démarrage du téléphone</td><td>Maintenir la réception instantanée et la relancer après un redémarrage.</td></tr>
             <tr><td>Exemption d’optimisation de batterie (facultative)</td><td>Éviter qu’Android coupe la réception en arrière-plan.</td></tr>
             <tr><td>Biométrie (facultative)</td><td>Verrouiller l’application avec votre empreinte ou votre visage.</td></tr>
-            <tr><td>Photos, appareil photo, fichiers (à la demande)</td><td>Joindre une photo, une vidéo ou un fichier à un mail, ou enregistrer une pièce jointe. MailYo n’accède qu’aux éléments que vous choisissez ou que vous prenez vous-même.</td></tr>
+            <tr><td>Photos, appareil photo, fichiers (à la demande)</td><td>Joindre une photo, une vidéo ou un fichier à un mail, ou enregistrer une pièce jointe. L’application n’accède qu’aux éléments que vous choisissez ou que vous prenez vous-même.</td></tr>
           </tbody>
         </table>
+        <p>Vous pouvez retirer ces autorisations à tout moment dans les réglages d’Android ; les fonctions concernées cessent alors de fonctionner.</p>
 
-        <h2 id="droits">10. Vos droits</h2>
-        <p>Selon la législation applicable (notamment le RGPD pour les personnes situées dans l’Union européenne), vous disposez de droits d’accès, de rectification, d’effacement, de limitation, d’opposition et de portabilité. Vos données étant conservées sur votre appareil et chez votre messagerie, vous les exercez directement : en consultant ou supprimant vos mails, en vous déconnectant, ou en désinstallant l’application. Pour toute demande ou question, écrivez-nous (voir « Contact ») ; vous pouvez également saisir l’autorité de protection des données de votre pays.</p>
+        <h2 id="droits">12. Vos droits</h2>
+        <p>Selon la loi applicable, notamment la loi congolaise n° 29-2019 du 10 octobre 2019 portant protection des données à caractère personnel et, pour les personnes situées dans l’Union européenne, le Règlement général sur la protection des données (RGPD), vous disposez de droits d’accès, de rectification, d’effacement, de limitation, d’opposition et de portabilité.</p>
+        <p>Vos données étant conservées sur votre appareil et chez votre fournisseur de messagerie, vous les exercez directement : en consultant, modifiant ou supprimant vos mails, en vous déconnectant, ou en désinstallant l’application. Pour toute demande ou question, écrivez à <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a> ; nous répondons dans un délai d’un mois. Vous pouvez également saisir l’autorité de protection des données de votre pays.</p>
 
-        <h2 id="mineurs">11. Mineurs</h2>
-        <p>MailYo n’est pas destiné aux enfants de moins de 13 ans (ou de l’âge minimum requis dans votre pays pour consentir seul au traitement de ses données). Nous ne collectons sciemment aucune donnée les concernant.</p>
+        <h2 id="mineurs">13. Mineurs</h2>
+        <p>L’application n’est pas destinée aux enfants de moins de 13 ans, ni aux mineurs n’ayant pas l’âge requis dans leur pays pour consentir seuls au traitement de leurs données. L’éditeur ne collecte sciemment aucune donnée les concernant.</p>
 
-        <h2 id="modifications">12. Modifications</h2>
-        <p>Nous pouvons mettre à jour cette politique, par exemple lors de l’ajout d’une fonction. La date en haut de page indique la dernière version. En cas de changement important, vous en serez informé dans l’application avant qu’il ne s’applique.</p>
+        <h2 id="modifications">14. Modifications</h2>
+        <p>Cette politique peut être mise à jour, par exemple lors de l’ajout d’une fonction. La date en haut de page indique la version en vigueur. En cas de changement important, vous en serez informé dans l’application avant qu’il ne s’applique.</p>
 
-        <h2 id="contact">13. Contact</h2>
-        <p>Pour toute question sur cette politique ou sur vos données : <a href="mailto:contact@mailyo.app">contact@mailyo.app</a> <span class="todo">[adresse à confirmer]</span>.</p>
+        <h2 id="contact">15. Contact</h2>
+        <p><strong>Flamme WASSANGOU</strong>, éditeur de Wouah Mail — République du Congo<br />E-mail : <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a></p>
+        <p>An English version of this policy is available: <a href="privacy.html" hreflang="en">Privacy Policy</a>.</p>
       </article>
     </div>
   </main>
 
   <footer class="footer">
     <div class="container footer-inner">
-      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />MailYo</a>
+      <a class="brand" href="./"><img src="assets/icon-512.png" alt="" width="34" height="34" />Wouah Mail</a>
       <nav aria-label="Liens légaux">
         <a href="confidentialite.html">Confidentialité</a>
         <a href="conditions.html">Conditions d’utilisation</a>
-        <a href="mailto:contact@mailyo.app">Contact</a>
+        <a href="privacy.html" hreflang="en">Privacy (EN)</a>
+        <a href="mailto:flammewassangou@gmail.com">Contact</a>
       </nav>
-      <span>© 2026 MailYo</span>
+      <span>© 2026 Flamme WASSANGOU</span>
     </div>
   </footer>
 </body>

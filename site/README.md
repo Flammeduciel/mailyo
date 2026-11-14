@@ -10,6 +10,8 @@ navigateur.
 | `index.html`            | Page d'accueil                                     |
 | `confidentialite.html`  | Politique de confidentialité (exigences Google)    |
 | `conditions.html`       | Conditions d'utilisation                           |
+| `privacy.html`          | Privacy Policy (anglais)                           |
+| `terms.html`            | Terms of Service (anglais)                         |
 | `styles.css`            | Styles communs                                     |
 | `assets/`               | Icône de l'app (favicon, apple-touch-icon, 512 px) |
 
@@ -28,14 +30,11 @@ Application, source GitHub, branche `master`, puis :
 
 Test local : `docker build -f site/Dockerfile -t mailyo-site . && docker run -p 8080:80 mailyo-site`.
 
-## Avant publication
+## Identité
 
-Remplacer les éléments surlignés en jaune (classe `todo`) et l'adresse de contact :
-
-- `[nom de l'éditeur ou de la société]` et `[adresse postale]` (confidentialité §2, conditions §1) ;
-- `[du pays de l'éditeur]` (conditions §12) ;
-- `contact@mailyo.app` : adresse de contact réelle (toutes les pages, pied de page compris) ;
-- le bouton « Bientôt disponible sur Google Play » : lien vers la fiche Play Store une fois publiée.
+Nom affiché (identique à l'écran de consentement OAuth) : **Wouah Mail**, aussi publiée
+sous le nom MailYo. Éditeur : Flamme WASSANGOU (République du Congo). Contact :
+flammewassangou@gmail.com.
 
 ## Console Google (écran de consentement OAuth)
 
@@ -43,8 +42,8 @@ Remplacer les éléments surlignés en jaune (classe `todo`) et l'adresse de con
 2. Vérifier ce domaine dans Google Search Console avec le même compte Google.
 3. Dans « Écran de consentement OAuth » › « Branding » :
    - Page d'accueil de l'application : `https://<domaine>/`
-   - Règles de confidentialité : `https://<domaine>/confidentialite.html`
-   - Conditions d'utilisation : `https://<domaine>/conditions.html`
+   - Règles de confidentialité : `https://<domaine>/privacy.html` (version anglaise, la mieux lue par Google ; `confidentialite.html` en français)
+   - Conditions d'utilisation : `https://<domaine>/terms.html` (`conditions.html` en français)
    - Domaines autorisés : `<domaine>`
    - Logo : `assets/icon-512.png` (carré, 120 px minimum).
 

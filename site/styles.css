@@ -417,3 +417,12 @@ h2 { font-size: clamp(32px, 3.8vw, 48px); line-height: 1.08; letter-spacing: -0.
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Sélecteur de langue (pages légales) */
+.lang { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 2px; font-size: 13px; font-weight: 700; }
+.lang a { color: var(--text-2); padding: 4px 10px; border-radius: 999px; }
+.lang a:hover { text-decoration: none; color: var(--text); }
+.lang a[aria-current="true"] { background: var(--primary-soft); color: var(--on-primary-soft); }
+.legal-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; color: var(--text-2); font-size: 15px; }
+.legal-meta b { color: var(--text); font-weight: 650; }
+@media (max-width: 680px) { .nav-inner .lang { margin-left: auto; } .nav-inner .lang + .btn { display: none; } }
