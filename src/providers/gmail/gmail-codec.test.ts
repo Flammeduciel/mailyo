@@ -18,7 +18,7 @@ function b64url(text: string): string {
 
 describe('gmail codec', () => {
   it('round-trips UTF-8 through base64url, including emoji', () => {
-    const text = 'Élève — café ☕ 😀';
+    const text = 'Élève « café » ☕ 😀';
     expect(utf8Decode(base64ToBytes(b64url(text)))).toBe(text);
   });
 

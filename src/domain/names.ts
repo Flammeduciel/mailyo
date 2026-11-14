@@ -7,7 +7,7 @@
  * 3. the name given in the current header, if any;
  * 4. a name seen next to the address in To/Cc lines;
  * 5. Google's « other contacts » name (auto-collected, often a placeholder
- *    typed in some form — e.g. « Nom du destinataire »);
+ *    typed in some form, e.g. « Nom du destinataire »);
  * 6. nothing (callers fall back to the address).
  */
 

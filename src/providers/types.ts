@@ -26,7 +26,7 @@ export interface RemoteAttachment {
   remotePartId: string | null;
   /**
    * Directly usable URI (https:, file:, data:) when the content is already
-   * reachable without a download — used by the demo provider.
+   * reachable without a download, used by the demo provider.
    */
   contentUri?: string | null;
 }

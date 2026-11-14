@@ -174,7 +174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const unlock = useCallback(async (): Promise<boolean> => {
-    const success = await authenticator.authenticate('Déverrouillez MailYo');
+    const success = await authenticator.authenticate('Déverrouillez Wouah Mail');
     if (success) {
       setLocked(false);
     }
@@ -216,7 +216,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     invalidate,
   ]);
 
-  // Hide the splash as soon as the app is usable — or once initialisation has
+  // Hide the splash as soon as the app is usable, or once initialisation has
   // failed, so the user is never stuck on a frozen splash screen.
   useEffect(() => {
     if (ready || error !== null) {

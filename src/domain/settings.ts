@@ -6,10 +6,10 @@
 import type { NotificationContentMode, QuietHours } from '@/domain/models';
 
 /**
- * How new mail reaches the phone while MailYo is closed:
+ * How new mail reaches the phone while Wouah Mail is closed:
  * - 'off': periodic background sync only (Android decides when, ~15 min or more);
  * - 'idle': « Notifications instantanées », a permanent IMAP connection (Android service);
- * - 'relay': provider push through a MailYo relay server — reserved, not available yet.
+ * - 'relay': provider push through a Wouah Mail relay server, reserved, not available yet.
  */
 export type RealtimeMode = 'off' | 'idle' | 'relay';
 

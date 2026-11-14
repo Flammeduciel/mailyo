@@ -34,7 +34,7 @@ type Request =
 let present: ((request: Request) => void) | null = null;
 
 /**
- * Drop-in for `Alert.alert`: a MailYo bottom sheet with the buttons stacked as
+ * Drop-in for `Alert.alert`: a Wouah Mail bottom sheet with the buttons stacked as
  * pill actions (destructive in red, cancel as a quiet text button).
  */
 export function showAlert(

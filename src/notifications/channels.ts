@@ -5,7 +5,7 @@
  * importance, a vibration behaviour and a sound. The rule engine decides
  * *whether* to notify and *which* sound/vibration to use; this module maps that
  * decision onto one of the three channels the app creates. Pure data and pure
- * functions only — the native API is touched exclusively in `notifier.ts`.
+ * functions only, the native API is touched exclusively in `notifier.ts`.
  */
 
 import type { VibrationMode } from '@/domain/models';

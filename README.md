@@ -1,114 +1,159 @@
-# MailYo
+<p align="center">
+  <img src="site/assets/icon-512.png" alt="Icône de Wouah Mail" width="96" height="96" />
+</p>
 
-Application email mobile type WhatsApp, en **React Native + Expo**, qui parle
-**directement en IMAP/SMTP** (pas de serveur intermédiaire). IMAP IDLE pour la
-réception temps réel, notifications avec **sons personnalisés par expéditeur**.
+<h1 align="center">Wouah Mail</h1>
 
-> ⚠️ **Development build obligatoire.** MailYo dépend de modules natifs
-> (SQLite, notifications, background task, secure store, biométrie, OAuth2) qui
-> ne sont **pas** inclus dans Expo Go. Lancez `npx expo run:android` /
-> `npx expo run:ios` ou `eas build --profile development`.
+<p align="center">
+  <strong>Vos mails, aussi simples que vos messages.</strong><br />
+  Un client mail Android qui range votre boîte en conversations, comme une messagerie instantanée.
+</p>
 
-## Stack
+<p align="center">
+  <a href="https://wouah-mail.flamme.work">Site</a> ·
+  <a href="https://wouah-mail.flamme.work/confidentialite.html">Confidentialité</a> ·
+  <a href="https://wouah-mail.flamme.work/conditions.html">Conditions</a> ·
+  <a href="CODE_OF_CONDUCT.md">Code de conduite</a>
+</p>
 
-- **Expo SDK 57** / React Native 0.86 / React 19, Expo Router (file-based routing).
-- **expo-sqlite** — cache local (comptes, dossiers, threads, emails, règles).
-- **expo-secure-store** — secrets (mots de passe IMAP, tokens OAuth).
-- **expo-notifications** — notifications locales + sons personnalisés (WAV embarqués via le config plugin).
-- **expo-background-task** + **expo-task-manager** — relève périodique en arrière-plan.
-- **expo-auth-session** + **expo-crypto** — OAuth2 (Gmail).
-- **expo-local-authentication** — verrou biométrique.
-- **expo-dev-client** — development build (indispensable : les modules natifs
-  ci-dessus ne sont **pas** dans Expo Go).
+---
+
+Wouah Mail (aussi publiée sous le nom MailYo) se connecte **directement** depuis le
+téléphone à votre messagerie, Gmail ou n'importe quelle adresse IMAP/SMTP. Il n'y a
+**aucun serveur intermédiaire** : vos mails, contacts et identifiants restent sur
+l'appareil et chez votre fournisseur.
+
+## Captures d'écran
+
+Données fictives du compte de démonstration.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/discussions.png" width="220" alt="Liste des discussions" /><br /><sub>Un fil par personne</sub></td>
+    <td align="center"><img src="docs/screenshots/conversation.png" width="220" alt="Conversation" /><br /><sub>Conversation en bulles</sub></td>
+    <td align="center"><img src="docs/screenshots/drawer.png" width="220" alt="Menu des boîtes" /><br /><sub>Catégories Gmail et dossiers</sub></td>
+    <td align="center"><img src="docs/screenshots/actus.png" width="220" alt="Onglet Actus" /><br /><sub>Newsletters et promotions à part</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/welcome.png" width="220" alt="Écran de bienvenue" /><br /><sub>Autorisations expliquées au démarrage</sub></td>
+    <td align="center"><img src="docs/screenshots/sheet.png" width="220" alt="Confirmation en bottom sheet" /><br /><sub>Confirmations en bottom sheet</sub></td>
+    <td align="center"><img src="docs/screenshots/sombre-discussions.png" width="220" alt="Discussions en thème sombre" /><br /><sub>Thème sombre</sub></td>
+    <td align="center"><img src="docs/screenshots/sombre-conversation.png" width="220" alt="Conversation en thème sombre" /><br /><sub>Conversation en thème sombre</sub></td>
+  </tr>
+</table>
+
+## Fonctionnalités
+
+- **Conversations par personne** : bulles, citations, réponse en glissant, plusieurs sujets avec une même personne regroupés et choisis depuis une feuille.
+- **Notifications instantanées** : connexion IMAP IDLE gardée par un service Android, sonnerie par expéditeur, toucher la notification ouvre la conversation.
+- **Gmail complet** : catégories (Principale, Promotions, Réseaux sociaux, Notifications, Forums), favoris, envoyés, spam, archives et corbeille avec restauration.
+- **Toute adresse IMAP** : Yahoo, iCloud, Orange, Free, SFR, La Poste, GMX, Zoho, OVHcloud, Fastmail et serveurs personnalisés.
+- **Pièces jointes** : aperçu des images, PDF et vidéos dans le fil, galerie des fichiers échangés, enregistrement et partage.
+- **Envoi maîtrisé** : annulation pendant quelques secondes grâce à un anneau de compte à rebours, brouillons, transfert propre.
+- **Désabonnement en un appui** et onglet « Actus » pour les newsletters.
+- **Vie privée** : images distantes bloquées (pixels espions), alerte sur les liens trompeurs, verrouillage biométrique.
+- **Recherche plein texte** hors connexion (objet, expéditeur, contenu, noms de fichiers).
+- **Thème clair et sombre**, avatars à initiales, confirmations en bottom sheet.
+
+## Confidentialité
+
+- L'application parle directement à Google (API Gmail) ou au serveur IMAP/SMTP de votre fournisseur.
+- Les jetons Google et mots de passe IMAP sont chiffrés dans le stockage sécurisé d'Android.
+- Aucun outil d'analyse, de publicité ou de suivi.
+- Se déconnecter d'un compte révoque l'accès et efface ses données du téléphone.
+
+Détails : [politique de confidentialité](https://wouah-mail.flamme.work/confidentialite.html) ([English](https://wouah-mail.flamme.work/privacy.html)).
+
+## Tags
+
+`android` `email-client` `gmail` `gmail-api` `imap` `smtp` `imap-idle` `react-native` `expo` `expo-router` `typescript` `sqlite` `messaging` `privacy` `offline-first`
+
+## Stack technique
+
+| Domaine        | Choix                                                                        |
+| -------------- | ---------------------------------------------------------------------------- |
+| Application    | Expo SDK 57, React Native, React 19, Expo Router, TypeScript                 |
+| Stockage local | expo-sqlite (recherche FTS5), expo-secure-store                              |
+| Gmail          | OAuth2 (expo-auth-session), API REST Gmail, API People pour les contacts     |
+| IMAP / SMTP    | Module natif Kotlin (`modules/mailyo-imap`) basé sur JavaMail                |
+| Temps réel     | Service Android au premier plan avec IMAP IDLE, relève périodique en secours |
+| Notifications  | expo-notifications, sons embarqués, canal par sonnerie                       |
+| Animations     | Reanimated, Gesture Handler                                                  |
+| Tests          | Jest, Testing Library, SQLite en mémoire                                     |
 
 ## Démarrer
 
-MailYo ne tourne **pas** dans Expo Go. Deux chemins selon votre machine.
-
-### A. En local (JDK 17+ et SDK Android requis)
+L'application dépend de modules natifs : elle ne tourne **pas** dans Expo Go. Il faut un
+development build.
 
 ```bash
 npm install
-npx expo run:android   # compile le dev build et l'installe (émulateur ou appareil USB)
+npx expo run:android          # compile et installe le development build
 ```
 
-Le dossier natif (`android/`) est généré par CNG et n'est pas committé.
-
-### B. Via EAS (build cloud, aucun SDK Android local)
+Sans SDK Android local, via EAS :
 
 ```bash
-npm install --global eas-cli
-eas login
-eas build --profile development --platform android   # APK « development » (voir eas.json)
-# installez l'APK sur votre téléphone, puis :
+npx eas-cli@latest build --profile development --platform android
 npx expo start --dev-client
 ```
 
-`eas.json` définit les profils `development`, `preview` et `production`.
-`expo-dev-client` étant installé, `npx expo start` démarre directement en mode
-development build plutôt qu'en Expo Go.
+Dans l'application, l'écran de connexion propose un **compte de démonstration** avec
+des données fictives, pratique pour tout tester sans identifiants.
+
+### Construire un APK dans un conteneur cloud
+
+Voir [docs/build-android-cloud.md](docs/build-android-cloud.md) et
+`scripts/build-android-cloud.sh`.
+
+## Commandes utiles
+
+```bash
+npm run verify       # typecheck + lint + tests
+npx tsc --noEmit     # typecheck
+npx expo lint        # lint
+npm test             # tests Jest
+```
 
 ## Structure
 
 ```
 src/
-  app/                     # routes Expo Router (présentation / navigation)
-    _layout.tsx            # providers (gesture, safe-area, thème) + AppProvider
-    index.tsx              # route d'entrée → redirige vers /(tabs)/inbox
-    (tabs)/
-      _layout.tsx          # onglets Réception / Paramètres
-      inbox/index.tsx      # liste des conversations
-      settings/index.tsx   # comptes, notifications, règles, fiabilité
-    thread/[id].tsx        # conversation (bulles + réponse)
-    compose.tsx            # nouveau message (SMTP)
-    search.tsx             # recherche plein texte (FTS5)
-    login.tsx              # démo + connexion Gmail OAuth2
-    onboarding.tsx         # fiabilité notifications / batterie / arrière-plan
-    rules/edit.tsx         # création / édition d'une règle de notification
-  ui/                      # design system (AppText, Button, Chips, Screen…)
-  state/                   # AppProvider + useServiceQuery (accès au service)
-  services/                # MailService : composition root de l'application
-  domain/                  # cœur métier pur et testable (threading, règles, recherche…)
-  data/                    # SQLite, migrations, repositories
-    db/                    # abstraction Database + adaptateur expo-sqlite + schéma + FTS5
-    repositories/          # accès typés aux tables (accounts, messages, threads, settings…)
-  providers/               # contrats fournisseurs + MockMailProvider + OAuth Gmail
-  sync/                    # moteur de synchronisation + file d'opérations + arrière-plan
-  notifications/           # résolution des règles + canaux + publication système
-  constants/config.ts      # constantes (timeouts IMAP, nom de base, canal…)
+  app/            routes Expo Router (écrans)
+  screens/        écrans partagés (liste des conversations, tiroir, autorisations)
+  ui/             design system (thème, bottom sheets, bulles, lignes, avatars)
+  state/          contexte applicatif, requêtes, autorisations
+  services/       MailService, point d'entrée de la logique applicative
+  domain/         logique métier pure et testée (fils, noms, citations, doublons)
+  data/           SQLite, migrations, repositories
+  providers/      Gmail, IMAP, compte de démonstration
+  sync/           moteur de synchronisation et relève en arrière-plan
+  realtime/       notifications instantanées (IMAP IDLE, emplacement relais)
+  notifications/  règles de sonnerie et publication système
+modules/mailyo-imap/   module natif Kotlin (IMAP, SMTP, service temps réel)
+site/                  site vitrine et documents légaux (HTML/CSS, Dockerfile)
+docs/                  documentation technique et captures
 ```
 
-## Configuration native (CNG)
+Les dossiers `android/` et `ios/` sont générés (Continuous Native Generation) et ne
+sont pas versionnés : la configuration native vit dans `app.json`.
 
-Aucun dossier `ios/` / `android/` n'est committé : la config vit dans
-`app.json` (permissions Android, plugins) et est régénérée au build.
-Permissions Android : `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`,
-`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`.
-`expo-background-task` enregistre une sync périodique (`src/sync/background-sync.ts`).
+## Site web
 
-## Scripts
+Le dossier [`site/`](site/) contient la page d'accueil, les politiques de
+confidentialité et les conditions d'utilisation, en français et en anglais. Il se
+déploie avec le `Dockerfile` fourni (voir [site/README.md](site/README.md)).
 
-```bash
-npm run verify      # typecheck + lint + tests
-npm run typecheck
-npm run lint
-npm test
-npm run sounds:generate   # régénère les sons de notification (assets/sounds/*.wav)
-```
+## Contribuer
 
-## Notes MVP
+Les contributions sont les bienvenues :
 
-- Schéma SQLite appliqué idempotemment au démarrage (`PRAGMA user_version`) +
-  index plein texte **FTS5** (`messages_fts`) pour la recherche.
-- Les implémentations natives Gmail / IMAP IDLE / SMTP restent à écrire dans
-  `src/providers/` (elles implémentent l'interface `MailProvider`). La connexion
-  Gmail OAuth2 crée déjà un compte et stocke ses jetons dans le stockage
-  sécurisé ; en attendant le transport natif, ces comptes ne synchronisent rien.
-  La réception **instantanée** (IMAP `IDLE`) exige un service de premier plan
-  natif ; en attendant, `expo-background-task` assure une relève périodique.
-- Un `MockMailProvider` déterministe, connecté via l'écran de connexion
-  (« compte de démonstration »), fait tourner toute la chaîne
-  (sync → threading → règles → UI → notifications) sans appareil ni identifiants.
-- La cible est **Android** (et iOS). Le **web n'est pas supporté** :
-  `expo-sqlite` (wasm), `expo-secure-store`, la biométrie, les notifications et
-  les tâches d'arrière-plan n'ont pas d'implémentation web fonctionnelle.
+1. Ouvrez une issue pour décrire le bug ou l'idée.
+2. Créez une branche, puis lancez `npm run verify` avant de proposer une pull request.
+3. Décrivez ce qui change et comment le vérifier.
+
+En participant, vous acceptez de respecter le [code de conduite](CODE_OF_CONDUCT.md).
+
+## Contact
+
+Flamme WASSANGOU, [flammewassangou@gmail.com](mailto:flammewassangou@gmail.com)

@@ -52,7 +52,7 @@ export interface ContactSheetProps {
 
 function formatDate(timestamp: number | null): string {
   if (timestamp === null) {
-    return '—';
+    return 'Inconnue';
   }
   return new Date(timestamp).toLocaleDateString('fr-FR', {
     day: 'numeric',

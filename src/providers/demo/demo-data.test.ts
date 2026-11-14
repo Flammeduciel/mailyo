@@ -18,7 +18,7 @@ describe('demo data', () => {
   it('builds a Gmail demo account', () => {
     const account = createDemoAccount(1_000);
     expect(account.provider).toBe('gmail');
-    expect(account.emailAddress).toBe('demo@mailyo.app');
+    expect(account.emailAddress).toBe('demo@wouah-mail.app');
     expect(account.displayName).toBe('Compte démo');
     expect(account.createdAt).toBe(1_000);
   });

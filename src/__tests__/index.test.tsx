@@ -1,5 +1,5 @@
 /**
- * The entry route must resolve — Expo Router opens the app at `/`, and without
+ * The entry route must resolve, Expo Router opens the app at `/`, and without
  * an `index` route that URL is unmatched upstream of any screen. It hands over
  * to the conversation list, which owns the empty state for a fresh install.
  */

@@ -9,7 +9,7 @@ import { usePermissions } from '@/state/use-permissions';
 import { AppText, Radius, Spacing, useAppTheme } from '@/ui';
 
 /**
- * First launch: explains why MailYo needs notifications and an unrestricted
+ * First launch: explains why Wouah Mail needs notifications and an unrestricted
  * battery (the near-instant delivery only holds while Android keeps it alive),
  * and asks for them before the inbox.
  */
@@ -39,10 +39,10 @@ export default function WelcomeScreen() {
           <MaterialIcons name="mark-email-unread" size={40} color={colors.primary} />
         </View>
         <AppText weight="bold" style={styles.title}>
-          Bienvenue sur MailYo
+          Bienvenue sur Wouah Mail
         </AppText>
         <AppText color="textSecondary" style={styles.lead}>
-          Vos mails arrivent comme des messages. Pour qu’ils sonnent dès leur arrivée, MailYo a
+          Vos mails arrivent comme des messages. Pour qu’ils sonnent dès leur arrivée, Wouah Mail a
           besoin de quelques autorisations.
         </AppText>
 
@@ -53,7 +53,7 @@ export default function WelcomeScreen() {
         >
           <MaterialIcons name="lock-outline" size={18} color={colors.textSecondary} />
           <AppText variant="caption" color="textSecondary" style={styles.noteText}>
-            Vos mails restent chez votre messagerie : MailYo s’y connecte directement depuis ce
+            Vos mails restent chez votre messagerie : Wouah Mail s’y connecte directement depuis ce
             téléphone, sans serveur intermédiaire.
           </AppText>
         </View>

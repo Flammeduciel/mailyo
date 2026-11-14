@@ -15,7 +15,7 @@ export interface SplitQuote {
 }
 
 /**
- * "Le …, X a écrit :" / "On …, X wrote:" — may wrap over two lines. `[^\S\n]`
+ * "Le …, X a écrit :" / "On …, X wrote:", may wrap over two lines. `[^\S\n]`
  * also matches the no-break spaces French clients put before the colon.
  */
 const ATTRIBUTION =
@@ -109,7 +109,7 @@ export function parseQuoteBlock(quoted: string): QuoteBlock {
       date = parts[1].trim();
       author = parts[2].trim();
       address = parts[3]?.trim() ?? null;
-      // English Gmail: "On Mon, Jan 5, 2026 at 9:00 AM Bob <…> wrote:" — the
+      // English Gmail: "On Mon, Jan 5, 2026 at 9:00 AM Bob <…> wrote:", the
       // time sits before the name, without a comma.
       const timed = /^(.*\d{1,2}[:h]\d{2}(?:\s*[AP]M)?)\s+(.+)$/i.exec(author);
       if (timed) {

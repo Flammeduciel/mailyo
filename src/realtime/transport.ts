@@ -17,7 +17,7 @@ export interface RealtimeStatus {
   running: boolean;
   /** Addresses being watched. */
   accounts: string[];
-  /** MailYo is exempt from battery optimisation (fewer delays). */
+  /** Wouah Mail is exempt from battery optimisation (fewer delays). */
   batteryUnrestricted: boolean;
 }
 

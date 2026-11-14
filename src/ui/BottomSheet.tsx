@@ -45,7 +45,7 @@ export interface BottomSheetProps {
 }
 
 /**
- * MailYo bottom sheet: slides up over a backdrop that fades with it, follows
+ * Wouah Mail bottom sheet: slides up over a backdrop that fades with it, follows
  * the finger on the grab handle (drag down, flick or tap outside to close).
  */
 export function BottomSheet({

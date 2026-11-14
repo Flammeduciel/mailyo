@@ -6,7 +6,7 @@ import { useApp } from '@/state/app-context';
 import { usePermissions } from '@/state/use-permissions';
 import { AppText, Header, Screen, Spacing, useAppTheme } from '@/ui';
 
-/** « Réception en arrière-plan »: the live state of what MailYo needs to ring on time. */
+/** « Réception en arrière-plan »: the live state of what Wouah Mail needs to ring on time. */
 export default function OnboardingScreen() {
   const colors = useAppTheme();
   const { service } = useApp();
@@ -20,7 +20,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.content}
       >
         <AppText color="textSecondary" style={styles.intro}>
-          MailYo se connecte directement à votre boîte. Pour qu’un mail sonne dès son arrivée,
+          Wouah Mail se connecte directement à votre boîte. Pour qu’un mail sonne dès son arrivée,
           Android doit laisser l’application travailler en arrière-plan.
         </AppText>
         <PermissionList states={states} onRequest={(id) => void request(id)} />

@@ -193,7 +193,7 @@ export function MailboxDrawer({
           >
             <View style={styles.head}>
               <AppText weight="bold" style={[styles.brand, { color: colors.brand }]}>
-                MailYo
+                Wouah Mail
               </AppText>
               {subtitle ? (
                 <AppText variant="caption" color="textSecondary" numberOfLines={1}>

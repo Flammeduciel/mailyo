@@ -1,5 +1,5 @@
 /**
- * `relay` transport — reserved, not implemented yet (see docs/realtime-relay.md).
+ * `relay` transport, reserved, not implemented yet (see docs/realtime-relay.md).
  *
  * Planned flow: the app registers its FCM token and account ids with the relay;
  * the relay subscribes to provider push (Gmail `users.watch` → Pub/Sub,

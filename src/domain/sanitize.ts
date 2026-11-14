@@ -4,7 +4,7 @@
  * Email bodies are untrusted: a message may contain scripts, event handlers and
  * `javascript:` links that would run inside a WebView. This module implements a
  * small allow-list sanitiser with no external dependency. It is intentionally
- * conservative — anything not explicitly allowed is dropped.
+ * conservative, anything not explicitly allowed is dropped.
  *
  * The functions here are pure and never throw, so they are safe to call while
  * rendering a list of messages.

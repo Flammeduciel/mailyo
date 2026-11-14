@@ -1,4 +1,4 @@
-export const APP_NAME = 'MailYo';
+export const APP_NAME = 'Wouah Mail';
 
 export const DEFAULT_IMAP_TIMEOUT_MS = 30000;
 export const DEFAULT_IMAP_IDLE_RETRY_MS = 5000;

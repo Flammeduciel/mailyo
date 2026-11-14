@@ -50,10 +50,10 @@ describe('createExpoBiometricAuthenticator', () => {
       authenticateAsync.mockResolvedValue({ success: true });
 
       await expect(
-        createExpoBiometricAuthenticator().authenticate('Déverrouillez MailYo'),
+        createExpoBiometricAuthenticator().authenticate('Déverrouillez Wouah Mail'),
       ).resolves.toBe(true);
       expect(authenticateAsync).toHaveBeenCalledWith({
-        promptMessage: 'Déverrouillez MailYo',
+        promptMessage: 'Déverrouillez Wouah Mail',
         cancelLabel: 'Annuler',
         disableDeviceFallback: false,
       });
@@ -63,7 +63,7 @@ describe('createExpoBiometricAuthenticator', () => {
       authenticateAsync.mockResolvedValue({ success: false, error: 'user_cancel' });
 
       await expect(
-        createExpoBiometricAuthenticator().authenticate('Déverrouillez MailYo'),
+        createExpoBiometricAuthenticator().authenticate('Déverrouillez Wouah Mail'),
       ).resolves.toBe(false);
     });
 
@@ -71,7 +71,7 @@ describe('createExpoBiometricAuthenticator', () => {
       authenticateAsync.mockRejectedValue(new Error('native failure'));
 
       await expect(
-        createExpoBiometricAuthenticator().authenticate('Déverrouillez MailYo'),
+        createExpoBiometricAuthenticator().authenticate('Déverrouillez Wouah Mail'),
       ).resolves.toBe(false);
     });
   });

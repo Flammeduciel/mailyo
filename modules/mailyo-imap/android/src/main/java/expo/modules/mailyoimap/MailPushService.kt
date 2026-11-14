@@ -86,7 +86,7 @@ class MailPushService : Service() {
     val notification = NotificationCompat.Builder(this, SERVICE_CHANNEL)
       .setSmallIcon(smallIcon())
       .setContentTitle("Notifications instantanées")
-      .setContentText("MailYo reste à l’écoute de vos nouveaux emails")
+      .setContentText("Wouah Mail reste à l’écoute de vos nouveaux emails")
       .setPriority(NotificationCompat.PRIORITY_MIN)
       .setOngoing(true)
       .setShowWhen(false)
@@ -214,7 +214,7 @@ class MailPushService : Service() {
   ) {
     val id = (account.id + ":" + uid).hashCode()
     val (title, text) = when (config.contentMode) {
-      "hidden" -> "MailYo" to "Nouveau message"
+      "hidden" -> "Wouah Mail" to "Nouveau message"
       "sender" -> from to "Nouveau message"
       else -> from to subject.ifEmpty { "(Sans objet)" }
     }

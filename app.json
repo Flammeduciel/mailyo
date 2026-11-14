@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MailYo",
+    "name": "Wouah Mail",
     "slug": "mailyo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,7 +18,7 @@
           "fetch",
           "remote-notification"
         ],
-        "NSFaceIDUsageDescription": "Déverrouillez MailYo pour accéder à vos emails."
+        "NSFaceIDUsageDescription": "Déverrouillez Wouah Mail pour accéder à vos emails."
       }
     },
     "android": {
@@ -78,8 +78,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "MailYo accède à vos photos pour les joindre à vos emails.",
-          "cameraPermission": "MailYo utilise l’appareil photo pour joindre une photo à un email.",
+          "photosPermission": "Wouah Mail accède à vos photos pour les joindre à vos emails.",
+          "cameraPermission": "Wouah Mail utilise l’appareil photo pour joindre une photo à un email.",
           "microphonePermission": false
         }
       ],

@@ -185,7 +185,7 @@ export default function SettingsScreen() {
     (account: Account) => {
       showAlert(
         'Se déconnecter',
-        `Déconnecter ${account.emailAddress} ? L’accès de MailYo à ce compte est révoqué et ses mails sont effacés de ce téléphone (ils restent dans Gmail).`,
+        `Déconnecter ${account.emailAddress} ? L’accès de Wouah Mail à ce compte est révoqué et ses mails sont effacés de ce téléphone (ils restent dans Gmail).`,
         [
           { text: 'Annuler', style: 'cancel' },
           {
@@ -244,7 +244,7 @@ export default function SettingsScreen() {
             testID="settings-profile"
           >
             <Avatar
-              name={primary?.displayName || primary?.emailAddress || 'MailYo'}
+              name={primary?.displayName || primary?.emailAddress || 'Wouah Mail'}
               size={56}
               imageUri={service.getContactPhoto(primary?.emailAddress)}
             />
@@ -293,7 +293,7 @@ export default function SettingsScreen() {
           footer={
             permissions.missingVital
               ? 'Une autorisation essentielle manque : des mails peuvent arriver en retard ou sans notification.'
-              : 'MailYo a tout ce qu’il faut pour vous prévenir à l’arrivée d’un mail.'
+              : 'Wouah Mail a tout ce qu’il faut pour vous prévenir à l’arrivée d’un mail.'
           }
         >
           {permissions.states
@@ -521,10 +521,10 @@ export default function SettingsScreen() {
 
         <View style={styles.about}>
           <AppText weight="semibold" color="textSecondary">
-            MailYo
+            Wouah Mail
           </AppText>
           <AppText variant="caption" color="textMuted" style={styles.aboutText}>
-            Version {Constants.expoConfig?.version ?? '—'} · Vos mails restent chez votre
+            Version {Constants.expoConfig?.version ?? '1.0.0'} · Vos mails restent chez votre
             fournisseur, sans serveur intermédiaire.
           </AppText>
         </View>

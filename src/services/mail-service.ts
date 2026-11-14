@@ -1,5 +1,5 @@
 /**
- * Application service — the composition root the UI talks to.
+ * Application service, the composition root the UI talks to.
  *
  * It owns no state beyond its injected collaborators: it sequences the
  * repositories, the provider registry, the sync engine and the notifier so a
@@ -328,7 +328,7 @@ export class MailService {
   /**
    * On screen, the app notifies the mail its own syncs bring in. In the
    * background, accounts watched by « Notifications instantanées » are notified
-   * by the native service — the app stays quiet so nothing rings twice.
+   * by the native service, the app stays quiet so nothing rings twice.
    */
   setAppForeground(foreground: boolean): void {
     if (!foreground) {

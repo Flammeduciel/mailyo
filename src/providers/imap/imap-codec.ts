@@ -1,5 +1,5 @@
 /**
- * Pure mapping between the native IMAP client and MailYo's provider contract:
+ * Pure mapping between the native IMAP client and Wouah Mail's provider contract:
  * folder roles (SPECIAL-USE attributes, then usual names) and messages.
  */
 

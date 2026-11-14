@@ -49,7 +49,7 @@ class MailError(code: String, message: String, cause: Throwable? = null) :
   CodedException(code, message, cause)
 
 /**
- * IMAP + SMTP for MailYo, on top of JavaMail for Android. Every call is a
+ * IMAP + SMTP for Wouah Mail, on top of JavaMail for Android. Every call is a
  * coroutine on the IO dispatcher; IMAP stores are cached per account and
  * reconnected when the server dropped them.
  */
@@ -113,7 +113,7 @@ class MailyoImapModule : Module() {
       )
     }
 
-    /** Opens the system screen where MailYo can be exempted from battery optimisation. */
+    /** Opens the system screen where Wouah Mail can be exempted from battery optimisation. */
     Function("openBatterySettings") {
       val context = requireContext()
       val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)

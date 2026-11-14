@@ -1,5 +1,5 @@
 /**
- * « Corbeille »: mail deleted from MailYo (or elsewhere) is still in the
+ * « Corbeille »: mail deleted from Wouah Mail (or elsewhere) is still in the
  * provider's trash for about 30 days. Read live from the server, one tap
  * puts it back in its conversation.
  */

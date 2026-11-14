@@ -202,7 +202,7 @@ export interface GmailMessagePart {
   parts?: GmailMessagePart[];
 }
 
-/** Subset of the `users.messages` resource used by MailYo. */
+/** Subset of the `users.messages` resource used by Wouah Mail. */
 export interface GmailMessage {
   id: string;
   threadId?: string;
@@ -257,7 +257,7 @@ function walkParts(part: GmailMessagePart, acc: ExtractedBody): void {
  * Map a Gmail message onto the provider-neutral `RemoteMessage`.
  *
  * `remoteUid` is the message's `internalDate` (ms): it is a safe integer, it
- * grows with arrival time — which is what the sync cursor needs — and it is
+ * grows with arrival time, which is what the sync cursor needs, and it is
  * identical in every label, so a mail in INBOX and SENT keeps one identity.
  */
 export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: string): RemoteMessage {

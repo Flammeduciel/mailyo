@@ -1,5 +1,5 @@
 /**
- * Permissions MailYo depends on, read live from the OS:
+ * Permissions Wouah Mail depends on, read live from the OS:
  * - notifications (vital: without it no mail can ring);
  * - no battery restriction (vital while « Notifications instantanées » is on:
  *   Android otherwise kills the permanent connection);
