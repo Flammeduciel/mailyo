@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a release APK (arm64) inside the Claude Code cloud container, without EAS.
-# Known-good recipe — see docs/build-android-cloud.md for why each step exists.
+# Known-good recipe, see docs/build-android-cloud.md for why each step exists.
 set -euo pipefail
 
 export ANDROID_HOME=/opt/android-sdk

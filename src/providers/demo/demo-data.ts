@@ -16,7 +16,7 @@ import type { RemoteFolder, RemoteMessage } from '@/providers/types';
 
 /** Identifier of the built-in demo account, stable across runs. */
 export const DEMO_ACCOUNT_ID = 'acc_demo';
-const DEMO_EMAIL = 'demo@mailyo.app';
+const DEMO_EMAIL = 'demo@wouah-mail.app';
 
 /** Fixed clock so the demo data never depends on the current time. */
 const BASE_TIME = Date.UTC(2026, 0, 12, 8, 30);
@@ -133,7 +133,7 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
     {
       remoteUid: 2,
       folderRemoteId: INBOX_FOLDER.remoteFolderId,
-      messageIdHeader: '<rdv-2026-01-reponse@mailyo.app>',
+      messageIdHeader: '<rdv-2026-01-reponse@wouah-mail.app>',
       inReplyTo: '<rdv-2026-01@atelier-nord.fr>',
       referencesHeader: '<rdv-2026-01@atelier-nord.fr>',
       senderName: 'Compte démo',
@@ -152,8 +152,8 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
       remoteUid: 3,
       folderRemoteId: INBOX_FOLDER.remoteFolderId,
       messageIdHeader: '<rdv-2026-01-suite@atelier-nord.fr>',
-      inReplyTo: '<rdv-2026-01-reponse@mailyo.app>',
-      referencesHeader: '<rdv-2026-01@atelier-nord.fr> <rdv-2026-01-reponse@mailyo.app>',
+      inReplyTo: '<rdv-2026-01-reponse@wouah-mail.app>',
+      referencesHeader: '<rdv-2026-01@atelier-nord.fr> <rdv-2026-01-reponse@wouah-mail.app>',
       senderName: 'Claire Fontaine',
       senderAddress: 'claire.fontaine@atelier-nord.fr',
       to: [{ name: 'Compte démo', address: DEMO_EMAIL }],
@@ -191,7 +191,7 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
     {
       remoteUid: 5,
       folderRemoteId: INBOX_FOLDER.remoteFolderId,
-      messageIdHeader: '<facture-2026-01-reponse@mailyo.app>',
+      messageIdHeader: '<facture-2026-01-reponse@wouah-mail.app>',
       inReplyTo: '<facture-2026-01@orange.fr>',
       referencesHeader: '<facture-2026-01@orange.fr>',
       senderName: 'Compte démo',
@@ -218,7 +218,7 @@ export function createDemoRemoteMessages(): RemoteMessage[] {
       senderAddress: 'lettre@lefilvert.example',
       to: [{ name: 'Compte démo', address: DEMO_EMAIL }],
       cc: [],
-      subject: 'La lettre du jardin — janvier',
+      subject: 'La lettre du jardin de janvier',
       bodyText: '',
       bodyHtml: `<table width="640" cellpadding="0" cellspacing="0" style="font-family:Georgia,serif">
   <tr><td style="background:#2f6b3a;color:#fff;padding:18px 24px;font-size:22px">Le Fil Vert · janvier</td></tr>

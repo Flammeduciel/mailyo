@@ -11,7 +11,7 @@ function remoteMessage(overrides: Partial<RemoteMessage> = {}): RemoteMessage {
     referencesHeader: null,
     senderName: 'Alice',
     senderAddress: 'alice@example.com',
-    to: [{ name: 'Demo', address: 'demo@mailyo.app' }],
+    to: [{ name: 'Demo', address: 'demo@wouah-mail.app' }],
     cc: [],
     subject: 'Sujet',
     bodyText: 'Corps',
@@ -48,22 +48,25 @@ function inboxFetch(
 
 describe('MockMailProvider', () => {
   it('exposes the configured identity and a default inbox folder', async () => {
-    const provider = new MockMailProvider({ emailAddress: 'demo@mailyo.app', provider: 'gmail' });
+    const provider = new MockMailProvider({
+      emailAddress: 'demo@wouah-mail.app',
+      provider: 'gmail',
+    });
 
     expect(provider.id).toBe('gmail');
-    expect(provider.emailAddress).toBe('demo@mailyo.app');
+    expect(provider.emailAddress).toBe('demo@wouah-mail.app');
     await expect(provider.listFolders()).resolves.toEqual([
       { remoteFolderId: 'INBOX', name: 'Boîte de réception', role: 'inbox' },
     ]);
   });
 
   it('falls back to the mock provider id when none is given', () => {
-    expect(new MockMailProvider({ emailAddress: 'demo@mailyo.app' }).id).toBe('mock');
+    expect(new MockMailProvider({ emailAddress: 'demo@wouah-mail.app' }).id).toBe('mock');
   });
 
   it('returns the initial fetch sorted by remoteUid ascending', async () => {
     const provider = new MockMailProvider({
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
       uidValidity: 7,
       messages: [
         remoteMessage({ remoteUid: 3 }),
@@ -79,7 +82,7 @@ describe('MockMailProvider', () => {
 
   it('returns only messages above lastSyncedUid on a differential fetch', async () => {
     const provider = new MockMailProvider({
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
       messages: [
         remoteMessage({ remoteUid: 1 }),
         remoteMessage({ remoteUid: 2 }),
@@ -93,7 +96,7 @@ describe('MockMailProvider', () => {
 
   it('honours the limit after sorting', async () => {
     const provider = new MockMailProvider({
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
       messages: [
         remoteMessage({ remoteUid: 3 }),
         remoteMessage({ remoteUid: 1 }),
@@ -107,7 +110,7 @@ describe('MockMailProvider', () => {
 
   it('re-fetches everything when the known UIDVALIDITY differs', async () => {
     const provider = new MockMailProvider({
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
       uidValidity: 1,
       messages: [
         remoteMessage({ remoteUid: 1 }),
@@ -126,7 +129,7 @@ describe('MockMailProvider', () => {
   });
 
   it('records sends and returns an incrementing remoteId', async () => {
-    const provider = new MockMailProvider({ emailAddress: 'demo@mailyo.app' });
+    const provider = new MockMailProvider({ emailAddress: 'demo@wouah-mail.app' });
 
     await expect(provider.send(outgoing)).resolves.toEqual({ status: 'sent', remoteId: 'sent-1' });
     await expect(provider.send(outgoing)).resolves.toEqual({ status: 'sent', remoteId: 'sent-2' });
@@ -134,7 +137,7 @@ describe('MockMailProvider', () => {
   });
 
   it('reports a failed send when the next status is forced to failed', async () => {
-    const provider = new MockMailProvider({ emailAddress: 'demo@mailyo.app' });
+    const provider = new MockMailProvider({ emailAddress: 'demo@wouah-mail.app' });
     provider.setNextSendStatus('failed');
 
     const result = await provider.send(outgoing);
@@ -147,7 +150,7 @@ describe('MockMailProvider', () => {
   });
 
   it('notifies watchers when a message is delivered remotely', async () => {
-    const provider = new MockMailProvider({ emailAddress: 'demo@mailyo.app' });
+    const provider = new MockMailProvider({ emailAddress: 'demo@wouah-mail.app' });
     const onHint = jest.fn();
     const unsubscribe = provider.watch(onHint);
 
@@ -163,7 +166,7 @@ describe('MockMailProvider', () => {
 
   it('excludes a message from its folder after moveToTrash', async () => {
     const provider = new MockMailProvider({
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
       messages: [remoteMessage({ remoteUid: 1 }), remoteMessage({ remoteUid: 2 })],
     });
 
@@ -174,7 +177,7 @@ describe('MockMailProvider', () => {
 
   it('reflects setRead and star on subsequent fetches', async () => {
     const provider = new MockMailProvider({
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
       messages: [remoteMessage({ remoteUid: 1 })],
     });
 

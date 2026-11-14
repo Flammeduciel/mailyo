@@ -1,13 +1,13 @@
 # Journal des versions
 
-Toutes les évolutions notables de MailYo. Format inspiré de
+Toutes les évolutions notables de Wouah Mail. Format inspiré de
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ## [Non publié]
 
 ### Ajouté
 
-- **Application** : parcours complet câblé sur `MailService` — réception
+- **Application** : parcours complet câblé sur `MailService`: réception
   (conversations groupées en fils), conversation, nouveau message, recherche,
   paramètres, connexion (démo + Gmail OAuth2), onboarding.
 - **Recherche plein texte** FTS5 (objet, expéditeur, contenu), requête assainie.

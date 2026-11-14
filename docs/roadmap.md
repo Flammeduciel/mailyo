@@ -20,6 +20,6 @@
   Affiché « Bientôt disponible » sur l'écran de connexion.
 - **Serveur relais** (push Gmail Pub/Sub, abonnements Microsoft Graph → FCM) : plus
   économe que la connexion permanente, indispensable pour Microsoft. Emplacement
-  prêt (`RelayTransport`, réglage « Bientôt disponible ») — voir `docs/realtime.md`.
+  prêt (`RelayTransport`, réglage « Bientôt disponible »): voir `docs/realtime.md`.
 - iOS pour IMAP (MailCore2).
 - Yahoo en OAuth (si Yahoo approuve l'accès Mail) ; d'ici là, mot de passe d'application.

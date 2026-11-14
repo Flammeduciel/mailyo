@@ -5,7 +5,7 @@
  * User input must never reach it verbatim or a stray `"` or `NEAR` would throw
  * or change the semantics. We tokenise the input, keep letters/numbers (plus
  * `@` and `.` so email addresses stay searchable), wrap every token in double
- * quotes and let the last token be a prefix query — the familiar "search as you
+ * quotes and let the last token be a prefix query, the familiar "search as you
  * type" behaviour.
  */
 

@@ -59,19 +59,19 @@ function silence(duration) {
 
 mkdirSync('assets/sounds', { recursive: true });
 
-// soft.wav — gentle descending two-note chime.
+// soft.wav, gentle descending two-note chime.
 writeFileSync(
   'assets/sounds/soft.wav',
   wav(concat([tone(880, 0.22, 0.5), tone(659, 0.34, 0.45)])),
 );
 
-// chime.wav — pleasant rising triad.
+// chime.wav, pleasant rising triad.
 writeFileSync(
   'assets/sounds/chime.wav',
   wav(concat([tone(523, 0.16, 0.5), tone(659, 0.16, 0.5), tone(784, 0.34, 0.5)])),
 );
 
-// urgent.wav — three quick beeps.
+// urgent.wav, three quick beeps.
 writeFileSync(
   'assets/sounds/urgent.wav',
   wav(

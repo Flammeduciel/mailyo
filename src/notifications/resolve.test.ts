@@ -96,7 +96,7 @@ describe('resolveNotification', () => {
     expect(decision.notify).toBe(true);
     expect(decision.silent).toBe(false);
     expect(decision.title).toBe('Alice Martin');
-    expect(decision.body).toBe('Réunion demain — Bonjour,');
+    expect(decision.body).toBe('Réunion demain · Bonjour,');
     expect(decision.channelId).toBe('default');
     expect(decision.soundId).toBe('default');
     expect(decision.matchedRuleId).toBeNull();
@@ -173,7 +173,7 @@ describe('resolveNotification', () => {
     expect(decision.channelId).toBe('silent');
     expect(decision.reason).toBe('Plage horaire silencieuse');
     expect(decision.title).toBe('Alice Martin');
-    expect(decision.body).toBe('Réunion demain — Bonjour,');
+    expect(decision.body).toBe('Réunion demain · Bonjour,');
   });
 
   it('lets a VIP notify rule escape quiet hours', () => {

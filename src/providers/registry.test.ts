@@ -36,7 +36,7 @@ describe('ProviderRegistry', () => {
     const created = registry.getOrCreate({
       accountId: 'acc_2',
       provider: 'gmail',
-      emailAddress: 'demo@mailyo.app',
+      emailAddress: 'demo@wouah-mail.app',
     });
     expect(created).toBeInstanceOf(MockMailProvider);
     expect(created.id).toBe('gmail');
@@ -46,7 +46,7 @@ describe('ProviderRegistry', () => {
       registry.getOrCreate({
         accountId: 'acc_2',
         provider: 'gmail',
-        emailAddress: 'demo@mailyo.app',
+        emailAddress: 'demo@wouah-mail.app',
       }),
     ).toBe(created);
   });

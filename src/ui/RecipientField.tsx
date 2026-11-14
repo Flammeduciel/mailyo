@@ -25,7 +25,7 @@ export interface RecipientFieldProps {
 
 /**
  * "À" field like a messaging app: chosen people as chips with their avatar,
- * and while the field is active, the people you already wrote to — filtered as
+ * and while the field is active, the people you already wrote to, filtered as
  * you type. A typed address is accepted with space, comma or Entrée.
  */
 export function RecipientField({

@@ -1,6 +1,6 @@
 /**
  * Resolve a message plus the rule engine decision into a concrete, testable
- * notification. Pure and synchronous: no native module, no clock of its own —
+ * notification. Pure and synchronous: no native module, no clock of its own -
  * the caller injects `now`. The actual presentation lives in `notifier.ts`.
  */
 
@@ -75,7 +75,7 @@ function buildContent(input: ResolveNotificationInput): { title: string; body: s
       const preview = buildPreview(message.bodyText, 80);
       return {
         title: message.senderName,
-        body: preview.length > 0 ? `${message.subject} — ${preview}` : message.subject,
+        body: preview.length > 0 ? `${message.subject} · ${preview}` : message.subject,
       };
     }
     case 'sender':

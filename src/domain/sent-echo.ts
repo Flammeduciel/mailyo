@@ -1,7 +1,7 @@
 /**
  * Sent-mail echoes.
  *
- * Right after sending, MailYo stores a local copy of the message (no server
+ * Right after sending, Wouah Mail stores a local copy of the message (no server
  * UID yet) so it shows in the conversation at once. The next sync brings the
  * same mail back from the server's Sent folder (and sometimes the inbox). That
  * copy must replace the local one, not sit next to it.

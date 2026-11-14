@@ -9,12 +9,12 @@
 | ------- | ------------------------ | -------------------------------------------------------------------- |
 | `off`   | disponible               | Synchro périodique d'arrière-plan (Android décide, ~15 min ou plus). |
 | `idle`  | **disponible** (Android) | Connexion IMAP IDLE permanente, sans serveur.                        |
-| `relay` | **réservé**              | Push des fournisseurs via un serveur relais MailYo, puis FCM.        |
+| `relay` | **réservé**              | Push des fournisseurs via un serveur relais Wouah Mail, puis FCM.        |
 
 Dans tous les modes, quand l'app est ouverte : synchro au retour au premier plan,
 puis toutes les 30 s (`src/realtime/use-realtime.ts`).
 
-## `idle` — connexion permanente (fait)
+## `idle`: connexion permanente (fait)
 
 - Service Android de premier plan `MailPushService` (type `remoteMessaging`), une
   petite notification fixe « Notifications instantanées ». Redémarre au boot.
@@ -29,12 +29,12 @@ puis toutes les 30 s (`src/realtime/use-realtime.ts`).
   tait pour les comptes surveillés ; à l'écran, l'app notifie ce que ses synchros
   apportent, sauf les mails arrivés avant son ouverture (déjà notifiés).
 - Limites : batterie (une connexion par compte), certains constructeurs tuent les
-  services — d'où le bouton « Ne pas restreindre la batterie ». Pas d'iOS.
+  services, d'où le bouton « Ne pas restreindre la batterie ». Pas d'iOS.
 
-## `relay` — serveur relais (à faire)
+## `relay`: serveur relais (à faire)
 
 Emplacement : `src/realtime/relay-transport.ts` (`isAvailable() === false`), ligne
-« Serveur relais — Bientôt disponible » dans les réglages.
+« Serveur relais, Bientôt disponible » dans les réglages.
 
 Plan :
 

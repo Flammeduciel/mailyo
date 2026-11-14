@@ -1,10 +1,10 @@
 /**
- * MailYo design system — colours, spacing, radii and typography scale.
+ * Wouah Mail design system, colours, spacing, radii and typography scale.
  *
- * Identity: "encre" — a deep indigo accent on cool slate neutrals. Calm,
+ * Identity: "encre", a deep indigo accent on cool slate neutrals. Calm,
  * editorial and readable for long mail bodies; the accent is reserved for
  * actions, selection and unread state so screens never look busy. Every value
- * here is MailYo's own (no palette borrowed from another messaging app).
+ * here is Wouah Mail's own (no palette borrowed from another messaging app).
  * Light/dark follow the device or the user's preference.
  */
 

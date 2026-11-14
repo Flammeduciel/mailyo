@@ -7,7 +7,7 @@ nohup scripts/build-android-cloud.sh > /tmp/build.log 2>&1 &   # run in backgrou
 ```
 
 Result: `android/app/build/outputs/apk/release/app-release.apk` (arm64 only,
-signed with the default debug key — fine for testing, not for the Play Store).
+signed with the default debug key, fine for testing, not for the Play Store).
 Send it to the user with `SendUserFile` from the scratchpad directory.
 
 ## What was learned (do not retry the dead ends)

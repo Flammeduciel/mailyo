@@ -88,7 +88,7 @@ function LockScreen() {
     <Screen>
       <View style={styles.lock}>
         <AppText variant="title" weight="semibold">
-          MailYo verrouillé
+          Wouah Mail verrouillé
         </AppText>
         <AppText variant="body" color="textSecondary" style={styles.lockDescription}>
           Déverrouillez avec Face ID ou votre empreinte pour accéder à vos messages.

@@ -1,4 +1,4 @@
-# Journal des décisions — MailChat / mailyo
+# Journal des décisions, MailChat / mailyo
 
 Ce fichier consigne les décisions prises pendant la construction du projet.
 Chaque décision indique le contexte, le choix retenu et la justification.
@@ -12,7 +12,7 @@ sections sont thématiques.
 
 ## 1. Socle technique
 
-### D-001 — Conserver Expo SDK 57 plutôt que React Native CLI nu
+### D-001, Conserver Expo SDK 57 plutôt que React Native CLI nu
 
 - **Contexte :** le dépôt a été initialisé avec `create-expo-app` (Expo SDK 57,
   expo-router, React Native 0.86, React 19).
@@ -27,7 +27,7 @@ sections sont thématiques.
 - **Conséquence :** les dossiers `android/` et `ios/` sont générés, jamais
   édités à la main.
 
-### D-002 — Gestion d'état sans bibliothèque externe
+### D-002, Gestion d'état sans bibliothèque externe
 
 - **Contexte :** le plan demande une « couche repository et gestion d'état
   explicite » qui distingue données synchronisées, cache et état d'interface.
@@ -40,14 +40,14 @@ sections sont thématiques.
   l'écran ne connaît que le service. Une migration vers une bibliothèque reste
   possible sans toucher aux repositories.
 
-### D-003 — Tests avec jest-expo + Testing Library, colocalisés
+### D-003, Tests avec jest-expo + Testing Library, colocalisés
 
 - **Décision :** `jest-expo` comme preset, `@testing-library/react-native` pour
   l'UI, tests colocalisés (`*.test.ts` à côté du code).
 - **Justification :** preset officiel Expo, gère les mocks natifs des modules
   Expo. Tests colocalisés = le test vit avec la responsabilité qu'il couvre.
 
-### D-004 — Design « classique et propre »
+### D-004, Design « classique et propre »
 
 - **Décision :** jetons de design centralisés (couleurs, espacements, rayons,
   typographie) dans `src/ui/theme.ts`, composants réutilisables dans `src/ui/`.
@@ -60,7 +60,7 @@ sections sont thématiques.
 
 ## 2. Architecture
 
-### D-010 — Architecture en couches
+### D-010, Architecture en couches
 
 ```
 src/app/          routes expo-router (présentation / navigation)
@@ -78,7 +78,7 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** le cœur métier (threading, règles de notification,
   priorité, backoff, assainissement HTML) doit être testable sans appareil.
 
-### D-011 — Adaptateurs fournisseurs derrière interfaces, avec implémentation mock
+### D-011, Adaptateurs fournisseurs derrière interfaces, avec implémentation mock
 
 - **Contexte :** la Phase 0 (faisabilité IMAP/IDLE/SMTP/OAuth sur appareil réel)
   ne peut pas être exécutée dans un environnement sans appareil ni identifiants
@@ -93,7 +93,7 @@ src/notifications/ résolution des règles + publication système
   adaptateurs réels. Aucune bibliothèque IMAP n'est choisie « parce qu'elle
   marche sous Node ».
 
-### D-012 — Regroupement des conversations par fil (threading)
+### D-012, Regroupement des conversations par fil (threading)
 
 - **Décision :** moteur de threading qui s'appuie en priorité sur `Message-ID`,
   `In-Reply-To`, `References`, avec sujet normalisé en repli prudent. Voir
@@ -104,20 +104,20 @@ src/notifications/ résolution des règles + publication système
 
 ## 3. Données et sécurité
 
-### D-020 — SQLite (expo-sqlite) + migrations versionnées
+### D-020, SQLite (expo-sqlite) + migrations versionnées
 
 - **Décision :** schéma conforme au §15 du plan, migrations idempotentes
   pilotées par `PRAGMA user_version`.
 - **Justification :** socle officiel Expo, supporte SQLCipher via config plugin
   pour le chiffrement au repos (MVP sécurité).
 
-### D-021 — Jetons OAuth dans le stockage sécurisé, jamais dans SQLite
+### D-021, Jetons OAuth dans le stockage sécurisé, jamais dans SQLite
 
 - **Décision :** `expo-secure-store` (Android Keystore) pour les jetons ;
   `accounts` ne contient que des métadonnées non secrètes.
 - **Justification :** règle produit §12.
 
-### D-022 — Assainissement HTML
+### D-022, Assainissement HTML
 
 - **Décision :** le HTML entrant est assaini avant stockage/affichage
   (`src/domain/sanitize`). Aucun rendu HTML actif sans contexte isolé.
@@ -125,7 +125,7 @@ src/notifications/ résolution des règles + publication système
 
 ---
 
-### D-013 — Identité locale d'un message
+### D-013, Identité locale d'un message
 
 - **Contexte :** il faut une clé stable pour rendre la synchronisation
   idempotente et détecter les doublons.
@@ -137,7 +137,7 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** satisfait « détection des doublons et mise à jour
   idempotente » (§5) sans dépendre d'un identifiant local volatil.
 
-### D-014 — Réinitialisation sur changement d'UIDVALIDITY
+### D-014, Réinitialisation sur changement d'UIDVALIDITY
 
 - **Décision :** si `UIDVALIDITY` diffère de la valeur mémorisée, les messages du
   dossier sont supprimés localement puis re-téléchargés intégralement
@@ -146,7 +146,7 @@ src/notifications/ résolution des règles + publication système
   changement d'`UIDVALIDITY` ; conserver les anciens provoquerait des
   doublons/erreurs de correspondance.
 
-### D-015 — Test de la couche données avec `node:sqlite`
+### D-015, Test de la couche données avec `node:sqlite`
 
 - **Décision :** les repositories dépendent de l'interface `Database`
   (`src/data/db/database.ts`). En production un adaptateur `expo-sqlite`, en test
@@ -155,7 +155,7 @@ src/notifications/ résolution des règles + publication système
   sans module natif ni appareil. Ce qui est testé est exactement ce que
   l'appareil exécutera.
 
-### D-016 — Service applicatif plutôt que store d'état
+### D-016, Service applicatif plutôt que store d'état
 
 - **Décision :** `src/services/mail-service.ts` est le composition root que l'UI
   consomme (bootstrap, sync, envoi, règles, notifications). Il est exposé par
@@ -165,7 +165,7 @@ src/notifications/ résolution des règles + publication système
   (voir `mail-service.test.ts`), cohérent avec « gestion d'état explicite » sans
   ajouter de bibliothèque ni dupliquer la source de vérité.
 
-### D-017 — Adaptateurs fournisseurs mockés pour le MVP
+### D-017, Adaptateurs fournisseurs mockés pour le MVP
 
 - **Décision :** l'application utilise `MockMailProvider` (déterministe, en
   mémoire) derrière l'interface `MailProvider`. Les adaptateurs Gmail/IMAP/SMTP
@@ -174,7 +174,7 @@ src/notifications/ résolution des règles + publication système
   réception → threading → règles → notification → UI sans dépendre d'un appareil
   ni d'identifiants Google, sans mentir sur les capacités réelles.
 
-### D-018 — Synchro d'arrière-plan périodique (expo-background-task)
+### D-018, Synchro d'arrière-plan périodique (expo-background-task)
 
 - **Décision :** `src/sync/background-sync.ts` enregistre une tâche
   `expo-task-manager` déclenchée par `expo-background-task` (WorkManager Android /
@@ -188,7 +188,7 @@ src/notifications/ résolution des règles + publication système
 - **Conséquence :** `expo-background-task` + `expo-task-manager` sont des
   dépendances assumées, exercées par l'écran `/onboarding`.
 
-### D-030 — Service applicatif (`MailService`)
+### D-030, Service applicatif (`MailService`)
 
 - **Décision :** `src/services/mail-service.ts` séquence repositories, registre de
   fournisseurs, moteur de sync et notifier. L'UI ne connaît que lui. Les
@@ -197,7 +197,7 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** un seul point de composition, testable avec le vrai SQLite
   en mémoire et `MockMailProvider`, sans appareil.
 
-### D-031 — Recherche plein texte FTS5
+### D-031, Recherche plein texte FTS5
 
 - **Contexte :** le plan demande une recherche par objet, expéditeur et contenu.
 - **Décision :** table virtuelle `messages_fts` (external content) alimentée par
@@ -206,7 +206,7 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** recherche instantanée côté appareil, sans requête réseau ni
   scan complet.
 
-### D-032 — Sons de notification par règle
+### D-032, Sons de notification par règle
 
 - **Décision :** les règles `sender`/`domain`/`subject`/`vip` portent un `soundId`
   et un `vibrationMode` ; `evaluateRules` (pur) les résout, `resolve.ts` produit
@@ -216,7 +216,7 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** exigence produit centrale (« son personnalisé par
   expéditeur »), testée de bout en bout en pur.
 
-### D-033 — Écrans : rattachement au service, pas aux repositories
+### D-033, Écrans : rattachement au service, pas aux repositories
 
 - **Décision :** chaque écran (`inbox`, `thread/[id]`, `search`, `compose`,
   `settings`, `rules/edit`, `login`, `onboarding`) lit et mute via `useApp()` /
@@ -225,7 +225,7 @@ src/notifications/ résolution des règles + publication système
 - **Justification :** règle de pureté React (`react-hooks`) et un seul chemin de
   données.
 
-### D-034 — Sons de notification embarqués
+### D-034, Sons de notification embarqués
 
 - **Contexte :** les règles et canaux référençaient des fichiers audio
   (`soft.wav`, `urgent.wav`) absents du dépôt : les sons personnalisés seraient
@@ -238,7 +238,7 @@ src/notifications/ résolution des règles + publication système
   fichier est embarqué dans le build natif. Assets générés par script, sans
   dépendance de licence.
 
-### D-035 — Comptes OAuth créés et gérés, sans transport natif factice
+### D-035, Comptes OAuth créés et gérés, sans transport natif factice
 
 - **Contexte :** l'écran de connexion sauvait les jetons Gmail sous l'identifiant
   factice `gmail-pending`, qu'aucun code ne relisait, et ne créait pas de compte.
@@ -253,7 +253,7 @@ src/notifications/ résolution des règles + publication système
   prétendre qu'une boîte Gmail vide est synchronisée. Le jour où l'adaptateur
   natif arrive, les jetons sont déjà au bon endroit.
 
-### D-036 — Préférence de thème réellement appliquée
+### D-036, Préférence de thème réellement appliquée
 
 - **Contexte :** `AppSettings.theme` était persisté et exposé dans les
   paramètres, mais `useAppTheme` suivait uniquement le thème du système : le
@@ -267,7 +267,7 @@ src/notifications/ résolution des règles + publication système
   préférence a une valeur par défaut, donc les composants testés hors provider
   continuent de fonctionner.
 
-### D-037 — Route d'entrée `/` explicite
+### D-037, Route d'entrée `/` explicite
 
 - **Contexte :** aucune route `index` n'existait sous `src/app/`. Expo Router
   ouvre l'application sur `/`, qui n'était donc apparié à aucun écran ; les seules
@@ -281,7 +281,7 @@ src/notifications/ résolution des règles + publication système
   possède déjà le parcours de première ouverture, sans dupliquer cette logique
   dans une route supplémentaire. Testé (`src/app/index.test.tsx`).
 
-### D-038 — Version affichée lue depuis la configuration
+### D-038, Version affichée lue depuis la configuration
 
 - **Contexte :** l'écran « À propos » affichait une version codée en dur
   (`0.1.0`) divergente de `app.json`/`package.json` (`1.0.0`).
@@ -289,7 +289,7 @@ src/notifications/ résolution des règles + publication système
   d'une constante littérale.
 - **Justification :** une valeur affichée doit refléter le build, pas dériver.
 
-### D-039 — Gmail via l'API REST plutôt qu'IMAP/SMTP natif
+### D-039, Gmail via l'API REST plutôt qu'IMAP/SMTP natif
 
 - **Contexte :** l'OAuth Gmail fonctionnait sur appareil, mais aucun transport
   n'existait : les comptes Gmail restaient vides (D-035). Aucune bibliothèque
@@ -310,11 +310,11 @@ src/notifications/ résolution des règles + publication système
   Pub/Sub côté serveur), les nouveaux mails arrivent à la relève périodique ou
   au rafraîchissement. Seuls les nouveaux messages sont synchronisés : un
   changement lu/non-lu fait ailleurs n'est pas répercuté. Un message envoyé
-  depuis MailYo peut apparaître deux fois (copie locale + copie `SENT`). Le
+  depuis Wouah Mail peut apparaître deux fois (copie locale + copie `SENT`). Le
   scope `https://mail.google.com/` est « restreint » : publication hors mode
   Test = validation Google + audit CASA.
 
-### D-040 — Interface de messagerie Android (onglets par catégorie, bulles, HTML)
+### D-040, Interface de messagerie Android (onglets par catégorie, bulles, HTML)
 
 - **Contexte :** demande d'une interface calquée sur les conventions d'une
   messagerie Android (barre du haut, barre d'onglets, bouton flottant, appui
@@ -323,7 +323,7 @@ src/notifications/ résolution des règles + publication système
 - **Décision :**
   - Onglets `Discussions · Actus · Groupes · Favoris` d'après les catégories
     Gmail (`CATEGORY_*` → colonne `messages.category`, migration 4) ;
-    Paramètres et Archivées passent dans le menu ⋮. Couleur : bleu MailYo,
+    Paramètres et Archivées passent dans le menu ⋮. Couleur : bleu Wouah Mail,
     sans marque ni logo tiers.
   - Liste : recherche en pilule, filtres (Toutes / Non lus / Pièces jointes),
     épinglage, sélection multiple par appui long, défilement infini (pages
@@ -346,7 +346,7 @@ src/notifications/ résolution des règles + publication système
 
 ---
 
-### D-041 — IMAP/SMTP via un module natif Expo (Jakarta Mail), Microsoft reporté
+### D-041, IMAP/SMTP via un module natif Expo (Jakarta Mail), Microsoft reporté
 
 - **Contexte :** après Gmail (API REST), il faut couvrir les autres boîtes : Yahoo,
   iCloud, Orange, Free, SFR, La Poste, OVH, GMX, Zoho, Fastmail… Une app Expo n'a
@@ -364,7 +364,7 @@ src/notifications/ résolution des règles + publication système
   fait transiter les identifiants.
 - **Conséquence :** nécessite un development build / APK (pas Expo Go).
 
-### D-042 — Commits au nom du propriétaire du dépôt
+### D-042, Commits au nom du propriétaire du dépôt
 
 - **Décision :** aucun commit ne porte de mention « Co-Authored-By », « Claude »,
   « Claude Code » ou « Anthropic » ; l'auteur est le propriétaire du dépôt.

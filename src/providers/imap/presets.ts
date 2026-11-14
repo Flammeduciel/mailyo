@@ -1,5 +1,5 @@
 /**
- * Mail services MailYo connects to over IMAP/SMTP, with their server settings
+ * Mail services Wouah Mail connects to over IMAP/SMTP, with their server settings
  * and how to get an app password. Shown with their logo on the login screen.
  */
 

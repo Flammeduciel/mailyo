@@ -1,5 +1,5 @@
 /**
- * Keeps new mail flowing in while MailYo is open, and hands over to the
+ * Keeps new mail flowing in while Wouah Mail is open, and hands over to the
  * real-time transport when it goes to the background:
  *
  * - on screen: sync on resume, then every 30 s; announced mail syncs at once;
