@@ -142,6 +142,7 @@ import { ImapMailProvider } from '@/providers/imap/imap-provider';
 import { ProviderRegistry } from '@/providers/registry';
 import {
   localMessageId,
+  SyncCancelledError,
   SyncEngine,
   toLocalAttachments,
   type SyncProgress,
@@ -237,6 +238,12 @@ export interface MailServiceOptions {
 
 /** Longest wait for Google to revoke the token when signing out. */
 const REVOKE_TIMEOUT_MS = 5000;
+/** Longest wait for a running sync to stop before an account's data is deleted. */
+const SIGN_OUT_SYNC_WAIT_MS = 2500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export class MailService {
   private readonly db: Database;
@@ -847,6 +854,8 @@ export class MailService {
   }
 
   private syncRun: Promise<void> | null = null;
+  /** Accounts being signed out: their sync stops and writes nothing more. */
+  private readonly removing = new Set<string>();
   private readonly syncListeners = new Set<(progress: SyncProgress) => void>();
 
   private async runSyncAll(onProgress: (progress: SyncProgress) => void): Promise<void> {
@@ -865,6 +874,7 @@ export class MailService {
         provider,
         now: this.now,
         fetchLimit: this.fetchLimit,
+        isCancelled: () => this.removing.has(account.id),
         onProgress: (progress) =>
           onProgress({
             ratio: (index + progress.ratio) / accounts.length,
@@ -874,8 +884,9 @@ export class MailService {
       try {
         const result = await engine.syncAccount(account);
         storedBefore += result.fetchedCount;
-        await this.notifyIncoming(account, result.added);
+        if (!this.removing.has(account.id)) await this.notifyIncoming(account, result.added);
       } catch (error) {
+        if (error instanceof SyncCancelledError) continue;
         // One unreachable account (offline, expired token) must not block the
         // others nor app start-up; the engine already flagged it `error`.
         console.warn(`[MailService] sync failed for ${account.emailAddress}`, error);
@@ -1625,35 +1636,60 @@ export class MailService {
    * Revoke the account's Google authorisation (best effort: offline must not
    * block signing out), then delete it and its local mail.
    */
+  /**
+   * Sign an account out. Local data goes first and fast, so the screen never
+   * waits on the network: the account leaves the sync (a run in progress stops
+   * at its next write), its rows are deleted, then Google is asked to revoke
+   * the token in the background.
+   */
   async signOutAccount(accountId: string): Promise<void> {
-    // Stop syncing it first, and let a sync already running finish: deleting
-    // rows under a running sync used to leave the app stuck.
+    this.removing.add(accountId);
     this.registry.remove(accountId);
-    await this.syncRun?.catch(() => undefined);
+    const tokens = await this.tokenStore?.load(accountId).catch(() => null);
 
-    const tokens = await this.tokenStore?.load(accountId);
-    const token = tokens?.refreshToken ?? tokens?.accessToken;
-    if (token) {
-      // Best effort, and never more than a few seconds (offline, slow network).
-      const controller = typeof AbortController === 'undefined' ? null : new AbortController();
-      const timer = setTimeout(() => controller?.abort(), REVOKE_TIMEOUT_MS);
-      try {
-        await (this.fetchImpl ?? fetch)(
-          `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            signal: controller?.signal,
-          },
-        );
-      } catch (cause) {
-        console.warn('[MailService] token revocation failed', cause);
-      } finally {
-        clearTimeout(timer);
-      }
+    // Let a running sync notice the cancellation, but never wait long for it
+    // (a first Gmail sync or a slow download can take minutes).
+    const running = this.syncRun;
+    if (running) {
+      await Promise.race([running.catch(() => undefined), delay(SIGN_OUT_SYNC_WAIT_MS)]);
     }
+
     await this.deleteAccountData(accountId);
     await this.refreshNames();
+
+    // A write already in flight when we deleted may have landed after it:
+    // clean up again once that run is really over.
+    if (running) {
+      void running
+        .catch(() => undefined)
+        .then(() => deleteAccount(this.db, accountId))
+        .finally(() => this.removing.delete(accountId));
+    } else {
+      this.removing.delete(accountId);
+    }
+
+    const token = tokens?.refreshToken ?? tokens?.accessToken;
+    if (token) void this.revokeGoogleToken(token);
+  }
+
+  /** Best effort, at most a few seconds: offline must not block signing out. */
+  private async revokeGoogleToken(token: string): Promise<void> {
+    const controller = typeof AbortController === 'undefined' ? null : new AbortController();
+    const timer = setTimeout(() => controller?.abort(), REVOKE_TIMEOUT_MS);
+    try {
+      await (this.fetchImpl ?? fetch)(
+        `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          signal: controller?.signal,
+        },
+      );
+    } catch (cause) {
+      console.warn('[MailService] token revocation failed', cause);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async deleteAccountData(accountId: string): Promise<void> {

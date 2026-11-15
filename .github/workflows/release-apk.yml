@@ -1,0 +1,87 @@
+# Construit l'APK Android et le publie dans une release GitHub.
+# Lancement : onglet Actions > « Release APK » > Run workflow (avec un numéro de version),
+# ou en poussant un tag v* (ex. v1.0.1).
+name: Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (ex. 1.0.1), utilisée pour le tag v<version>"
+        required: true
+        default: "1.0.0"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Dépendances
+        run: npm ci
+
+      - name: Générer le projet Android
+        run: CI=1 npx expo prebuild --platform android --no-install
+
+      - name: Compiler l'APK
+        working-directory: android
+        run: |
+          sed -i 's/-Xmx2048m/-Xmx6g/' gradle.properties
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Nommer l'APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            "dist/wouah-mail-${{ steps.version.outputs.version }}.apk"
+
+      - name: Publier la release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Wouah Mail ${{ steps.version.outputs.version }}
+          files: dist/wouah-mail-${{ steps.version.outputs.version }}.apk
+          generate_release_notes: true
+          body: |
+            APK Android de Wouah Mail (arm64, téléphones récents).
+
+            Installation : téléchargez le fichier `.apk` ci-dessous sur le téléphone, ouvrez-le,
+            puis autorisez l'installation depuis cette source si Android le demande.
+
+            Version de test : l'APK n'est pas publié sur le Play Store.

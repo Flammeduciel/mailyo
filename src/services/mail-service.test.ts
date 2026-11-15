@@ -602,6 +602,25 @@ describe('MailService OAuth accounts', () => {
     expect(await service.listAccounts()).toEqual([account]);
   });
 
+  it('signs out quickly even while a sync never finishes', async () => {
+    const { service } = await bootstrap();
+    const registry = (
+      service as unknown as {
+        registry: { get(id: string): { listFolders: () => Promise<unknown> } };
+      }
+    ).registry;
+    // The network hangs: the running sync would never end.
+    registry.get(DEMO_ACCOUNT_ID).listFolders = () => new Promise(() => undefined);
+    void service.syncAll();
+
+    const started = Date.now();
+    await service.signOutAccount(DEMO_ACCOUNT_ID);
+
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(await service.listAccounts()).toEqual([]);
+    expect(await service.listConversations()).toEqual([]);
+  }, 10000);
+
   it('removes the stored tokens when the account is deleted', async () => {
     const { tokenStore, service } = await oauthService();
     const account = await service.connectOAuthAccount({ emailAddress: 'a@gmail.com', tokens });

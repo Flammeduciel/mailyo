@@ -254,18 +254,37 @@ class MailPushService : Service() {
       }, 9, 9, TimeUnit.MINUTES)
     }
 
+    /**
+     * Stop watching. Called from the main thread (account removed, service
+     * stopping): the IMAP connection is closed on a background thread, since
+     * closing it waits for the server (and for a running IDLE to end) and would
+     * freeze the app.
+     */
     fun shutdown() {
       stopped = true
       keepAlive.shutdownNow()
-      closeQuietly()
+      closeInBackground()
       interrupt()
+      synchronized(lock) { lock.notifyAll() }
     }
 
-    /** Drop the connection: the loop reconnects immediately. */
+    /** Drop the connection: the loop reconnects immediately. Never blocks the caller. */
     fun reconnectNow() {
       reconnectRequested = true
-      closeQuietly()
+      closeInBackground()
       synchronized(lock) { lock.notifyAll() }
+    }
+
+    private fun closeInBackground() {
+      val openFolder = folder
+      val openStore = imapStore
+      folder = null
+      imapStore = null
+      if (openFolder == null && openStore == null) return
+      Thread({
+        runCatching { openFolder?.takeIf { it.isOpen }?.close(false) }
+        runCatching { openStore?.close() }
+      }, "mailyo-close-${account.id}").apply { isDaemon = true }.start()
     }
 
     override fun run() {
