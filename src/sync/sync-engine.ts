@@ -61,6 +61,16 @@ export interface SyncEngineOptions {
   fetchLimit?: number;
   /** Progress of `syncAccount`, from 0 to 1, plus how many messages are stored so far. */
   onProgress?: (progress: SyncProgress) => void;
+  /** True once the account is being removed: the run stops before its next write. */
+  isCancelled?: () => boolean;
+}
+
+/** Thrown when a run is stopped because its account is being signed out. */
+export class SyncCancelledError extends Error {
+  constructor() {
+    super('Synchronisation interrompue (compte supprimé)');
+    this.name = 'SyncCancelledError';
+  }
 }
 
 export interface SyncProgress {
@@ -77,6 +87,7 @@ export class SyncEngine {
   private readonly now: () => number;
   private readonly fetchLimit: number;
   private readonly onProgress?: (progress: SyncProgress) => void;
+  private readonly isCancelled: () => boolean;
   private stored = 0;
 
   constructor(options: SyncEngineOptions) {
@@ -85,6 +96,11 @@ export class SyncEngine {
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
     this.onProgress = options.onProgress;
+    this.isCancelled = options.isCancelled ?? (() => false);
+  }
+
+  private throwIfCancelled(): void {
+    if (this.isCancelled()) throw new SyncCancelledError();
   }
 
   /** Synchronise every folder of an account that is enabled for sync. */
@@ -106,6 +122,7 @@ export class SyncEngine {
             ratio: Math.min(1, (index + share) / Math.max(1, folders.length)),
             stored: this.stored,
           });
+        this.throwIfCancelled();
         const folderResult = await this.syncFolder(account, folder, report);
         result.added.push(...folderResult.added);
         result.fetchedCount += folderResult.fetchedCount;
@@ -114,7 +131,10 @@ export class SyncEngine {
       await updateAccountSyncStatus(this.db, account.id, 'idle', this.now());
       this.onProgress?.({ ratio: 1, stored: this.stored });
     } catch (error) {
-      await updateAccountSyncStatus(this.db, account.id, 'error', account.lastSyncAt);
+      // A removed account has no row left to flag.
+      if (!(error instanceof SyncCancelledError)) {
+        await updateAccountSyncStatus(this.db, account.id, 'error', account.lastSyncAt);
+      }
       throw error;
     }
 
@@ -124,6 +144,7 @@ export class SyncEngine {
   /** Fetch the remote folders and persist them locally (idempotent). */
   async ensureFolders(account: Account): Promise<Folder[]> {
     const remoteFolders = await this.provider.listFolders();
+    this.throwIfCancelled();
     const existing = await listFolders(this.db, account.id);
     const cursorByRemoteId = new Map(existing.map((folder) => [folder.remoteFolderId, folder]));
 
@@ -227,6 +248,7 @@ export class SyncEngine {
     remote: RemoteMessage,
     knownThreads: Map<string, string>,
   ): Promise<{ message: Message; isNew: boolean }> {
+    this.throwIfCancelled();
     const messageIdHeader = remote.messageIdHeader;
     const threadKey = computeThreadKey(
       {

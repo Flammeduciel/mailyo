@@ -2,7 +2,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  ToastAndroid,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Account, NotificationRule } from '@/domain/models';
@@ -115,6 +122,9 @@ function shortOf(options: { value: string; short: string }[], value: string): st
 }
 
 /** Choice sheet with the current value ticked. */
+/** The sign-out screen never spins longer than this. */
+const SIGN_OUT_TIMEOUT_MS = 8000;
+
 function choose<T extends string>(
   title: string,
   options: { value: T; label: string; description?: string; icon?: string }[],
@@ -194,17 +204,31 @@ export default function SettingsScreen() {
             onPress: () => {
               void (async () => {
                 setSigningOut(account.emailAddress);
+                let failed = false;
                 try {
-                  await service.signOutAccount(account.id);
-                  // The real-time service stops watching the removed account.
-                  await applyRealtime();
-                } finally {
-                  invalidate();
-                  setSigningOut(null);
-                  // Back to the home screen, with nothing of this account left in the stack.
+                  // Never more than a few seconds: local data goes first, the
+                  // network (token revocation) runs in the background.
+                  await Promise.race([
+                    service.signOutAccount(account.id),
+                    new Promise((resolve) => setTimeout(resolve, SIGN_OUT_TIMEOUT_MS)),
+                  ]);
+                } catch (cause) {
+                  failed = true;
+                  console.warn('[settings] sign-out failed', cause);
+                }
+                // The real-time service stops watching the removed account (not awaited).
+                void applyRealtime().catch(() => undefined);
+                invalidate();
+                setSigningOut(null);
+                if (failed) {
+                  ToastAndroid.show('La déconnexion a échoué, réessayez.', ToastAndroid.SHORT);
+                  return;
+                }
+                // Back to the home screen, with nothing of this account left in the stack.
+                setTimeout(() => {
                   if (router.canDismiss()) router.dismissAll();
                   router.replace('/discussions');
-                }
+                }, 0);
               })();
             },
           },
@@ -529,8 +553,14 @@ export default function SettingsScreen() {
           </AppText>
         </View>
       </ScrollView>
-      <Modal visible={signingOut !== null} transparent animationType="fade" statusBarTranslucent>
-        <View style={[styles.overlay, { backgroundColor: colors.scrim }]}>
+      {signingOut !== null ? (
+        // A plain overlay, not a Modal: navigating away while an Android Modal
+        // is open can crash the app.
+        <View
+          style={[styles.overlay, { backgroundColor: colors.scrim }]}
+          pointerEvents="auto"
+          testID="settings-signing-out"
+        >
           <View style={[styles.overlayCard, { backgroundColor: colors.surface }]}>
             <ActivityIndicator color={colors.primary} />
             <AppText weight="semibold">Déconnexion…</AppText>
@@ -539,7 +569,7 @@ export default function SettingsScreen() {
             </AppText>
           </View>
         </View>
-      </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -594,7 +624,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
