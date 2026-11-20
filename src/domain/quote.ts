@@ -15,11 +15,12 @@ export interface SplitQuote {
 }
 
 /**
- * "Le …, X a écrit :" / "On …, X wrote:", may wrap over two lines. `[^\S\n]`
+ * "Le …, X a écrit :" / "On …, X wrote:", may wrap over up to three lines
+ * (Gmail rewraps quoted attributions at 78 columns). `[^\S\n]`
  * also matches the no-break spaces French clients put before the colon.
  */
 const ATTRIBUTION =
-  /(^|\n)[^\S\n]*((?:Le|On)\b[^\n]{0,200}(?:\n[^\n]{0,200})?(?:a\s+écrit|wrote)[^\S\n]*:)[^\S\n]*(\n|$)/i;
+  /(^|\n)[^\S\n]*((?:Le|On)\b[^\n]{0,200}(?:\n[^\n]{0,200}){0,2}?(?:a\s+écrit|wrote)[^\S\n]*:)[^\S\n]*(\n|$)/i;
 
 /** Outlook / forwarded headers block. */
 const OUTLOOK_SEPARATORS = [
@@ -82,6 +83,11 @@ export interface QuoteBlock {
 const ATTRIBUTION_LINE =
   /^(?:Le|On)\s+(.+),\s*([^,<\n]+?)\s*(?:<\s*([^>\s]+)\s*>)?\s*(?:a\s+écrit|wrote)\s*:?\s*$/i;
 
+function isFullyQuoted(text: string): boolean {
+  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  return lines.length > 0 && lines.every((line) => line.trim().startsWith('>'));
+}
+
 /** Remove one level of "> " quoting from every line. */
 export function unquoteOnce(text: string): string {
   return text
@@ -98,11 +104,18 @@ export function unquoteOnce(text: string): string {
 export function parseQuoteBlock(quoted: string): QuoteBlock {
   const source = quoted.replace(/\r\n/g, '\n').trim();
   const match = ATTRIBUTION.exec(source);
+  const startsWithAttribution = match !== null && match.index + match[1].length === 0;
+  // "> Le …, X a écrit :" / ">> …": the whole block is one level deeper than
+  // its attribution line; peel that level off first, else the attribution
+  // stays as raw text.
+  if (!startsWithAttribution && isFullyQuoted(source)) {
+    return parseQuoteBlock(unquoteOnce(source));
+  }
   let author: string | null = null;
   let address: string | null = null;
   let date: string | null = null;
   let rest = source;
-  if (match && match.index + match[1].length === 0) {
+  if (match && startsWithAttribution) {
     const line = match[2].replace(/\s*\n\s*/g, ' ').trim();
     const parts = ATTRIBUTION_LINE.exec(line);
     if (parts) {

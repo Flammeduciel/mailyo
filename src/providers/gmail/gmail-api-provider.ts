@@ -63,6 +63,23 @@ export interface GmailApiProviderOptions {
   /** Stored Message-ID of the local message with this UID, for id recovery. */
   lookupMessageIdHeader: (remoteUid: number) => Promise<string | null>;
   fetchImpl?: typeof fetch;
+  /** Waits between retries when Gmail throttles (injectable for tests). */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/** Retries after a « quota exceeded » answer, waiting longer each time. */
+const THROTTLE_DELAYS_MS = [1_000, 3_000, 8_000];
+
+/** 429, or 403 whose reason is a rate limit (not a permission problem). */
+async function isThrottled(response: Response): Promise<boolean> {
+  if (response.status === 429) return true;
+  if (response.status !== 403) return false;
+  try {
+    const text = await response.clone().text();
+    return /rateLimitExceeded|userRateLimitExceeded|RATE_LIMIT_EXCEEDED|Quota exceeded/i.test(text);
+  } catch {
+    return false;
+  }
 }
 
 export class GmailApiProvider implements MailProvider {
@@ -72,6 +89,7 @@ export class GmailApiProvider implements MailProvider {
   private readonly getAccessToken: AccessTokenProvider;
   private readonly lookupMessageIdHeader: (remoteUid: number) => Promise<string | null>;
   private readonly fetchImpl: typeof fetch;
+  private readonly sleep: (ms: number) => Promise<void>;
   /** remoteUid → Gmail message id. */
   private readonly gmailIds = new Map<number, string>();
 
@@ -80,6 +98,7 @@ export class GmailApiProvider implements MailProvider {
     this.getAccessToken = options.getAccessToken;
     this.lookupMessageIdHeader = options.lookupMessageIdHeader;
     this.fetchImpl = options.fetchImpl ?? ((...args) => fetch(...args));
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   async listFolders(): Promise<RemoteFolder[]> {
@@ -368,8 +387,23 @@ export class GmailApiProvider implements MailProvider {
     return response;
   }
 
-  /** Attach the bearer token; on 401 refresh it once and retry. */
+  /**
+   * Gmail limits the cost of calls per user and per minute: a burst (first
+   * sync, trash, restore) can hit it. Wait and retry instead of failing.
+   */
   private async authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    let response = await this.authorizedFetchOnce(path, init);
+    for (const delay of THROTTLE_DELAYS_MS) {
+      if (!(await isThrottled(response))) return response;
+      const retryAfter = Number(response.headers?.get?.('Retry-After'));
+      await this.sleep(retryAfter > 0 ? Math.min(retryAfter * 1000, 30_000) : delay);
+      response = await this.authorizedFetchOnce(path, init);
+    }
+    return response;
+  }
+
+  /** Attach the bearer token; on 401 refresh it once and retry. */
+  private async authorizedFetchOnce(path: string, init: RequestInit = {}): Promise<Response> {
     const call = async (token: string) =>
       this.fetchImpl(`${API_BASE}${path}`, {
         ...init,

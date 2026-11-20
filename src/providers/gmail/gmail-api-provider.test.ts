@@ -189,4 +189,57 @@ describe('GmailApiProvider', () => {
     }) as unknown as typeof fetch);
     await expect(failing.gmail.send(outgoing)).resolves.toMatchObject({ status: 'ambiguous' });
   });
+
+  it('waits and retries when Gmail answers « quota exceeded »', async () => {
+    const quota = {
+      ok: false,
+      status: 403,
+      headers: { get: () => null },
+      clone: () => ({
+        text: async () =>
+          JSON.stringify({
+            error: { message: "Quota exceeded for quota metric 'Total Query Cost'" },
+          }),
+      }),
+      json: async () => ({ error: { message: 'Quota exceeded' } }),
+    } as unknown as Response;
+    const ok = { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(quota)
+      .mockResolvedValueOnce(quota)
+      .mockResolvedValue(ok);
+    const sleep = jest.fn(async () => undefined);
+    const gmail = new GmailApiProvider({
+      emailAddress: 'moi@gmail.com',
+      getAccessToken: async () => 'token',
+      lookupMessageIdHeader: async () => null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep,
+    });
+    await expect(gmail.listTrash(10)).resolves.toEqual([]);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a real permission error', async () => {
+    const denied = {
+      ok: false,
+      status: 403,
+      headers: { get: () => null },
+      clone: () => ({ text: async () => '{"error":{"message":"Insufficient Permission"}}' }),
+      json: async () => ({ error: { message: 'Insufficient Permission' } }),
+    } as unknown as Response;
+    const fetchImpl = jest.fn().mockResolvedValue(denied);
+    const sleep = jest.fn(async () => undefined);
+    const gmail = new GmailApiProvider({
+      emailAddress: 'moi@gmail.com',
+      getAccessToken: async () => 'token',
+      lookupMessageIdHeader: async () => null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep,
+    });
+    await expect(gmail.listTrash(10)).rejects.toThrow('Insufficient Permission');
+    expect(sleep).not.toHaveBeenCalled();
+  });
 });

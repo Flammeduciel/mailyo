@@ -93,6 +93,49 @@ describe('parseQuoteBlock', () => {
   });
 });
 
+describe('deeply nested Gmail history', () => {
+  const history = [
+    'Le ven. 6 nov. 2026 à 10:13, Flamme <',
+    'f@x.com> a écrit :',
+    '',
+    '> je suis déjà au boulot',
+    '> Bonjour',
+    '>',
+    '> Le jeu. 5 nov. 2026 à 23:02, Benicia Moussana <',
+    '> b@x.com> a écrit :',
+    '>',
+    '>> Oui je passerai',
+    '>>',
+    '>> Le jeu. 5 nov. 2026 à',
+    '>> 21:55, Flamme <',
+    '>> f@x.com> a écrit :',
+    '>>',
+    '>>> Oui je sais !',
+  ].join('\n');
+
+  it('peels every level into an author, a date and plain text', () => {
+    const first = parseQuoteBlock(history);
+    expect(first.author).toBe('Flamme');
+    const firstSplit = splitQuotedText(first.text);
+    expect(firstSplit.body).toBe('je suis déjà au boulot\nBonjour');
+
+    const second = parseQuoteBlock(firstSplit.quoted ?? '');
+    expect(second).toMatchObject({ author: 'Benicia Moussana', address: 'b@x.com' });
+    const secondSplit = splitQuotedText(second.text);
+    expect(secondSplit.body).toBe('Oui je passerai');
+
+    // Attribution wrapped over three lines.
+    const third = parseQuoteBlock(secondSplit.quoted ?? '');
+    expect(third).toMatchObject({ author: 'Flamme', date: 'jeu. 5 nov. 2026 à 21:55' });
+    expect(third.text).toBe('Oui je sais !');
+  });
+
+  it('parses a block whose attribution line is itself quoted', () => {
+    const block = parseQuoteBlock('> Le jeu. 5 nov. 2026, Bob <bob@x.com> a écrit :\n>\n>> Salut');
+    expect(block).toMatchObject({ author: 'Bob', text: 'Salut' });
+  });
+});
+
 describe('quote-only messages and quote targets', () => {
   const quote =
     "Le jeu. 5 nov. 2026 à 17:43, Jonathan Matondo <j@gmail.com> a écrit :\n\n> C'est comment cousin on valide ta proposition fais l'effort de nous\n> envoyer le lien en ligne\n>";
