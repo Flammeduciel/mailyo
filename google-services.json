@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "602522346982",
+    "project_id": "mailyo-514316",
+    "storage_bucket": "mailyo-514316.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:602522346982:android:b6e7b16683ac4eb14a2227",
+        "android_client_info": {
+          "package_name": "com.anonymous.mailyo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCg8j9UU_5pdB4B_ExixwAVkETFRTFilBo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
