@@ -881,7 +881,7 @@ export class MailService {
   }
 
   /** The trash grouped into conversations, most recent first. */
-  async listTrashConversations(limitPerAccount = 100): Promise<TrashedConversation[]> {
+  async listTrashConversations(limitPerAccount = 50): Promise<TrashedConversation[]> {
     const items = await this.listTrash(limitPerAccount);
     return groupTrashed(items).map((group) => {
       const own = group.latest.accountAddress.toLowerCase();

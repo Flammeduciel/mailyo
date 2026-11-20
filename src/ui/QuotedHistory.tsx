@@ -16,20 +16,43 @@ export interface QuotedHistoryProps {
   depth?: number;
   /** Jump to the quoted message in the conversation, when it is there. */
   onPress?: () => void;
+  /** Part of a flat list: shows its own text only, the list shows the rest. */
+  leaf?: boolean;
 }
 
-const MAX_DEPTH = 4;
+/** Cards nest up to this depth; older messages follow as a flat list. */
+const NEST_DEPTH = 2;
+/** Safety stop for pathological mails. */
+const MAX_CHAIN = 40;
+
+/** The quoted messages below `text`, oldest last, each without its own quotes. */
+function quoteChain(text: string): { text: string }[] {
+  const chain: { text: string }[] = [];
+  let next: string | null = text;
+  while (next && chain.length < MAX_CHAIN) {
+    chain.push({ text: next });
+    next = splitQuotedText(parseQuoteBlock(next).text).quoted;
+  }
+  return chain;
+}
 
 /**
  * Quoted history as cards: « Euloge Ngouma · sam. 6 juin 2026, 16:06 » over
  * the quoted text, without the "> " markers; older quotes nest inside.
  */
-export function QuotedHistory({ text, textColor, depth = 0, onPress }: QuotedHistoryProps) {
+export function QuotedHistory({
+  text,
+  textColor,
+  depth = 0,
+  onPress,
+  leaf = false,
+}: QuotedHistoryProps) {
   const colors = useAppTheme();
   const block = parseQuoteBlock(text);
-  const inner =
-    depth < MAX_DEPTH ? splitQuotedText(block.text) : { body: block.text, quoted: null };
+  const inner = splitQuotedText(block.text);
   const own = tidyPlainText(inner.body).trim();
+  const flat = depth + 1 >= NEST_DEPTH;
+  const quoted = leaf ? null : inner.quoted;
 
   return (
     <Pressable
@@ -70,9 +93,22 @@ export function QuotedHistory({ text, textColor, depth = 0, onPress }: QuotedHis
           </View>
         ) : null}
         {own ? <RichText style={[styles.text, { color: textColor }]}>{own}</RichText> : null}
-        {inner.quoted ? (
-          <QuotedHistory text={inner.quoted} textColor={textColor} depth={depth + 1} />
+        {quoted && !flat ? (
+          <QuotedHistory text={quoted} textColor={textColor} depth={depth + 1} />
         ) : null}
+        {quoted && flat
+          ? // Deep history (long back-and-forth): one card per message, no
+            // further indentation, so it stays readable on a phone.
+            quoteChain(quoted).map((item, index) => (
+              <QuotedHistory
+                key={index}
+                text={item.text}
+                textColor={textColor}
+                depth={NEST_DEPTH + index}
+                leaf
+              />
+            ))
+          : null}
         {onPress ? (
           <View style={styles.goto}>
             <AppText variant="caption" weight="semibold" style={{ color: colors.link }}>
