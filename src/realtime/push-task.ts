@@ -28,6 +28,17 @@ export function setRunningAppPushHandler(handler: (() => Promise<void>) | null):
 TaskManager.defineTask<Notifications.NotificationTaskPayload>(GMAIL_PUSH_TASK, async ({ data }) => {
   const message = data && !('actionIdentifier' in data) ? parseRelayMessage(data.data) : null;
   if (!message) return Notifications.BackgroundNotificationTaskResult.NoData;
+  if (message.test) {
+    // Diagnostic push from Settings: prove the chain works end to end.
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Wouah Mail',
+        body: 'Test réussi : le relais a bien réveillé l’application.',
+      },
+      trigger: null,
+    }).catch(() => undefined);
+    return Notifications.BackgroundNotificationTaskResult.NewData;
+  }
   try {
     if (runningAppHandler) {
       await runningAppHandler();

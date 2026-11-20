@@ -1,7 +1,7 @@
 /**
  * Contacts from the Google People API: saved contacts, "other contacts"
  * (people the user has exchanged mail with) and the user's own profile.
- * Requires the `contacts.readonly` scope.
+ * Requires the `contacts.readonly` and `contacts.other.readonly` scopes.
  */
 
 import type { AccessTokenProvider } from '@/providers/gmail/gmail-tokens';
@@ -157,9 +157,19 @@ export async function fetchGoogleContacts(
   fetchImpl: typeof fetch = fetch,
 ): Promise<GoogleContacts> {
   const contacts: GoogleContacts = { photos: new Map(), details: new Map() };
-  // Saved contacts only (contacts.readonly): names of other correspondents come
-  // from the mails themselves.
+  // "Other contacts" first so saved contacts, listed second, take precedence.
   const sources: (() => Promise<void>)[] = [
+    () =>
+      listAll(
+        // Without the PROFILE source Google only returns what the user saved,
+        // never the person's own profile photo.
+        `${PEOPLE_API}/otherContacts?readMask=names,emailAddresses,phoneNumbers,photos&pageSize=1000` +
+          '&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE',
+        false,
+        getAccessToken,
+        fetchImpl,
+        contacts,
+      ),
     () =>
       listAll(
         `${PEOPLE_API}/people/me/connections?pageSize=1000&personFields=` +

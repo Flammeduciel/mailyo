@@ -59,10 +59,11 @@ describe('gmail push', () => {
   it('parses the relay message, raw or as dataString', () => {
     expect(parseRelayMessage({ type: 'gmail', email: 'Demo@Gmail.com' })).toEqual({
       email: 'demo@gmail.com',
+      test: false,
     });
-    expect(parseRelayMessage({ dataString: '{"type":"gmail","email":"a@b.c"}' })).toEqual({
-      email: 'a@b.c',
-    });
+    expect(
+      parseRelayMessage({ dataString: '{"type":"gmail","email":"a@b.c","test":"1"}' }),
+    ).toEqual({ email: 'a@b.c', test: true });
     expect(parseRelayMessage({ type: 'other' })).toBeNull();
     expect(parseRelayMessage(null)).toBeNull();
   });

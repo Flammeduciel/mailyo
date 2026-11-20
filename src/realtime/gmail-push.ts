@@ -66,11 +66,12 @@ export async function stopGmailWatch(
 }
 
 async function callRelay(
-  path: '/register' | '/unregister',
+  path: '/register' | '/unregister' | '/test',
   account: GmailPushAccount,
   fcmToken: string,
   config: GmailPushConfig,
   fetchImpl: typeof fetch,
+  extra: Record<string, unknown> = {},
 ): Promise<void> {
   const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, '')}${path}`, {
     method: 'POST',
@@ -79,11 +80,23 @@ async function callRelay(
       email: account.email,
       fcmToken,
       accessToken: account.accessToken,
+      ...extra,
     }),
   });
   if (!response.ok) {
     throw new Error(`Relay ${path} failed (${response.status})`);
   }
+}
+
+/** Ask the relay to push to this phone after `delaySeconds` (diagnostic). */
+export async function testGmailPush(
+  account: GmailPushAccount,
+  fcmToken: string,
+  config: GmailPushConfig,
+  delaySeconds: number,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  await callRelay('/test', account, fcmToken, config, fetchImpl, { delaySeconds });
 }
 
 /** Watch the inbox and register this phone with the relay for the address. */
@@ -109,7 +122,7 @@ export async function disableGmailPush(
 }
 
 /** The relay's data message: { type: 'gmail', email }. */
-export function parseRelayMessage(data: unknown): { email: string } | null {
+export function parseRelayMessage(data: unknown): { email: string; test: boolean } | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
   let payload: Record<string, unknown> = record;
@@ -121,5 +134,5 @@ export function parseRelayMessage(data: unknown): { email: string } | null {
     }
   }
   if (payload.type !== 'gmail' || typeof payload.email !== 'string') return null;
-  return { email: payload.email.toLowerCase() };
+  return { email: payload.email.toLowerCase(), test: payload.test === '1' };
 }

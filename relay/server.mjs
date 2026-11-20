@@ -37,6 +37,18 @@ function parseServiceAccount(raw) {
   }
 }
 
+// ------------------------------------------------------------ diagnostics
+
+/** a***@gmail.com: enough to read the logs without writing full addresses. */
+function mask(address) {
+  const [user, domain] = address.split('@');
+  return `${user.slice(0, 2)}***@${domain}`;
+}
+const stats = { lastPubsubAt: null, lastPushAt: null, lastError: null, pushesSent: 0 };
+function log(...parts) {
+  console.log(new Date().toISOString(), '[relay]', ...parts);
+}
+
 // ------------------------------------------------------------- storage
 
 /** { [address]: { [fcmToken]: updatedAtMs } } */
@@ -122,38 +134,50 @@ async function fcmAccessToken() {
   return fcmAccess.token;
 }
 
-/** Data-only, high priority: wakes the app, which syncs and shows the real notification. */
+/** One data-only, high-priority FCM message. Returns true when FCM accepted it. */
+async function sendPush(address, token, extra = {}) {
+  const access = await fcmAccessToken();
+  const response = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${SERVICE_ACCOUNT.project_id}/messages:send`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          token,
+          data: { type: 'gmail', email: address, ...extra },
+          android: { priority: 'HIGH', ttl: '600s' },
+        },
+      }),
+    },
+  );
+  if (response.ok) return true;
+  const detail = (await response.text().catch(() => '')).slice(0, 300);
+  stats.lastError = `FCM ${response.status} ${detail}`;
+  log(`FCM error for ${mask(address)}: ${response.status} ${detail}`);
+  if (response.status === 404 || /UNREGISTERED/.test(detail)) {
+    // App uninstalled or token rotated: forget it.
+    removeToken(address, token);
+  }
+  return false;
+}
+
+/** Wakes every phone of the address; the app syncs and shows the real notification. */
 async function pushNewMail(address) {
   const tokens = Object.keys(registrations[address] ?? {});
-  if (tokens.length === 0 || !SERVICE_ACCOUNT) return 0;
-  const access = await fcmAccessToken();
-  let sent = 0;
-  await Promise.all(
-    tokens.map(async (token) => {
-      const response = await fetch(
-        `https://fcm.googleapis.com/v1/projects/${SERVICE_ACCOUNT.project_id}/messages:send`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: {
-              token,
-              data: { type: 'gmail', email: address },
-              android: { priority: 'HIGH', collapse_key: `gmail-${address}`, ttl: '600s' },
-            },
-          }),
-        },
-      );
-      if (response.ok) {
-        sent += 1;
-      } else if (response.status === 404 || response.status === 400) {
-        // App uninstalled or token rotated: forget it.
-        removeToken(address, token);
-      } else {
-        console.warn('[relay] FCM error', response.status);
-      }
-    }),
-  );
+  if (tokens.length === 0) {
+    log(`no phone registered for ${mask(address)}`);
+    return 0;
+  }
+  if (!SERVICE_ACCOUNT) {
+    log('FIREBASE_SERVICE_ACCOUNT missing: cannot push');
+    return 0;
+  }
+  const results = await Promise.all(tokens.map((token) => sendPush(address, token)));
+  const sent = results.filter(Boolean).length;
+  stats.pushesSent += sent;
+  stats.lastPushAt = new Date().toISOString();
+  log(`push ${mask(address)}: ${sent}/${tokens.length} phone(s)`);
   return sent;
 }
 
@@ -202,30 +226,51 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://relay');
 
   if (req.method === 'GET' && url.pathname === '/health') {
+    const phones = Object.values(registrations).reduce((n, e) => n + Object.keys(e).length, 0);
     return send(res, 200, {
       ok: true,
       fcm: Boolean(SERVICE_ACCOUNT),
       pubsub: Boolean(PUBSUB_TOKEN),
+      addresses: Object.keys(registrations).length,
+      phones,
+      ...stats,
     });
   }
 
-  if (req.method === 'POST' && (url.pathname === '/register' || url.pathname === '/unregister')) {
+  const deviceRoutes = ['/register', '/unregister', '/test'];
+  if (req.method === 'POST' && deviceRoutes.includes(url.pathname)) {
     const body = await readJson(req);
     const address = String(body.email ?? '').toLowerCase();
     if (!isAddress(address) || !isToken(body.fcmToken) || typeof body.accessToken !== 'string') {
+      log(`${url.pathname}: invalid request`);
       return send(res, 400, { error: 'invalid request' });
     }
     if (!(await verifyGoogleToken(body.accessToken, address))) {
+      log(`${url.pathname} refused for ${mask(address)}: Google token does not match`);
       return send(res, 403, { error: 'access token does not match this address' });
+    }
+    if (url.pathname === '/test') {
+      // Push to this phone only, after a delay so the app can be closed meanwhile.
+      const delay = Math.min(Math.max(Number(body.delaySeconds) || 0, 0), 60);
+      log(`test push for ${mask(address)} in ${delay}s`);
+      setTimeout(() => {
+        sendPush(address, body.fcmToken, { test: '1' })
+          .then((ok) => log(`test push ${mask(address)}: ${ok ? 'accepted by FCM' : 'failed'}`))
+          .catch((error) => log('test push failed', error.message));
+      }, delay * 1000);
+      return send(res, 200, { ok: true, delaySeconds: delay });
     }
     if (url.pathname === '/register') addToken(address, body.fcmToken);
     else removeToken(address, body.fcmToken);
+    const count = Object.keys(registrations[address] ?? {}).length;
+    log(`${url.pathname.slice(1)} ${mask(address)} (${count} phone(s) for this address)`);
     return send(res, 200, { ok: true });
   }
 
   // Cloud Pub/Sub push subscription: https://<relay>/pubsub?token=<PUBSUB_TOKEN>
   if (req.method === 'POST' && url.pathname === '/pubsub') {
     if (!sameSecret(url.searchParams.get('token'), PUBSUB_TOKEN)) {
+      log('pubsub: wrong token (check the subscription URL)');
       return send(res, 403, { error: 'forbidden' });
     }
     const body = await readJson(req);
@@ -236,11 +281,14 @@ async function handle(req, res) {
     } catch {
       // Malformed message: acknowledge so Pub/Sub does not retry forever.
     }
+    stats.lastPubsubAt = new Date().toISOString();
+    log(`pubsub: Gmail activity for ${isAddress(address) ? mask(address) : 'unknown address'}`);
     if (isAddress(address)) {
       try {
         await pushNewMail(address);
       } catch (error) {
-        console.error('[relay] push failed', error.message);
+        stats.lastError = error.message;
+        log('push failed', error.message);
         return send(res, 500, { error: 'push failed' }); // Pub/Sub retries
       }
     }
@@ -253,7 +301,7 @@ async function handle(req, res) {
 load();
 createServer((req, res) => {
   handle(req, res).catch((error) => {
-    console.error('[relay]', error.message);
+    log('error', error.message);
     if (!res.headersSent) send(res, 400, { error: 'bad request' });
   });
 }).listen(PORT, () => {
