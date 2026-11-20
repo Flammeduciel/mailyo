@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Correspondence } from '@/data/repositories/messages';
 import { copyChanges, joinNames } from '@/domain/copies';
 import type { Attachment, EmailAddress, Message } from '@/domain/models';
+import { historyBubbles } from '@/domain/history-bubbles';
 import { findQuotedMessage, splitQuotedText } from '@/domain/quote';
 import { parseMessageIds } from '@/domain/threading';
 import { useApp } from '@/state/app-context';
@@ -71,7 +72,14 @@ const INITIAL: ThreadData = {
 };
 
 type Row =
-  | { type: 'message'; key: string; message: Message; showSender: boolean }
+  | {
+      type: 'message';
+      key: string;
+      message: Message;
+      showSender: boolean;
+      /** Rebuilt from a reply's quoted history: not a mail of its own. */
+      fromHistory?: boolean;
+    }
   | { type: 'day'; key: string; label: string }
   | { type: 'copy'; key: string; text: string; added: boolean; people: EmailAddress[] };
 
@@ -241,6 +249,45 @@ export default function ThreadScreen() {
     return result;
   }, [data.messages, isOwn]);
 
+  // Quoted messages missing from the conversation become bubbles of their own.
+  const history = useMemo(() => {
+    const { bubbles, covered } = historyBubbles(data.messages);
+    const ownNames = new Set(
+      data.messages
+        .filter((message) => isOwn(message))
+        .map((message) => message.senderName.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const template = data.messages[data.messages.length - 1];
+    const rebuilt: Message[] = template
+      ? bubbles.map((bubble) => ({
+          ...template,
+          id: bubble.id,
+          remoteUid: null,
+          messageIdHeader: null,
+          inReplyTo: null,
+          referencesHeader: null,
+          // Without an address, our own name tells our messages apart.
+          senderAddress:
+            bubble.senderAddress ||
+            (ownNames.has(bubble.senderName.toLowerCase()) ? self : bubble.senderName),
+          senderName: bubble.senderName,
+          to: [],
+          cc: [],
+          bodyText: bubble.text,
+          bodyHtmlSanitized: null,
+          receivedAt: bubble.receivedAt,
+          isRead: true,
+          isStarred: false,
+          hasAttachments: false,
+          syncState: 'synced',
+          listUnsubscribe: null,
+          listUnsubscribePost: null,
+        }))
+      : [];
+    return { rebuilt, covered, ids: new Set(rebuilt.map((message) => message.id)) };
+  }, [data.messages, isOwn, self]);
+
   // Newest first for the inverted list, with a day chip above each day.
   const rows = useMemo<Row[]>(() => {
     const { now } = data;
@@ -249,7 +296,10 @@ export default function ThreadScreen() {
     const chronological: Row[] = [];
     let currentDay = '';
     let previousSender = '';
-    for (const message of data.messages) {
+    const timeline = [...data.messages, ...history.rebuilt].sort(
+      (a, b) => a.receivedAt - b.receivedAt,
+    );
+    for (const message of timeline) {
       const key = dayKey(message.receivedAt);
       if (key !== currentDay) {
         currentDay = key;
@@ -290,11 +340,12 @@ export default function ThreadScreen() {
         message,
         // Only at the start of a run, like a group chat.
         showSender: sender !== previousSender,
+        fromHistory: history.ids.has(message.id),
       });
       previousSender = sender;
     }
     return chronological.reverse();
-  }, [data, self]);
+  }, [data, self, history]);
 
   const jumpTo = useCallback(
     (messageId: string) => {
@@ -652,6 +703,17 @@ export default function ThreadScreen() {
     }
     const { message } = item;
     const selecting = selected.size > 0;
+    if (item.fromHistory) {
+      return (
+        <MessageBubble
+          message={message}
+          isOwn={isOwn(message)}
+          showSender={item.showSender}
+          fromHistory
+          testID={`message-${message.id}`}
+        />
+      );
+    }
     return (
       <SwipeToReply onReply={() => setReplyTo(message)} enabled={!selecting}>
         <MessageBubble
@@ -659,7 +721,7 @@ export default function ThreadScreen() {
           isOwn={isOwn(message)}
           showSender={item.showSender}
           quoted={parents.get(message.id)?.adjacent ? undefined : parents.get(message.id)?.quote}
-          parentInThread={parents.has(message.id)}
+          parentInThread={parents.has(message.id) || history.covered.has(message.id)}
           onQuotePress={jumpTo}
           findQuoted={findQuoted}
           attachments={data.attachments[message.id]}

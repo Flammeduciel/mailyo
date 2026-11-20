@@ -186,6 +186,45 @@ describe('ImapMailProvider', () => {
     };
   }
 
+  it('starts with the last 30 days when the server can search by date', async () => {
+    const fetchSince = jest.fn(async () => ({ uidValidity: 7, messages: [nativeMessage(9)] }));
+    const { provider: p } = provider(fakeNative({ fetchSince }));
+    const result = await p.fetchMessages({
+      folderRemoteId: 'INBOX',
+      knownUidValidity: null,
+      lastSyncedUid: null,
+      limit: 500,
+      sinceMs: 123_000,
+    });
+    expect(fetchSince).toHaveBeenCalledWith(expect.anything(), 'INBOX', 123_000, 500);
+    expect(result.messages.map((m) => m.remoteUid)).toEqual([9]);
+  });
+
+  it('reports read, starred and deleted mail from the server flags', async () => {
+    const fetchFlags = jest.fn(async () => [
+      { uid: 4, seen: true, flagged: false },
+      { uid: 6, seen: false, flagged: true },
+    ]);
+    const { provider: p } = provider(fakeNative({ fetchFlags }));
+    const { changes } = await p.fetchChanges({
+      cursor: null,
+      folders: [{ folderRemoteId: 'INBOX', uids: [4, 5, 6] }],
+    });
+    expect(fetchFlags).toHaveBeenCalledWith(expect.anything(), 'INBOX', 4);
+    expect(changes).toEqual([
+      { folderRemoteId: 'INBOX', remoteUid: 4, isRead: true, isStarred: false },
+      { folderRemoteId: 'INBOX', remoteUid: 5, removed: true },
+      { folderRemoteId: 'INBOX', remoteUid: 6, isRead: false, isStarred: true },
+    ]);
+  });
+
+  it('empties the trash folder for good', async () => {
+    const emptyFolder = jest.fn(async () => 12);
+    const { provider: p } = provider(fakeNative({ emptyFolder }));
+    await expect(p.emptyTrash()).resolves.toBe(12);
+    expect(emptyFolder).toHaveBeenCalledWith(expect.anything(), 'Trash');
+  });
+
   it('lists the synced folders and fetches mail oldest first', async () => {
     const { provider: p } = provider();
     expect((await p.listFolders()).map((f) => f.role)).toEqual(['inbox', 'sent', 'spam']);
@@ -302,11 +341,14 @@ describe('Real-time delivery (« Notifications instantanées »)', () => {
     const credentials = new MemoryCredentials();
     const present = jest.fn(async () => undefined);
     const dismissThread = jest.fn(async () => undefined);
+    // First sync of the account: an empty inbox (the first sync never rings).
+    const server = { delivered: false };
     const native = fakeNative({
       fetchMessages: jest.fn(async (_imap, folder: string) => ({
         uidValidity: 7,
         // uid 1 arrived at t=1 000, uid 5 at t=5 000.
-        messages: folder === 'INBOX' ? [nativeMessage(5), nativeMessage(1)] : [],
+        messages:
+          folder === 'INBOX' && server.delivered ? [nativeMessage(5), nativeMessage(1)] : [],
       })),
     });
     const service = new MailService({
@@ -321,6 +363,8 @@ describe('Real-time delivery (« Notifications instantanées »)', () => {
       emailAddress: 'moi@yahoo.fr',
       config: CONFIG,
     });
+    await service.syncAll();
+    server.delivered = true;
     return { service, account, present };
   }
 
@@ -417,12 +461,15 @@ describe('Trash and notification targets', () => {
     const credentials = new MemoryCredentials();
     const present = jest.fn(async () => undefined);
     const dismissThread = jest.fn(async () => undefined);
+    const server = { delivered: false };
     const native = fakeNative({
       fetchMessages: jest.fn(async (_imap, folder: string) => ({
         uidValidity: 7,
         messages:
           folder === 'INBOX'
-            ? [nativeMessage(2, { fromName: '' }), nativeMessage(1)]
+            ? server.delivered
+              ? [nativeMessage(2, { fromName: '' }), nativeMessage(1)]
+              : []
             : folder === 'Trash'
               ? [nativeMessage(40, { subject: 'Supprimé', date: 40_000 })]
               : [],
@@ -436,6 +483,8 @@ describe('Trash and notification targets', () => {
     });
     await mail.updateSettings({ realtimeMode: 'off' });
     const account = await mail.connectImapAccount({ emailAddress: 'moi@yahoo.fr', config: CONFIG });
+    await mail.syncAll();
+    server.delivered = true;
     await mail.syncAll();
     return { mail, account, native, present, dismissThread };
   }

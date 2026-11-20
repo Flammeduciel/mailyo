@@ -64,6 +64,7 @@ describe('gmail codec', () => {
     };
 
     expect(gmailMessageToRemote(message, 'INBOX')).toEqual({
+      providerMessageId: '18c0ffee',
       remoteUid: 1700000000123,
       folderRemoteId: 'INBOX',
       messageIdHeader: '<abc@example.com>',

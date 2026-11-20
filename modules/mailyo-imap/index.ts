@@ -58,6 +58,21 @@ export interface MailyoImapNative {
     lastUid: number,
     limit: number,
   ): Promise<{ uidValidity: number; messages: NativeMessage[] }>;
+  /** Initial sync: messages received since `sinceMs` (newest `limit`). */
+  fetchSince(
+    imap: ServerConfig,
+    folder: string,
+    sinceMs: number,
+    limit: number,
+  ): Promise<{ uidValidity: number; messages: NativeMessage[] }>;
+  /** Read / starred state of the messages from `minUid` on. */
+  fetchFlags(
+    imap: ServerConfig,
+    folder: string,
+    minUid: number,
+  ): Promise<{ uid: number; seen: boolean; flagged: boolean }[]>;
+  /** Delete every message of the folder for good; returns how many. */
+  emptyFolder(imap: ServerConfig, folder: string): Promise<number>;
   fetchOlder(
     imap: ServerConfig,
     folder: string,

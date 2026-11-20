@@ -8,7 +8,7 @@
 
 import type { Database } from '@/data/db/database';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 const MIGRATION_1 = `
 CREATE TABLE IF NOT EXISTS accounts (
@@ -209,6 +209,17 @@ const MIGRATION_6 = `
 ALTER TABLE messages ADD COLUMN list_unsubscribe_post TEXT;
 `;
 
+/**
+ * Provider id of a message (Gmail message id), to apply changes made
+ * elsewhere (read, starred, trashed...). Cursors are reset: the next sync
+ * fetches the last 30 days again with their current state and fills the id.
+ */
+const MIGRATION_7 = `
+ALTER TABLE messages ADD COLUMN provider_message_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_messages_provider_id ON messages (account_id, provider_message_id);
+UPDATE folders SET last_synced_uid = NULL;
+`;
+
 const MIGRATIONS: readonly string[] = [
   MIGRATION_1,
   MIGRATION_2,
@@ -216,6 +227,7 @@ const MIGRATIONS: readonly string[] = [
   MIGRATION_4,
   MIGRATION_5,
   MIGRATION_6,
+  MIGRATION_7,
 ];
 
 /** Apply every pending migration. Resumable and idempotent. */

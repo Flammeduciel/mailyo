@@ -68,6 +68,8 @@ export interface Message {
   listUnsubscribe?: string | null;
   /** "List-Unsubscribe=One-Click" when the sender supports RFC 8058 one-click unsubscribe. */
   listUnsubscribePost?: string | null;
+  /** Provider's own id (Gmail message id), when it has one. */
+  providerMessageId?: string | null;
 }
 
 /** Gmail-style inbox categories. */
