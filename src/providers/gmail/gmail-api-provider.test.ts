@@ -242,4 +242,103 @@ describe('GmailApiProvider', () => {
     await expect(gmail.listTrash(10)).rejects.toThrow('Insufficient Permission');
     expect(sleep).not.toHaveBeenCalled();
   });
+
+  it('starts the first sync with the last 30 days', async () => {
+    const { fetchImpl, calls } = fakeGmail(store);
+    const { gmail } = provider(fetchImpl);
+    await gmail.fetchMessages({
+      folderRemoteId: 'INBOX',
+      knownUidValidity: null,
+      lastSyncedUid: null,
+      limit: 500,
+      sinceMs: 1_700_000_002_500,
+    });
+    expect(decodeURIComponent(calls[0].url)).toContain('q=after:1700000002');
+  });
+});
+
+describe('GmailApiProvider changes and counters', () => {
+  const json = (body: unknown, status = 200) =>
+    ({ ok: status < 300, status, json: async () => body }) as Response;
+
+  function gmailWith(route: (path: string) => Response) {
+    const urls: string[] = [];
+    const fetchImpl = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      return route(url.slice(API.length));
+    });
+    const gmail = new GmailApiProvider({
+      emailAddress: 'moi@gmail.com',
+      getAccessToken: async () => 'token',
+      lookupMessageIdHeader: async () => null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    return { gmail, urls };
+  }
+
+  it('starts from the current history id the first time', async () => {
+    const { gmail } = gmailWith((path) =>
+      path === '/profile' ? json({ historyId: '900' }) : json({}, 404),
+    );
+    await expect(gmail.fetchChanges({ cursor: null, folders: [] })).resolves.toEqual({
+      cursor: '900',
+      changes: [],
+    });
+  });
+
+  it('turns Gmail history into read, star, trash, spam and archive changes', async () => {
+    const { gmail, urls } = gmailWith(() =>
+      json({
+        historyId: '950',
+        history: [
+          { labelsRemoved: [{ message: { id: 'a' }, labelIds: ['UNREAD'] }] },
+          { labelsAdded: [{ message: { id: 'b' }, labelIds: ['STARRED'] }] },
+          { labelsAdded: [{ message: { id: 'c' }, labelIds: ['TRASH'] }] },
+          { labelsAdded: [{ message: { id: 'd' }, labelIds: ['SPAM'] }] },
+          { labelsRemoved: [{ message: { id: 'e' }, labelIds: ['INBOX'] }] },
+          { messagesDeleted: [{ message: { id: 'f' } }] },
+          { labelsAdded: [{ message: { id: 'a' }, labelIds: ['UNREAD'] }] },
+        ],
+      }),
+    );
+    const result = await gmail.fetchChanges({ cursor: '900', folders: [] });
+    expect(urls[0]).toContain('startHistoryId=900');
+    expect(result.cursor).toBe('950');
+    expect(result.changes).toEqual([
+      // Read then unread again: the last state wins.
+      { providerMessageId: 'a', isRead: false },
+      { providerMessageId: 'b', isStarred: true },
+      { providerMessageId: 'c', removed: true },
+      { providerMessageId: 'd', spam: true },
+      { providerMessageId: 'e', inInbox: false },
+      { providerMessageId: 'f', removed: true },
+    ]);
+  });
+
+  it('starts over when the history is too old', async () => {
+    const { gmail } = gmailWith((path) =>
+      path === '/profile'
+        ? json({ historyId: '5000' })
+        : json({ error: { message: 'Requested entity was not found.' } }, 404),
+    );
+    await expect(gmail.fetchChanges({ cursor: '1', folders: [] })).resolves.toEqual({
+      cursor: '5000',
+      changes: [],
+    });
+  });
+
+  it('counts unread conversations per tab exactly, marking 500+', async () => {
+    const { gmail } = gmailWith((path) => {
+      const q = decodeURIComponent(new URLSearchParams(path.split('?')[1]).get('q') ?? '');
+      if (q.includes('category:promotions')) {
+        return json({ threads: [{ id: '1' }], nextPageToken: 'more' });
+      }
+      return json({ threads: q.includes('category:primary') ? [{ id: '1' }, { id: '2' }] : [] });
+    });
+    const counts = await gmail.fetchMailboxCounts();
+    expect(counts.primary).toEqual({ unread: 2 });
+    expect(counts.promotions).toEqual({ unread: 1, capped: true });
+    expect(counts.social).toEqual({ unread: 0 });
+  });
 });

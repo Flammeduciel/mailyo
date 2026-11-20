@@ -11,12 +11,15 @@ import { buildRawMessage } from '@/providers/gmail/gmail-codec';
 import type { ImapAccountConfig } from '@/providers/imap/credentials';
 import { folderRole, folderRoles, nativeToRemote } from '@/providers/imap/imap-codec';
 import type {
+  FetchChangesInput,
+  FetchChangesResult,
   FetchMessagesInput,
   FetchMessagesResult,
   FetchOlderMessagesInput,
   MailProvider,
   OutgoingMessage,
   RemoteAttachment,
+  RemoteChange,
   RemoteFolder,
   RemoteMessage,
   SendResult,
@@ -89,12 +92,16 @@ export class ImapMailProvider implements MailProvider {
     const { imap } = await this.servers();
     const limit = input.limit ?? 50;
     // A changed UIDVALIDITY means the server renumbered the folder: start over.
-    const result = await this.client.fetchMessages(
-      imap,
-      input.folderRemoteId,
-      input.lastSyncedUid ?? -1,
-      limit,
-    );
+    const initial = input.lastSyncedUid === null || input.lastSyncedUid < 0;
+    const result =
+      initial && input.sinceMs !== undefined && typeof this.client.fetchSince === 'function'
+        ? await this.client.fetchSince(imap, input.folderRemoteId, input.sinceMs, limit)
+        : await this.client.fetchMessages(
+            imap,
+            input.folderRemoteId,
+            input.lastSyncedUid ?? -1,
+            limit,
+          );
     const restart =
       input.knownUidValidity !== null && input.knownUidValidity !== result.uidValidity;
     const messages = restart
@@ -186,6 +193,41 @@ export class ImapMailProvider implements MailProvider {
 
   async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {
     await this.moveTo(remoteUid, isSpam ? 'spam' : 'inbox');
+  }
+
+  /**
+   * Read / starred state on the server of the mail the phone holds; a UID the
+   * server no longer has was deleted or moved elsewhere.
+   */
+  async fetchChanges(input: FetchChangesInput): Promise<FetchChangesResult> {
+    if (typeof this.client.fetchFlags !== 'function') return { cursor: null, changes: [] };
+    const { imap } = await this.servers();
+    const changes: RemoteChange[] = [];
+    for (const { folderRemoteId, uids } of input.folders) {
+      if (uids.length === 0) continue;
+      const minUid = Math.min(...uids);
+      const server = await this.client.fetchFlags(imap, folderRemoteId, minUid);
+      const byUid = new Map(server.map((entry) => [entry.uid, entry]));
+      for (const uid of uids) {
+        const entry = byUid.get(uid);
+        changes.push(
+          entry
+            ? { folderRemoteId, remoteUid: uid, isRead: entry.seen, isStarred: entry.flagged }
+            : { folderRemoteId, remoteUid: uid, removed: true },
+        );
+      }
+    }
+    return { cursor: null, changes };
+  }
+
+  /** Delete for good everything in the trash folder. */
+  async emptyTrash(): Promise<number> {
+    const trash = (await this.folderRoles()).trash;
+    if (!trash || typeof this.client.emptyFolder !== 'function') {
+      throw new Error('Corbeille introuvable sur ce serveur.');
+    }
+    const { imap } = await this.servers();
+    return this.client.emptyFolder(imap, trash);
   }
 
   async listTrash(limit: number): Promise<RemoteMessage[]> {

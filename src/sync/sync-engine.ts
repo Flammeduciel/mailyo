@@ -9,6 +9,7 @@
 
 import {
   deleteMessagesInFolder,
+  findMessageByRemoteUid,
   getMessage,
   getOldestRemoteUid,
   getThread,
@@ -57,8 +58,14 @@ export interface SyncEngineOptions {
   db: Database;
   provider: MailProvider;
   now?: () => number;
-  /** Max messages fetched per folder per run (initial sync is bounded). */
+  /** Max messages fetched per folder per incremental run. */
   fetchLimit?: number;
+  /**
+   * Initial sync: every mail of the last `initialWindowMs` (capped by
+   * `initialLimit`), so two connections start from the same mail.
+   */
+  initialWindowMs?: number;
+  initialLimit?: number;
   /** Progress of `syncAccount`, from 0 to 1, plus how many messages are stored so far. */
   onProgress?: (progress: SyncProgress) => void;
   /** True once the account is being removed: the run stops before its next write. */
@@ -78,6 +85,11 @@ export interface SyncProgress {
   stored: number;
 }
 
+/** First sync of a folder: the last 30 days... */
+export const INITIAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+/** ...up to this many mails (older mail comes with infinite scroll). */
+export const INITIAL_LIMIT = 500;
+
 /** Share of a folder's progress spent downloading (the rest is storing). */
 const FETCH_WEIGHT = 0.8;
 
@@ -86,6 +98,8 @@ export class SyncEngine {
   private readonly provider: MailProvider;
   private readonly now: () => number;
   private readonly fetchLimit: number;
+  private readonly initialWindowMs: number;
+  private readonly initialLimit: number;
   private readonly onProgress?: (progress: SyncProgress) => void;
   private readonly isCancelled: () => boolean;
   private stored = 0;
@@ -95,6 +109,8 @@ export class SyncEngine {
     this.provider = options.provider;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
+    this.initialWindowMs = options.initialWindowMs ?? INITIAL_WINDOW_MS;
+    this.initialLimit = options.initialLimit ?? INITIAL_LIMIT;
     this.onProgress = options.onProgress;
     this.isCancelled = options.isCancelled ?? (() => false);
   }
@@ -173,11 +189,14 @@ export class SyncEngine {
     report?: (share: number) => void,
   ): Promise<SyncResult> {
     report?.(0);
+    // -1: the first sync found nothing in the window; keep looking at the window.
+    const initial = folder.lastSyncedUid === null || folder.lastSyncedUid < 0;
     const fetch = await this.provider.fetchMessages({
       folderRemoteId: folder.remoteFolderId,
       knownUidValidity: folder.lastUidValidity,
       lastSyncedUid: folder.lastSyncedUid,
-      limit: this.fetchLimit,
+      limit: initial ? this.initialLimit : this.fetchLimit,
+      ...(initial ? { sinceMs: this.now() - this.initialWindowMs } : {}),
       onProgress: (fetched, total) => report?.(FETCH_WEIGHT * (total > 0 ? fetched / total : 1)),
     });
     report?.(FETCH_WEIGHT);
@@ -195,7 +214,8 @@ export class SyncEngine {
 
     for (const [index, remote] of fetch.messages.entries()) {
       const persisted = await this.persistMessage(account, folder, remote, knownThreads);
-      if (persisted.isNew) {
+      // The very first sync brings a month of mail: nothing of it is « new ».
+      if (persisted.isNew && folder.lastSyncedUid !== null) {
         added.push(persisted.message);
       }
       maxUid = Math.max(maxUid, remote.remoteUid);
@@ -302,6 +322,7 @@ export class SyncEngine {
       category: remote.category ?? null,
       listUnsubscribe: remote.listUnsubscribe ?? null,
       listUnsubscribePost: remote.listUnsubscribePost ?? null,
+      providerMessageId: remote.providerMessageId ?? null,
     };
 
     // Our own sent mail coming back from the server replaces the local copy.
@@ -323,6 +344,7 @@ export class SyncEngine {
       }
     }
 
+    await this.freeRemoteUid(message);
     const isNew = replaced === null && (await getMessage(this.db, message.id)) === null;
     await upsertMessage(this.db, message);
     if (remote.attachments) {
@@ -337,6 +359,33 @@ export class SyncEngine {
     }
 
     return { message, isNew };
+  }
+
+  /**
+   * One row per (account, folder, UID). Another row already holding this UID:
+   * - IMAP: a UID names one mail in a folder, so that row is a stale copy;
+   * - Gmail: UIDs come from the delivery time, two mails of the same
+   *   millisecond (or a mail restored from the trash) shift by one.
+   */
+  private async freeRemoteUid(message: Message): Promise<void> {
+    if (message.remoteUid === null) return;
+    for (let attempt = 0; attempt < 1000; attempt += 1) {
+      const occupant = await findMessageByRemoteUid(
+        this.db,
+        message.accountId,
+        message.folderId,
+        message.remoteUid,
+      );
+      if (!occupant || occupant.id === message.id) return;
+      if (this.provider.id !== 'gmail') {
+        await deleteMessage(this.db, occupant.id);
+        if (occupant.threadId !== message.threadId) {
+          await recomputeThreadAggregates(this.db, occupant.threadId);
+        }
+        return;
+      }
+      message.remoteUid += 1;
+    }
   }
 
   /**

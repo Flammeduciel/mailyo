@@ -31,6 +31,8 @@ export interface MessageBubbleProps {
   quoted?: QuotedParent | null;
   /** The replied-to message is in the conversation, so the quoted history is redundant. */
   parentInThread?: boolean;
+  /** Rebuilt from a reply's quoted history (the mail itself is not on the phone). */
+  fromHistory?: boolean;
   onQuotePress?: (parentId: string) => void;
   /** Finds the message a quoted history comes from; returns its id when it is in the thread. */
   findQuoted?: (quoted: string) => string | null;
@@ -105,6 +107,7 @@ export function MessageBubble({
   onLongPress,
   selected = false,
   highlighted = false,
+  fromHistory = false,
   testID,
 }: MessageBubbleProps) {
   const colors = useAppTheme();
@@ -237,6 +240,14 @@ export function MessageBubble({
         ) : null}
 
         <View style={styles.footer}>
+          {fromHistory ? (
+            <MaterialIcons
+              name="history"
+              size={12}
+              color={colors.textMuted}
+              accessibilityLabel="Retrouvé dans l’historique"
+            />
+          ) : null}
           {message.isStarred ? (
             <MaterialIcons name="star" size={12} color={colors.textMuted} />
           ) : null}
@@ -246,7 +257,7 @@ export function MessageBubble({
           <AppText variant="caption" style={[styles.timestamp, { color: colors.textMuted }]}>
             {formatTimestamp(message.receivedAt)}
           </AppText>
-          {isOwn ? (
+          {isOwn && !fromHistory ? (
             <MaterialIcons
               name={message.syncState === 'pending' ? 'schedule' : 'done-all'}
               size={15}

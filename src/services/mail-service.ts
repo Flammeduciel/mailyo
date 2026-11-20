@@ -47,6 +47,9 @@ import {
   listMailingSenders,
   listMessagesMissingUnsubscribe,
   moveMessageToFolder,
+  findMessageByRemoteUid,
+  findMessagesByProviderIds,
+  listRecentFolderUids,
   setUnsubscribeHeaders,
   type MailingSender,
   getThreadIdByMessageIdHeader,
@@ -82,7 +85,13 @@ import {
   type ListThreadSummariesOptions,
   upsertThread,
 } from '@/data/repositories/threads';
-import { getAllSettings, getSetting, setSetting, setSettings } from '@/data/repositories/settings';
+import {
+  deleteSetting,
+  getAllSettings,
+  getSetting,
+  setSetting,
+  setSettings,
+} from '@/data/repositories/settings';
 import type {
   Account,
   Attachment,
@@ -128,6 +137,7 @@ import {
 import { createDemoProvider, createDemoRules, DEMO_ACCOUNT_ID } from '@/providers/demo/demo-data';
 import type {
   MailProvider,
+  MailboxCounts,
   OutgoingMessage,
   OAuthTokens,
   RemoteMessage,
@@ -158,6 +168,12 @@ import {
 } from '@/sync/sync-engine';
 
 const THREADING_VERSION_KEY = 'threading.version';
+/** Per account: where the provider's change feed stopped (Gmail historyId). */
+const SYNC_CURSOR_KEY = 'sync.changesCursor.';
+/** Gmail counters are asked again after this delay (or after a change). */
+const SERVER_COUNTS_TTL_MS = 60_000;
+/** IMAP: how many recent mails per folder are compared with the server. */
+const CHANGES_WINDOW = 300;
 const THREADING_VERSION = '2';
 // v3 holds Google's letter avatars and contact details; older caches are ignored.
 const CONTACT_PHOTOS_KEY = 'contacts.photos.v3';
@@ -252,6 +268,8 @@ export interface MailServiceOptions {
   fetchImpl?: typeof fetch;
   now?: () => number;
   fetchLimit?: number;
+  /** Cap of the first sync of a folder (the last 30 days otherwise). */
+  initialLimit?: number;
   /** Stores downloaded attachment bytes; defaults to the app cache directory. */
   attachmentWriter?: AttachmentWriter;
   /** IMAP settings + passwords (secure storage); omit where IMAP is not used. */
@@ -287,6 +305,7 @@ export class MailService {
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly fetchLimit: number;
+  private readonly initialLimit: number | undefined;
   private readonly attachmentWriter: AttachmentWriter;
   private readonly attachmentReader: (uri: string) => Promise<string>;
   private readonly imapCredentials: ImapCredentialStore | null;
@@ -311,6 +330,7 @@ export class MailService {
     this.fetchImpl = options.fetchImpl;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
+    this.initialLimit = options.initialLimit;
     this.attachmentWriter = options.attachmentWriter ?? writeAttachmentToCache;
     this.attachmentReader = options.attachmentReader ?? readFileAsBase64;
     this.imapCredentials = options.imapCredentials ?? null;
@@ -902,6 +922,38 @@ export class MailService {
     });
   }
 
+  /** Which accounts' trash can be emptied from the app (not Gmail's). */
+  async emptyTrashSupport(): Promise<{ supported: string[]; unsupported: string[] }> {
+    const supported: string[] = [];
+    const unsupported: string[] = [];
+    for (const account of await listAccounts(this.db)) {
+      const provider = this.registry.get(account.id);
+      if (!provider?.listTrash) continue;
+      (provider.emptyTrash ? supported : unsupported).push(account.emailAddress);
+    }
+    return { supported, unsupported };
+  }
+
+  /**
+   * « Vider la corbeille »: deletes for good what the providers allow. Gmail
+   * does not (Wouah Mail's Gmail access can move mail to the trash, not erase
+   * it): those addresses are returned so the screen can explain.
+   */
+  async emptyTrash(): Promise<{ deleted: number; unsupported: string[] }> {
+    let deleted = 0;
+    const unsupported: string[] = [];
+    for (const account of await listAccounts(this.db)) {
+      const provider = this.registry.get(account.id);
+      if (!provider?.listTrash) continue;
+      if (!provider.emptyTrash) {
+        unsupported.push(account.emailAddress);
+        continue;
+      }
+      deleted += await provider.emptyTrash();
+    }
+    return { deleted, unsupported };
+  }
+
   /** Restore every mail of a trashed conversation; it comes back as one conversation. */
   async restoreTrashConversation(conversation: TrashedConversation): Promise<void> {
     for (const item of conversation.items) {
@@ -1004,6 +1056,9 @@ export class MailService {
   }
 
   private syncRun: Promise<void> | null = null;
+  /** Unread counters given by the provider (Gmail), per account. */
+  private readonly serverCounts = new Map<string, MailboxCounts>();
+  private readonly serverCountsAt = new Map<string, number>();
   /** Accounts being signed out: their sync stops and writes nothing more. */
   private readonly removing = new Set<string>();
   private readonly syncListeners = new Set<(progress: SyncProgress) => void>();
@@ -1024,6 +1079,7 @@ export class MailService {
         provider,
         now: this.now,
         fetchLimit: this.fetchLimit,
+        initialLimit: this.initialLimit,
         isCancelled: () => this.removing.has(account.id),
         onProgress: (progress) =>
           onProgress({
@@ -1034,6 +1090,9 @@ export class MailService {
       try {
         const result = await engine.syncAccount(account);
         storedBefore += result.fetchedCount;
+        const changed = await this.applyRemoteChanges(account, provider);
+        if (changed > 0 || result.added.length > 0) this.serverCountsAt.delete(account.id);
+        await this.refreshServerCounts(account, provider);
         if (!this.removing.has(account.id)) await this.notifyIncoming(account, result.added);
       } catch (error) {
         if (error instanceof SyncCancelledError) continue;
@@ -1044,6 +1103,122 @@ export class MailService {
     }
     if (this.settings.offlineStarredAttachments) {
       await this.downloadStarredAttachments();
+    }
+  }
+
+  /**
+   * Changes made elsewhere (Gmail on the web, another phone): read, starred,
+   * deleted, spam, archived. Applied to the local copy; a conversation read
+   * elsewhere loses its notification here too. Never fails the sync.
+   */
+  async applyRemoteChanges(account: Account, provider: MailProvider): Promise<number> {
+    if (!provider.fetchChanges || this.removing.has(account.id)) return 0;
+    const cursorKey = `${SYNC_CURSOR_KEY}${account.id}`;
+    try {
+      const folders = await listFolders(this.db, account.id);
+      const byRemoteId = new Map(folders.map((folder) => [folder.remoteFolderId, folder]));
+      const inbox = folders.find((folder) => folder.role === 'inbox') ?? null;
+      const spam = folders.find((folder) => folder.role === 'spam') ?? null;
+      const compared =
+        provider.id === 'gmail'
+          ? []
+          : await Promise.all(
+              folders.map(async (folder) => ({
+                folderRemoteId: folder.remoteFolderId,
+                uids: await listRecentFolderUids(this.db, folder.id, CHANGES_WINDOW),
+              })),
+            );
+      const { cursor, changes } = await provider.fetchChanges({
+        cursor: await getSetting(this.db, cursorKey),
+        folders: compared,
+      });
+      if (this.removing.has(account.id)) return 0;
+
+      const byProviderId = new Map<string, Message[]>();
+      const providerIds = changes.flatMap((c) =>
+        c.providerMessageId ? [c.providerMessageId] : [],
+      );
+      for (const message of await findMessagesByProviderIds(this.db, account.id, providerIds)) {
+        const key = message.providerMessageId ?? '';
+        byProviderId.set(key, [...(byProviderId.get(key) ?? []), message]);
+      }
+
+      const touched = new Set<string>();
+      const readThreads = new Set<string>();
+      let applied = 0;
+      for (const change of changes) {
+        let targets: Message[] = [];
+        if (change.providerMessageId) {
+          targets = byProviderId.get(change.providerMessageId) ?? [];
+        } else if (change.folderRemoteId && change.remoteUid !== undefined) {
+          const folder = byRemoteId.get(change.folderRemoteId);
+          const found = folder
+            ? await findMessageByRemoteUid(this.db, account.id, folder.id, change.remoteUid)
+            : null;
+          targets = found ? [found] : [];
+        }
+        for (const message of targets) {
+          if (message.syncState === 'pending') continue; // our own change is on its way
+          if (change.removed) {
+            await deleteMessage(this.db, message.id);
+            touched.add(message.threadId);
+            applied += 1;
+            continue;
+          }
+          if (change.spam === true && spam && message.folderId !== spam.id) {
+            await moveMessageToFolder(this.db, message.id, spam.id);
+            touched.add(message.threadId);
+            applied += 1;
+          } else if (
+            change.spam === false &&
+            change.inInbox === true &&
+            inbox &&
+            spam &&
+            message.folderId === spam.id
+          ) {
+            await moveMessageToFolder(this.db, message.id, inbox.id);
+            touched.add(message.threadId);
+            applied += 1;
+          }
+          if (change.isRead !== undefined && change.isRead !== message.isRead) {
+            await setMessageRead(this.db, message.id, change.isRead);
+            touched.add(message.threadId);
+            if (change.isRead) readThreads.add(message.threadId);
+            applied += 1;
+          }
+          if (change.isStarred !== undefined && change.isStarred !== message.isStarred) {
+            await setMessageStarred(this.db, message.id, change.isStarred);
+            touched.add(message.threadId);
+            applied += 1;
+          }
+          if (change.inInbox !== undefined && inbox && message.folderId === inbox.id) {
+            // Archived (or moved back) in Gmail: the conversation follows.
+            const thread = await getThread(this.db, message.threadId);
+            if (thread && thread.isArchived === change.inInbox) {
+              await setThreadArchivedRow(this.db, message.threadId, !change.inInbox);
+              touched.add(message.threadId);
+              applied += 1;
+            }
+          }
+        }
+      }
+      for (const threadId of touched) await recomputeThreadAggregates(this.db, threadId);
+      if (touched.size > 0) await deleteEmptyThreads(this.db, account.id);
+      // Read elsewhere: its notification leaves this phone too.
+      for (const threadId of readThreads) {
+        const thread = await getThread(this.db, threadId);
+        if (!thread || thread.unreadCount === 0) {
+          await this.notifier?.dismissThread(
+            threadId,
+            await listMessagesByThread(this.db, threadId),
+          );
+        }
+      }
+      if (cursor) await setSetting(this.db, cursorKey, cursor);
+      return applied;
+    } catch (error) {
+      console.warn(`[MailService] remote changes unavailable for ${account.emailAddress}`, error);
+      return 0;
     }
   }
 
@@ -1230,6 +1405,8 @@ export class MailService {
       }
     }
     await recomputeThreadAggregates(this.db, threadId);
+    // The Gmail counters are asked again at the next sync.
+    if (messages[0]) this.serverCountsAt.delete(messages[0].accountId);
     if (isRead) await this.notifier?.dismissThread(threadId, messages);
   }
 
@@ -1271,18 +1448,52 @@ export class MailService {
     return this.listConversations({ includeArchived: false, ...query, limit });
   }
 
-  /** Total and unread conversations per drawer mailbox. */
+  /**
+   * Total and unread conversations per drawer mailbox. Accounts whose provider
+   * counts by itself (Gmail) give their exact unread numbers; the others are
+   * counted from the phone.
+   */
   async countMailboxes(): Promise<Record<MailboxId, MailboxCount>> {
+    const accounts = await listAccounts(this.db);
+    const counted = accounts.filter((account) => this.serverCounts.has(account.id));
+    const local = accounts.filter((account) => !this.serverCounts.has(account.id));
     const result = {} as Record<MailboxId, MailboxCount>;
     for (const box of MAILBOXES) {
       const counts = await countThreadSummaries(this.db, { includeArchived: false, ...box.query });
-      // The chip counts leave the filter out: the spam box reads its own column.
-      result[box.id] =
-        box.query.filter === 'spam'
+      const isSpam = box.query.filter === 'spam';
+      const fromServer = counted.map((account) => this.serverCounts.get(account.id)?.[box.id]);
+      if (counted.length === 0 || fromServer.some((entry) => entry === undefined)) {
+        // The chip counts leave the filter out: the spam box reads its own column.
+        result[box.id] = isSpam
           ? { total: counts.spam, unread: counts.spam }
           : { total: counts.all, unread: counts.unread };
+        continue;
+      }
+      let unread = fromServer.reduce((sum, entry) => sum + (entry?.unread ?? 0), 0);
+      for (const account of local) {
+        const own = await countThreadSummaries(this.db, {
+          includeArchived: false,
+          ...box.query,
+          accountId: account.id,
+        });
+        unread += isSpam ? own.spam : own.unread;
+      }
+      result[box.id] = isSpam ? { total: unread, unread } : { total: counts.all, unread };
     }
     return result;
+  }
+
+  /** Exact counters from the providers that have them, at most once a minute. */
+  private async refreshServerCounts(account: Account, provider: MailProvider): Promise<void> {
+    if (!provider.fetchMailboxCounts) return;
+    const last = this.serverCountsAt.get(account.id) ?? 0;
+    if (this.now() - last < SERVER_COUNTS_TTL_MS) return;
+    this.serverCountsAt.set(account.id, this.now());
+    try {
+      this.serverCounts.set(account.id, await provider.fetchMailboxCounts());
+    } catch (error) {
+      console.warn(`[MailService] counters unavailable for ${account.emailAddress}`, error);
+    }
   }
 
   /**
@@ -1800,6 +2011,9 @@ export class MailService {
     const removedAccount = await getAccount(this.db, accountId);
     this.removing.add(accountId);
     this.registry.remove(accountId);
+    this.serverCounts.delete(accountId);
+    this.serverCountsAt.delete(accountId);
+    await deleteSetting(this.db, `${SYNC_CURSOR_KEY}${accountId}`).catch(() => undefined);
     const tokens = await this.tokenStore?.load(accountId).catch(() => null);
 
     // Let a running sync notice the cancellation, but never wait long for it

@@ -35,6 +35,7 @@ interface MessageRow {
   category?: string | null;
   list_unsubscribe?: string | null;
   list_unsubscribe_post?: string | null;
+  provider_message_id?: string | null;
 }
 
 function parseAddresses(value: string): EmailAddress[] {
@@ -71,6 +72,7 @@ function mapMessage(row: MessageRow): Message {
     category: (row.category ?? null) as MailCategory | null,
     listUnsubscribe: row.list_unsubscribe ?? null,
     listUnsubscribePost: row.list_unsubscribe_post ?? null,
+    providerMessageId: row.provider_message_id ?? null,
   };
 }
 
@@ -80,8 +82,8 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        (id, account_id, folder_id, remote_uid, message_id_header, in_reply_to, references_header,
         thread_id, sender_name, sender_address, to_json, cc_json, subject, body_text,
         body_html_sanitized, received_at, is_read, is_starred, has_attachments, sync_state,
-        category, list_unsubscribe, list_unsubscribe_post)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        category, list_unsubscribe, list_unsubscribe_post, provider_message_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        account_id = excluded.account_id,
        folder_id = excluded.folder_id,
@@ -105,7 +107,8 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
        -- The same mail seen in SENT carries no category: keep the inbox one.
        category = COALESCE(excluded.category, messages.category),
        list_unsubscribe = COALESCE(excluded.list_unsubscribe, messages.list_unsubscribe),
-       list_unsubscribe_post = COALESCE(excluded.list_unsubscribe_post, messages.list_unsubscribe_post)`,
+       list_unsubscribe_post = COALESCE(excluded.list_unsubscribe_post, messages.list_unsubscribe_post),
+       provider_message_id = COALESCE(excluded.provider_message_id, messages.provider_message_id)`,
     [
       message.id,
       message.accountId,
@@ -130,6 +133,7 @@ export async function upsertMessage(db: Database, message: Message): Promise<voi
       message.category ?? null,
       message.listUnsubscribe ?? null,
       message.listUnsubscribePost ?? null,
+      message.providerMessageId ?? null,
     ],
   );
 }
@@ -146,6 +150,42 @@ export async function getOldestRemoteUid(db: Database, folderId: string): Promis
 export async function getMessage(db: Database, id: string): Promise<Message | null> {
   const row = await db.getFirstAsync<MessageRow>('SELECT * FROM messages WHERE id = ?', [id]);
   return row ? mapMessage(row) : null;
+}
+
+/** Messages of an account by provider id (Gmail message id). */
+export async function findMessagesByProviderIds(
+  db: Database,
+  accountId: string,
+  providerIds: readonly string[],
+): Promise<Message[]> {
+  const result: Message[] = [];
+  // SQLite caps bound parameters; stay well below.
+  for (let i = 0; i < providerIds.length; i += 200) {
+    const chunk = providerIds.slice(i, i + 200);
+    const rows = await db.getAllAsync<MessageRow>(
+      `SELECT * FROM messages WHERE account_id = ? AND provider_message_id IN (${chunk
+        .map(() => '?')
+        .join(', ')})`,
+      [accountId, ...chunk],
+    );
+    result.push(...rows.map(mapMessage));
+  }
+  return result;
+}
+
+/** UIDs of the newest messages of a folder (to compare with the server). */
+export async function listRecentFolderUids(
+  db: Database,
+  folderId: string,
+  limit: number,
+): Promise<number[]> {
+  const rows = await db.getAllAsync<{ remote_uid: number }>(
+    `SELECT remote_uid FROM messages
+     WHERE folder_id = ? AND remote_uid IS NOT NULL
+     ORDER BY remote_uid DESC LIMIT ?`,
+    [folderId, limit],
+  );
+  return rows.map((row) => row.remote_uid);
 }
 
 export async function findMessageByRemoteUid(

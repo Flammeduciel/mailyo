@@ -28,6 +28,8 @@ import javax.mail.Message
 import javax.mail.MessagingException
 import javax.mail.Multipart
 import javax.mail.Part
+import javax.mail.search.ComparisonTerm
+import javax.mail.search.ReceivedDateTerm
 import javax.mail.Session
 import javax.mail.Transport
 import javax.mail.UIDFolder
@@ -181,6 +183,55 @@ class MailyoImapModule : Module() {
               .toTypedArray()
           }
           mapOf("uidValidity" to uidValidity.toDouble(), "messages" to describe(folder, messages))
+        }
+      }
+    }
+
+    /** Initial sync: every message received since `sinceMs` (day precision), newest `limit`. */
+    AsyncFunction("fetchSince") Coroutine { imap: ServerConfig, folderName: String, sinceMs: Double, limit: Int ->
+      io {
+        withFolder(imap, folderName) { folder ->
+          val uidValidity = folder.uidValidity
+          val found = folder.search(ReceivedDateTerm(ComparisonTerm.GE, Date(sinceMs.toLong())))
+          val newest = found.takeLast(limit).toTypedArray()
+          mapOf("uidValidity" to uidValidity.toDouble(), "messages" to describe(folder, newest))
+        }
+      }
+    }
+
+    /** Read / starred state of every message from `minUid` on (changes made elsewhere). */
+    AsyncFunction("fetchFlags") Coroutine { imap: ServerConfig, folderName: String, minUid: Double ->
+      io {
+        withFolder(imap, folderName) { folder ->
+          val messages = folder.getMessagesByUID(maxOf(1L, minUid.toLong()), UIDFolder.LASTUID)
+            .filterNotNull()
+            .toTypedArray()
+          if (messages.isEmpty()) return@withFolder emptyList<Map<String, Any>>()
+          folder.fetch(messages, FetchProfile().apply {
+            add(FetchProfile.Item.FLAGS)
+            add(UIDFolder.FetchProfileItem.UID)
+          })
+          messages.map {
+            mapOf(
+              "uid" to folder.getUID(it).toDouble(),
+              "seen" to it.isSet(Flags.Flag.SEEN),
+              "flagged" to it.isSet(Flags.Flag.FLAGGED),
+            )
+          }
+        }
+      }
+    }
+
+    /** Delete for good every message of a folder (« Vider la corbeille »). */
+    AsyncFunction("emptyFolder") Coroutine { imap: ServerConfig, folderName: String ->
+      io {
+        withFolder(imap, folderName, Folder.READ_WRITE) { folder ->
+          val messages = folder.messages
+          if (messages.isNotEmpty()) {
+            folder.setFlags(messages, Flags(Flags.Flag.DELETED), true)
+            folder.expunge()
+          }
+          messages.size
         }
       }
     }

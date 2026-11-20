@@ -12,6 +12,10 @@
  */
 
 import type {
+  FetchChangesInput,
+  FetchChangesResult,
+  MailboxCounts,
+  RemoteChange,
   FetchMessagesInput,
   FetchMessagesResult,
   FetchOlderMessagesInput,
@@ -46,6 +50,16 @@ const FOLDERS: RemoteFolder[] = [
   // Gmail's own spam filter: shown in the list with a "Spam" badge.
   { remoteFolderId: 'SPAM', name: 'Spam', role: 'spam' },
 ];
+
+interface GmailHistoryPage {
+  history?: {
+    labelsAdded?: { message: { id: string }; labelIds?: string[] }[];
+    labelsRemoved?: { message: { id: string }; labelIds?: string[] }[];
+    messagesDeleted?: { message: { id: string } }[];
+  }[];
+  historyId?: string;
+  nextPageToken?: string;
+}
 
 export class GmailApiError extends Error {
   constructor(
@@ -116,7 +130,8 @@ export class GmailApiProvider implements MailProvider {
 
     let ids: string[];
     if (cursor === null || cursor < 0) {
-      ids = await this.listIds(input.folderRemoteId, null, limit);
+      const since = input.sinceMs ? `after:${Math.floor(input.sinceMs / 1000)}` : null;
+      ids = await this.listIds(input.folderRemoteId, since, limit);
     } else {
       // `after:` has one-second granularity; exact filtering happens below.
       const after = Math.max(0, Math.floor(cursor / 1000) - 1);
@@ -294,6 +309,100 @@ export class GmailApiProvider implements MailProvider {
     const labels = restored.labelIds ?? [];
     const folder = labels.includes('INBOX') ? 'INBOX' : labels.includes('SENT') ? 'SENT' : null;
     return folder ? { ...message, folderRemoteId: folder } : null;
+  }
+
+  /**
+   * Changes made elsewhere since the last call, from Gmail's history (labels
+   * added / removed, messages deleted). First call: just the starting point.
+   */
+  async fetchChanges(input: FetchChangesInput): Promise<FetchChangesResult> {
+    if (!input.cursor) {
+      return { cursor: await this.currentHistoryId(), changes: [] };
+    }
+    const byId = new Map<string, RemoteChange>();
+    const change = (id: string) => {
+      let entry = byId.get(id);
+      if (!entry) {
+        entry = { providerMessageId: id };
+        byId.set(id, entry);
+      }
+      return entry;
+    };
+    const apply = (entry: RemoteChange, label: string, added: boolean) => {
+      if (label === 'UNREAD') entry.isRead = !added;
+      else if (label === 'STARRED') entry.isStarred = added;
+      else if (label === 'TRASH') entry.removed = added;
+      else if (label === 'SPAM') entry.spam = added;
+      else if (label === 'INBOX') entry.inInbox = added;
+    };
+    let cursor = input.cursor;
+    let pageToken: string | undefined;
+    do {
+      const params = [
+        `startHistoryId=${encodeURIComponent(input.cursor)}`,
+        'historyTypes=labelAdded',
+        'historyTypes=labelRemoved',
+        'historyTypes=messageDeleted',
+        'maxResults=500',
+        ...(pageToken ? [`pageToken=${encodeURIComponent(pageToken)}`] : []),
+      ];
+      let data: GmailHistoryPage;
+      try {
+        data = (await this.requestJson(`/history?${params.join('&')}`)) as GmailHistoryPage;
+      } catch (error) {
+        // History older than about a week: start again from now.
+        if (error instanceof GmailApiError && error.status === 404) {
+          return { cursor: await this.currentHistoryId(), changes: [] };
+        }
+        throw error;
+      }
+      for (const record of data.history ?? []) {
+        for (const item of record.labelsAdded ?? []) {
+          for (const label of item.labelIds ?? []) apply(change(item.message.id), label, true);
+        }
+        for (const item of record.labelsRemoved ?? []) {
+          for (const label of item.labelIds ?? []) apply(change(item.message.id), label, false);
+        }
+        for (const item of record.messagesDeleted ?? []) change(item.message.id).removed = true;
+      }
+      if (data.historyId) cursor = data.historyId;
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+    return { cursor, changes: [...byId.values()] };
+  }
+
+  private async currentHistoryId(): Promise<string | null> {
+    const profile = (await this.requestJson('/profile')) as { historyId?: string };
+    return profile.historyId ?? null;
+  }
+
+  /**
+   * Unread conversations per inbox tab, as Gmail counts them: thread ids are
+   * listed (one call per box, up to 500), so the number is exact.
+   */
+  async fetchMailboxCounts(): Promise<MailboxCounts> {
+    const boxes: Record<string, string> = {
+      all: 'in:inbox is:unread',
+      primary: 'in:inbox category:primary is:unread',
+      social: 'in:inbox category:social is:unread',
+      promotions: 'in:inbox category:promotions is:unread',
+      updates: 'in:inbox category:updates is:unread',
+      forums: 'in:inbox category:forums is:unread',
+      spam: 'in:spam',
+    };
+    const result: MailboxCounts = {};
+    for (const [box, query] of Object.entries(boxes)) {
+      const data = (await this.requestJson(
+        `/threads?maxResults=500&q=${encodeURIComponent(query)}${
+          box === 'spam' ? '&includeSpamTrash=true' : ''
+        }`,
+      )) as { threads?: { id: string }[]; nextPageToken?: string };
+      result[box] = {
+        unread: data.threads?.length ?? 0,
+        ...(data.nextPageToken ? { capped: true } : {}),
+      };
+    }
+    return result;
   }
 
   async setSpam(remoteUid: number, isSpam: boolean): Promise<void> {

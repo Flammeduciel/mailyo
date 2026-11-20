@@ -566,6 +566,7 @@ describe('MailService OAuth accounts', () => {
       gmailClientId: 'client',
       fetchImpl,
       fetchLimit: 3,
+      initialLimit: 3,
     });
     await service.connectOAuthAccount({ emailAddress: 'moi@gmail.com', tokens });
     await service.syncAll();

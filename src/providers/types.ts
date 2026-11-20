@@ -53,6 +53,8 @@ export interface RemoteMessage {
   listUnsubscribePost?: string | null;
   /** Provider category (Gmail tabs), when the provider has one. */
   category?: MailCategory | null;
+  /** Provider's own id (Gmail message id), when it has one. */
+  providerMessageId?: string | null;
 }
 
 export interface FetchOlderMessagesInput {
@@ -69,9 +71,50 @@ export interface FetchMessagesInput {
   /** Last UID already stored locally, or null for the initial sync. */
   lastSyncedUid: number | null;
   limit?: number;
+  /**
+   * Initial sync only: every message received since this time (ms), up to
+   * `limit`. Without it the initial sync takes the newest `limit` messages.
+   */
+  sinceMs?: number;
   /** Download progress, for providers that fetch messages one by one. */
   onProgress?: (fetched: number, total: number) => void;
 }
+
+/** What happened on the server to a mail already on the phone. */
+export interface RemoteChange {
+  /** Gmail: the provider id of the message. */
+  providerMessageId?: string;
+  /** IMAP: folder + UID of the message. */
+  folderRemoteId?: string;
+  remoteUid?: number;
+  isRead?: boolean;
+  isStarred?: boolean;
+  /** Deleted, trashed or moved out of the folder. */
+  removed?: boolean;
+  /** Now flagged as spam by the server. */
+  spam?: boolean;
+  /** Gmail: in (true) or out of (false, archived) the inbox. */
+  inInbox?: boolean;
+}
+
+export interface FetchChangesInput {
+  /** Opaque cursor from the previous call, null the first time. */
+  cursor: string | null;
+  /** IMAP: what the phone holds per folder (UIDs), to compare with the server. */
+  folders: { folderRemoteId: string; uids: number[] }[];
+}
+
+export interface FetchChangesResult {
+  cursor: string | null;
+  changes: RemoteChange[];
+}
+
+/**
+ * Unread conversations per drawer mailbox id ('all', 'primary', 'social',
+ * 'promotions', 'updates', 'forums', 'spam'), as the provider counts them.
+ * `capped`: the provider stopped counting (500+).
+ */
+export type MailboxCounts = Partial<Record<string, { unread: number; capped?: boolean }>>;
 
 export interface FetchMessagesResult {
   uidValidity: number;
@@ -148,6 +191,15 @@ export interface MailProvider {
    * cursor), or null when the next sync will pick it up.
    */
   restoreFromTrash?(message: RemoteMessage): Promise<RemoteMessage | null>;
+  /**
+   * Changes made elsewhere (web, another phone) to mail already on the phone:
+   * read, starred, deleted, moved. Optional.
+   */
+  fetchChanges?(input: FetchChangesInput): Promise<FetchChangesResult>;
+  /** Exact counters from the server (Gmail labels). Optional. */
+  fetchMailboxCounts?(): Promise<MailboxCounts>;
+  /** Delete for good everything in the provider's trash. Optional. */
+  emptyTrash?(): Promise<number>;
   /** Attachment list of an already synced message (backfill for older mails). */
   fetchAttachments?(remoteUid: number): Promise<RemoteAttachment[]>;
   /**

@@ -7,12 +7,14 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { TrashedConversation } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
-import { AppBar, AppText, Avatar, EmptyState, Radius, Spacing, useAppTheme } from '@/ui';
+import { AppBar, AppText, Avatar, EmptyState, Radius, showAlert, Spacing, useAppTheme } from '@/ui';
+
+const GMAIL_TRASH_URL = 'https://mail.google.com/mail/u/0/#trash';
 
 function formatDate(ms: number): string {
   const date = new Date(ms);
@@ -75,6 +77,52 @@ export default function TrashScreen() {
 
   const multipleAccounts = new Set(items?.map((item) => item.accountId)).size > 1;
 
+  const explainGmail = useCallback((addresses: string[]) => {
+    showAlert(
+      'Gmail vide sa corbeille lui-même',
+      `Pour ${addresses.join(', ')}, Gmail efface définitivement les mails de la corbeille au bout de 30 jours. Wouah Mail peut placer un mail dans la corbeille ou l’en sortir, mais pas l’effacer définitivement : vous pouvez la vider tout de suite depuis Gmail.`,
+      [
+        { text: 'Fermer', style: 'cancel' },
+        { text: 'Ouvrir Gmail', onPress: () => void Linking.openURL(GMAIL_TRASH_URL) },
+      ],
+      { icon: 'delete-forever' },
+    );
+  }, []);
+
+  const emptyTrash = useCallback(async () => {
+    const support = await service.emptyTrashSupport();
+    if (support.supported.length === 0) {
+      explainGmail(support.unsupported);
+      return;
+    }
+    showAlert(
+      'Vider la corbeille ?',
+      `Les mails de la corbeille de ${support.supported.join(', ')} seront supprimés définitivement. Cette action est irréversible.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Vider',
+          style: 'destructive',
+          onPress: () =>
+            void (async () => {
+              setBusy('empty');
+              setError(null);
+              try {
+                const result = await service.emptyTrash();
+                load();
+                if (result.unsupported.length > 0) explainGmail(result.unsupported);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : String(cause));
+              } finally {
+                setBusy(null);
+              }
+            })(),
+        },
+      ],
+      { icon: 'delete-forever' },
+    );
+  }, [service, load, explainGmail]);
+
   return (
     <SafeAreaView
       edges={['top', 'bottom']}
@@ -88,7 +136,18 @@ export default function TrashScreen() {
             : undefined
         }
         onBack={() => router.back()}
-        actions={[{ icon: 'refresh', label: 'Actualiser', onPress: load }]}
+        actions={[
+          ...(items && items.length > 0
+            ? [
+                {
+                  icon: 'delete-sweep',
+                  label: 'Vider la corbeille',
+                  onPress: () => void emptyTrash(),
+                },
+              ]
+            : []),
+          { icon: 'refresh', label: 'Actualiser', onPress: load },
+        ]}
       />
       <View style={[styles.notice, { backgroundColor: colors.surfaceAlt }]}>
         <MaterialIcons name="info-outline" size={18} color={colors.textSecondary} />

@@ -291,6 +291,7 @@ export function gmailMessageToRemote(message: GmailMessage, folderRemoteId: stri
     listUnsubscribe: header(headers, 'List-Unsubscribe') ?? '',
     listUnsubscribePost: header(headers, 'List-Unsubscribe-Post'),
     category: gmailCategory(labels),
+    providerMessageId: message.id || null,
   };
 }
 

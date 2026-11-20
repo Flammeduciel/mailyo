@@ -42,6 +42,7 @@ function message(overrides: Partial<Message> = {}): Message {
     category: 'updates',
     listUnsubscribe: null,
     listUnsubscribePost: null,
+    providerMessageId: null,
     ...overrides,
   };
 }

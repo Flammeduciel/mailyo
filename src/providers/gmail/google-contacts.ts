@@ -45,17 +45,13 @@ interface PeoplePage {
 }
 
 /**
- * The person's own photo when they set one, otherwise the letter avatar Google
- * generates for them (`default: true`).
+ * The person's own photo. Google's generated letter avatar (`default: true`)
+ * is left out: its letter comes from Google's name for the person, which can
+ * differ from the name shown in Wouah Mail; the app's initials always match.
  */
 function photoOf(person: PeoplePerson): string | null {
-  const photos = (person.photos ?? []).filter((photo) => photo.url);
-  const real = photos.filter((photo) => !photo.default);
-  const photo =
-    real.find((candidate) => candidate.metadata?.primary) ??
-    real[0] ??
-    photos.find((candidate) => candidate.metadata?.primary) ??
-    photos[0];
+  const real = (person.photos ?? []).filter((photo) => photo.url && !photo.default);
+  const photo = real.find((candidate) => candidate.metadata?.primary) ?? real[0];
   return photo?.url ?? null;
 }
 
