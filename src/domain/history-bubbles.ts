@@ -9,7 +9,7 @@
  */
 
 import { tidyPlainText } from '@/domain/plain-text';
-import { parseQuoteBlock, quoteOnlyText, splitQuotedText } from '@/domain/quote';
+import { parseQuoteBlock, quoteOnlyText, sameText, splitQuotedText } from '@/domain/quote';
 
 export interface HistoryBubble {
   /** Stable id: `hist:` + quoting message id + depth. */
@@ -127,13 +127,6 @@ function ownText(bodyText: string): string {
   return normalize(splitQuotedText(bodyText).body);
 }
 
-/** Same text, give or take reflowed lines and a signature. */
-function sameText(a: string, b: string): boolean {
-  if (!a || !b) return false;
-  const probe = (value: string) => value.slice(0, 60);
-  return a.startsWith(probe(b)) || b.startsWith(probe(a));
-}
-
 const MAX_DEPTH = 40;
 
 /**
@@ -178,9 +171,10 @@ export function historyBubbles(messages: readonly MessageLike[]): {
         continue;
       }
       const parsed = parseAttributionDate(block.date);
-      // A quoted message cannot be newer than the reply quoting it.
+      // A quoted message cannot be newer than the reply quoting it (dates are
+      // to the minute: two mails of the same minute keep their order).
       const dated = parsed !== null && parsed <= ceiling + 60_000;
-      const receivedAt = dated ? (parsed as number) : ceiling - 1;
+      const receivedAt = dated ? Math.min(parsed as number, ceiling - 1) : ceiling - 1;
       ceiling = receivedAt;
       const bubble: HistoryBubble = {
         id: `hist:${message.id}:${depth}`,

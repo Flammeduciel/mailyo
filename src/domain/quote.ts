@@ -16,11 +16,13 @@ export interface SplitQuote {
 
 /**
  * "Le …, X a écrit :" / "On …, X wrote:", may wrap over up to three lines
- * (Gmail rewraps quoted attributions at 78 columns). `[^\S\n]`
+ * (Gmail rewraps quoted attributions at 78 columns). A wrapped line is never
+ * blank and never starts a new « Le / On »: « On demande d'abord » followed by
+ * a blank line and the real attribution is the author's own text. `[^\S\n]`
  * also matches the no-break spaces French clients put before the colon.
  */
 const ATTRIBUTION =
-  /(^|\n)[^\S\n]*((?:Le|On)\b[^\n]{0,200}(?:\n[^\n]{0,200}){0,2}?(?:a\s+écrit|wrote)[^\S\n]*:)[^\S\n]*(\n|$)/i;
+  /(^|\n)[^\S\n]*((?:Le|On)\b[^\n]{0,200}(?:\n(?![^\S\n]*(?:Le|On)\b)(?=[^\n]*\S)[^\n]{0,200}){0,2}?(?:a\s+écrit|wrote)[^\S\n]*:)[^\S\n]*(\n|$)/i;
 
 /** Outlook / forwarded headers block. */
 const OUTLOOK_SEPARATORS = [
@@ -154,6 +156,17 @@ export function quoteOnlyText(text: string): string | null {
   return lines.length > 0 && lines.every((line) => line.trim().startsWith('>')) ? source : null;
 }
 
+/**
+ * Same message, give or take reflowed lines and a trailing signature. A short
+ * text must match exactly: « Oui » is not « Oui je passerai ».
+ */
+export function sameText(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  return shorter.length >= 24 && longer.startsWith(shorter.slice(0, 60));
+}
+
 function normalizeForMatch(value: string): string {
   return value.replace(/\s+/g, ' ').trim().toLowerCase();
 }
@@ -169,13 +182,12 @@ export function findQuotedMessage<T extends { id: string; bodyText: string }>(
 ): T | null {
   const block = parseQuoteBlock(quoted);
   const quotedOwn = normalizeForMatch(splitQuotedText(block.text).body);
-  if (quotedOwn.length < 4) return null;
-  const probe = quotedOwn.slice(0, 60);
+  if (!quotedOwn) return null;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const candidate = messages[i];
     if (candidate.id === excludeId) continue;
     const own = normalizeForMatch(splitQuotedText(candidate.bodyText).body);
-    if (own && (own.startsWith(probe) || probe.startsWith(own.slice(0, 60)))) return candidate;
+    if (sameText(own, quotedOwn)) return candidate;
   }
   return null;
 }
