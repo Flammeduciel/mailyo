@@ -17,7 +17,9 @@ const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
 export function createAppMailService(db: Database): MailService {
   return new MailService({
     db,
-    notifier: new Notifier(createExpoNotificationApi()),
+    notifier: new Notifier(createExpoNotificationApi(), (accountId, uid) => {
+      getMailyoImap().dismissMail(accountId, uid);
+    }),
     tokenStore: new SecureTokenStore(),
     gmailClientId: (extra.gmailClientId as string | undefined) ?? '',
     gmailPush: {

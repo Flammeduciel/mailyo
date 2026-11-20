@@ -301,6 +301,7 @@ describe('Real-time delivery (« Notifications instantanées »)', () => {
     const db = await createMigratedDatabase();
     const credentials = new MemoryCredentials();
     const present = jest.fn(async () => undefined);
+    const dismissThread = jest.fn(async () => undefined);
     const native = fakeNative({
       fetchMessages: jest.fn(async (_imap, folder: string) => ({
         uidValidity: 7,
@@ -312,7 +313,7 @@ describe('Real-time delivery (« Notifications instantanées »)', () => {
       db,
       imapCredentials: credentials,
       imapNative: () => native,
-      notifier: { present } as unknown as Notifier,
+      notifier: { present, dismissThread } as unknown as Notifier,
       now: () => now,
     });
     await service.loadState();
@@ -415,6 +416,7 @@ describe('Trash and notification targets', () => {
     const db = await createMigratedDatabase();
     const credentials = new MemoryCredentials();
     const present = jest.fn(async () => undefined);
+    const dismissThread = jest.fn(async () => undefined);
     const native = fakeNative({
       fetchMessages: jest.fn(async (_imap, folder: string) => ({
         uidValidity: 7,
@@ -430,12 +432,12 @@ describe('Trash and notification targets', () => {
       db,
       imapCredentials: credentials,
       imapNative: () => native,
-      notifier: { present } as unknown as Notifier,
+      notifier: { present, dismissThread } as unknown as Notifier,
     });
     await mail.updateSettings({ realtimeMode: 'off' });
     const account = await mail.connectImapAccount({ emailAddress: 'moi@yahoo.fr', config: CONFIG });
     await mail.syncAll();
-    return { mail, account, native, present };
+    return { mail, account, native, present, dismissThread };
   }
 
   it('lists the server trash and moves a mail back to the inbox', async () => {
@@ -470,5 +472,15 @@ describe('Trash and notification targets', () => {
     const messages = await mail.openThread(thread.id);
     expect(messages.every((message) => message.senderName === 'Claire')).toBe(true);
     expect(thread.contact.name).toBe('Claire');
+  });
+
+  it('removes the notification of a conversation once it is opened', async () => {
+    const { mail, dismissThread } = await service();
+    const [thread] = await mail.listConversations();
+    await mail.openThread(thread.id);
+    expect(dismissThread).toHaveBeenCalledWith(
+      thread.id,
+      expect.arrayContaining([expect.objectContaining({ remoteUid: expect.any(Number) })]),
+    );
   });
 });

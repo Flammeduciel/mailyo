@@ -41,7 +41,15 @@ export interface NotificationApi {
     };
     trigger: null;
   }): Promise<string>;
+  /** Notifications of the app still shown in the system tray. */
+  getPresentedNotificationsAsync(): Promise<
+    { identifier: string; data: Record<string, unknown> | null }[]
+  >;
+  dismissNotificationAsync(identifier: string): Promise<void>;
 }
+
+/** Removes a notification posted by the native IMAP service (mail `uid` of an account). */
+export type NativeMailDismisser = (accountId: string, remoteUid: number) => void;
 
 /** Mirrors expo-notifications' `AndroidImportance` values for our channels. */
 const IMPORTANCE: Record<NotificationChannelSpec['importance'], number> = {
@@ -64,7 +72,10 @@ function soundNameFor(soundId: string | null): string | null {
 }
 
 export class Notifier {
-  constructor(private readonly api: NotificationApi) {}
+  constructor(
+    private readonly api: NotificationApi,
+    private readonly dismissNativeMail: NativeMailDismisser | null = null,
+  ) {}
 
   /** Install the foreground handler and (re)create the three channels. */
   async configure(): Promise<void> {
@@ -101,7 +112,7 @@ export class Notifier {
   }
 
   /** Present a resolved decision immediately. No-op when it should not notify. */
-  async present(decision: NotificationDecision, url?: string): Promise<void> {
+  async present(decision: NotificationDecision, url?: string, threadId?: string): Promise<void> {
     if (!decision.notify) {
       return;
     }
@@ -111,10 +122,42 @@ export class Notifier {
         body: decision.body,
         sound: soundNameFor(decision.soundId),
         // Where a tap leads (see app/_layout.tsx and app/open-mail.tsx).
-        ...(url ? { data: { url } } : {}),
+        ...(url || threadId
+          ? { data: { ...(url ? { url } : {}), ...(threadId ? { threadId } : {}) } }
+          : {}),
       },
       trigger: null,
     });
+  }
+
+  /**
+   * The conversation was read: its notifications leave the tray, like in a chat
+   * app. Covers the app's own notifications (tagged with the thread) and the
+   * ones of the native IMAP service (one per mail uid).
+   */
+  async dismissThread(
+    threadId: string,
+    messages: readonly { accountId: string; remoteUid: number | null }[],
+  ): Promise<void> {
+    try {
+      const presented = await this.api.getPresentedNotificationsAsync();
+      for (const notification of presented) {
+        if (notification.data?.threadId === threadId) {
+          await this.api.dismissNotificationAsync(notification.identifier);
+        }
+      }
+    } catch {
+      // Best effort: a notification left behind is harmless.
+    }
+    if (!this.dismissNativeMail) return;
+    for (const message of messages) {
+      if (message.remoteUid === null) continue;
+      try {
+        this.dismissNativeMail(message.accountId, message.remoteUid);
+      } catch {
+        // Native module missing (old build).
+      }
+    }
   }
 
   /** Present a test notification using the given sound. */
@@ -160,8 +203,17 @@ export function createExpoNotificationApi(): NotificationApi {
           title: request.content.title,
           body: request.content.body,
           sound: request.content.sound ?? false,
+          ...(request.content.data ? { data: request.content.data } : {}),
         },
         trigger: request.trigger,
       }),
+    getPresentedNotificationsAsync: async () => {
+      const presented = await Notifications.getPresentedNotificationsAsync();
+      return presented.map((notification) => ({
+        identifier: notification.request.identifier,
+        data: (notification.request.content.data as Record<string, unknown> | null) ?? null,
+      }));
+    },
+    dismissNotificationAsync: (identifier) => Notifications.dismissNotificationAsync(identifier),
   };
 }
