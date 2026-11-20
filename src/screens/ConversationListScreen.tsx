@@ -570,6 +570,30 @@ export function ConversationListScreen({
           now={data.now}
           onPick={openThread}
           onClose={() => setSubjectsOf(null)}
+          onDelete={(threads) =>
+            showAlert(
+              `Supprimer ${threads.length} conversation${threads.length > 1 ? 's' : ''} ?`,
+              'Les emails seront placés dans la corbeille, d’où vous pourrez les restaurer.',
+              [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                  text: 'Supprimer',
+                  style: 'destructive',
+                  onPress: () =>
+                    void (async () => {
+                      for (const thread of threads) await service.deleteThread(thread.id);
+                      const removed = new Set(threads.map((t) => t.id));
+                      setSubjectsOf((group) => {
+                        if (!group) return null;
+                        const left = group.threads.filter((t) => !removed.has(t.id));
+                        return left.length > 1 ? { ...group, threads: left } : null;
+                      });
+                      invalidate();
+                    })(),
+                },
+              ],
+            )
+          }
         />
       ) : null}
       <AppDrawer

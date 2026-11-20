@@ -97,6 +97,7 @@ import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
 import { parseListUnsubscribe } from '@/domain/html-privacy';
 import { createId } from '@/domain/ids';
 import { findSentEcho, SENT_ECHO_WINDOW_MS } from '@/domain/sent-echo';
+import { groupTrashed } from '@/domain/trash-groups';
 import {
   disableGmailPush,
   enableGmailPush,
@@ -220,6 +221,21 @@ export interface TrashedMail {
   accountAddress: string;
   senderDisplayName: string;
   remote: RemoteMessage;
+}
+
+/** Trashed mails of one conversation, shown as one row in the « Corbeille ». */
+export interface TrashedConversation {
+  key: string;
+  accountId: string;
+  accountAddress: string;
+  /** Who the conversation is with (latest message not sent by the account). */
+  displayName: string;
+  senderAddress: string;
+  subject: string;
+  preview: string;
+  receivedAt: number;
+  /** Oldest first. */
+  items: TrashedMail[];
 }
 
 export interface MailServiceOptions {
@@ -864,6 +880,35 @@ export class MailService {
     return result.sort((a, b) => b.remote.receivedAt - a.remote.receivedAt);
   }
 
+  /** The trash grouped into conversations, most recent first. */
+  async listTrashConversations(limitPerAccount = 100): Promise<TrashedConversation[]> {
+    const items = await this.listTrash(limitPerAccount);
+    return groupTrashed(items).map((group) => {
+      const own = group.latest.accountAddress.toLowerCase();
+      const counterpart =
+        [...group.items].reverse().find((i) => i.remote.senderAddress.toLowerCase() !== own) ??
+        group.latest;
+      return {
+        key: group.key,
+        accountId: group.accountId,
+        accountAddress: group.latest.accountAddress,
+        displayName: counterpart.senderDisplayName,
+        senderAddress: counterpart.remote.senderAddress,
+        subject: group.latest.remote.subject,
+        preview: group.latest.remote.bodyText.replace(/\s+/g, ' ').trim(),
+        receivedAt: group.latest.remote.receivedAt,
+        items: group.items,
+      };
+    });
+  }
+
+  /** Restore every mail of a trashed conversation; it comes back as one conversation. */
+  async restoreTrashConversation(conversation: TrashedConversation): Promise<void> {
+    for (const item of conversation.items) {
+      await this.restoreFromTrash(item);
+    }
+  }
+
   /** Put a trashed mail back in the inbox; it reappears in its conversation. */
   async restoreFromTrash(item: TrashedMail): Promise<void> {
     const provider = this.registry.get(item.accountId);
@@ -936,6 +981,8 @@ export class MailService {
   async removeSentEchoes(): Promise<number> {
     let removed = 0;
     for (const account of await listAccounts(this.db)) {
+      // Conversations emptied by a deletion (older versions left them archived).
+      await deleteEmptyThreads(this.db, account.id);
       const placeholders = await listSentPlaceholders(this.db, account.id, account.emailAddress);
       if (placeholders.length === 0) continue;
       const oldest = Math.min(...placeholders.map((p) => p.receivedAt)) - SENT_ECHO_WINDOW_MS;
@@ -1385,7 +1432,9 @@ export class MailService {
     for (const message of messages) {
       await this.deleteMessageById(message.id);
     }
-    await setThreadArchivedRow(this.db, threadId, true);
+    // The emptied conversation goes away (it used to linger under « Archivés »).
+    const thread = await getThread(this.db, threadId);
+    if (thread) await deleteEmptyThreads(this.db, thread.accountId);
   }
 
   async deleteMessageById(messageId: string): Promise<void> {

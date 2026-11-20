@@ -113,7 +113,20 @@ export function ConversationRow({
       ]}
     >
       <View>
-        <Avatar name={senderName} size={50} imageUri={photoUri} />
+        {/* Several subjects with this person: a counter on the face. */}
+        <Avatar
+          name={senderName}
+          size={50}
+          imageUri={photoUri}
+          badge={subjectCount}
+          badgeRing={selected ? colors.primaryContainer : colors.background}
+        />
+        {subjectCount > 1 ? (
+          <View
+            testID={testID ? `${testID}-subjects` : undefined}
+            accessibilityLabel={`${subjectCount} sujets`}
+          />
+        ) : null}
         {selected ? (
           <View
             style={[
@@ -123,17 +136,6 @@ export function ConversationRow({
           >
             <MaterialIcons name="check" size={14} color={colors.onPrimary} />
           </View>
-        ) : null}
-        {/* Several subjects with this person: a tiny count under the face. */}
-        {subjectCount > 1 ? (
-          <AppText
-            variant="caption"
-            weight="semibold"
-            style={[styles.subjectCount, { color: colors.primary }]}
-            testID={testID ? `${testID}-subjects` : undefined}
-          >
-            {subjectCount} sujets
-          </AppText>
         ) : null}
       </View>
 
@@ -244,12 +246,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.md - 1,
     lineHeight: 20,
-  },
-  subjectCount: {
-    fontSize: 10,
-    lineHeight: 12,
-    textAlign: 'center',
-    marginTop: 3,
   },
   clip: {
     transform: [{ rotate: '45deg' }],

@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -31,6 +32,8 @@ function AppShell() {
 
   return (
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {/* Dark clock and icons on the light theme, light ones on the dark theme. */}
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       {locked ? (
         <LockScreen />
       ) : (

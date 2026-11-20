@@ -92,3 +92,4 @@ export { SheetHost, showAlert, showChoice, type SheetButton, type SheetChoice } 
 export { SendCountdown, type SendCountdownProps } from './SendCountdown';
 export { MailboxDrawer, type DrawerLink, type MailboxDrawerProps } from './MailboxDrawer';
 export { SubjectsSheet, sortSubjects, type SubjectsSheetProps } from './SubjectsSheet';
+export { HighlightText, type HighlightTextProps } from './HighlightText';
