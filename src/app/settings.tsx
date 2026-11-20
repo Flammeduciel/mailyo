@@ -16,7 +16,7 @@ import type { Account, NotificationRule } from '@/domain/models';
 import { describePermissions, type PermissionTag } from '@/domain/permissions';
 import type { AppSettings } from '@/domain/settings';
 import { DEFAULT_SETTINGS } from '@/domain/settings';
-import { realtimeTransports } from '@/realtime/use-realtime';
+import { gmailPushStatus, realtimeTransports } from '@/realtime/use-realtime';
 import type { RealtimeStatus } from '@/realtime/transport';
 import { useApp } from '@/state/app-context';
 import { usePermissions } from '@/state/use-permissions';
@@ -138,6 +138,12 @@ export default function SettingsScreen() {
   const colors = useAppTheme();
   const { service, biometricsAvailable, setTheme, theme, invalidate, applyRealtime } = useApp();
   const { idle: idleTransport } = realtimeTransports();
+  const [gmailPush, setGmailPush] = useState<{ addresses: string[] }>({ addresses: [] });
+  useFocusEffect(
+    useCallback(() => {
+      setGmailPush(gmailPushStatus());
+    }, []),
+  );
 
   const { data, reload } = useServiceQuery<SettingsData>(async (mailService) => {
     const [accounts, rules] = await Promise.all([
@@ -403,10 +409,13 @@ export default function SettingsScreen() {
           <SettingRow
             icon="cloud-sync"
             tone="blue"
-            label="Serveur relais"
-            description="Push Gmail et Microsoft sans connexion permanente"
-            detail="Bientôt"
-            disabled
+            label="Gmail instantané"
+            description={
+              gmailPush.addresses.length > 0
+                ? `Push Gmail actif · ${gmailPush.addresses.join(', ')}`
+                : 'Push Gmail via le serveur relais, sans connexion permanente'
+            }
+            detail={gmailPush.addresses.length > 0 ? 'Actif' : 'En attente'}
             testID="settings-relay"
           />
         </SettingsGroup>

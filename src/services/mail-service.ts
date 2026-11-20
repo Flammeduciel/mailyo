@@ -97,6 +97,13 @@ import { isNoReplyAddress, type ContactSuggestion } from '@/domain/contacts';
 import { parseListUnsubscribe } from '@/domain/html-privacy';
 import { createId } from '@/domain/ids';
 import { findSentEcho, SENT_ECHO_WINDOW_MS } from '@/domain/sent-echo';
+import {
+  disableGmailPush,
+  enableGmailPush,
+  GMAIL_WATCH_RENEW_MS,
+  isGmailPushConfigured,
+  type GmailPushConfig,
+} from '@/realtime/gmail-push';
 import { mailbox, MAILBOXES, type MailboxCount, type MailboxId } from '@/domain/mailboxes';
 import { isSelf, parseAddressList } from '@/domain/mime';
 import { buildReplyHeaders, type ReplyMode } from '@/domain/reply-headers';
@@ -222,6 +229,8 @@ export interface MailServiceOptions {
   tokenStore?: TokenStore;
   /** Google OAuth client id, needed to refresh Gmail access tokens. */
   gmailClientId?: string;
+  /** Relay + Pub/Sub topic for instant Gmail (see realtime/gmail-push.ts). */
+  gmailPush?: GmailPushConfig;
   /** HTTP client for provider APIs; defaults to the global `fetch` (tests inject one). */
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -251,6 +260,11 @@ export class MailService {
   private readonly notifier: Notifier | null;
   private readonly tokenStore: TokenStore | null;
   private readonly gmailClientId: string;
+  private readonly gmailPush: GmailPushConfig | null;
+  /** This phone's FCM token, once known (used to unregister on sign-out). */
+  private fcmToken: string | null = null;
+  /** When `users.watch` last succeeded, per account. */
+  private readonly gmailWatchedAt = new Map<string, number>();
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly fetchLimit: number;
@@ -274,6 +288,7 @@ export class MailService {
     this.notifier = options.notifier ?? null;
     this.tokenStore = options.tokenStore ?? null;
     this.gmailClientId = options.gmailClientId ?? '';
+    this.gmailPush = isGmailPushConfigured(options.gmailPush) ? options.gmailPush! : null;
     this.fetchImpl = options.fetchImpl;
     this.now = options.now ?? (() => Date.now());
     this.fetchLimit = options.fetchLimit ?? 50;
@@ -356,6 +371,53 @@ export class MailService {
       loadTokens: (id) => (tokens ? tokens.load(id) : Promise.resolve(null)),
       gmailClientId: this.gmailClientId,
     });
+  }
+
+  /** Instant Gmail is set up in this build (relay URL and topic configured). */
+  isGmailPushConfigured(): boolean {
+    return this.gmailPush !== null;
+  }
+
+  /**
+   * Instant Gmail: ask Gmail to push inbox changes to the relay and register
+   * this phone for each Gmail account. Renewed daily (Gmail's watch lasts 7
+   * days). Returns the addresses now covered.
+   */
+  async refreshGmailPush(fcmToken: string, force = false): Promise<string[]> {
+    this.fcmToken = fcmToken;
+    const config = this.gmailPush;
+    if (!config || !this.tokenStore || !this.gmailClientId) return [];
+    const covered: string[] = [];
+    for (const account of await listAccounts(this.db)) {
+      if (account.provider !== 'gmail' || account.authType !== 'oauth' || !account.syncEnabled) {
+        continue;
+      }
+      const last = this.gmailWatchedAt.get(account.id) ?? 0;
+      if (!force && this.now() - last < GMAIL_WATCH_RENEW_MS) {
+        covered.push(account.emailAddress);
+        continue;
+      }
+      try {
+        const accessToken = await createGmailTokenProvider({
+          accountId: account.id,
+          clientId: this.gmailClientId,
+          tokenStore: this.tokenStore,
+          now: this.now,
+          fetchImpl: this.fetchImpl,
+        })();
+        await enableGmailPush(
+          { email: account.emailAddress, accessToken },
+          fcmToken,
+          config,
+          this.fetchImpl,
+        );
+        this.gmailWatchedAt.set(account.id, this.now());
+        covered.push(account.emailAddress);
+      } catch (cause) {
+        console.warn(`[MailService] instant Gmail failed for ${account.emailAddress}`, cause);
+      }
+    }
+    return covered;
   }
 
   async listAccounts(): Promise<Account[]> {
@@ -1643,6 +1705,7 @@ export class MailService {
    * the token in the background.
    */
   async signOutAccount(accountId: string): Promise<void> {
+    const removedAccount = await getAccount(this.db, accountId);
     this.removing.add(accountId);
     this.registry.remove(accountId);
     const tokens = await this.tokenStore?.load(accountId).catch(() => null);
@@ -1668,8 +1731,23 @@ export class MailService {
       this.removing.delete(accountId);
     }
 
+    // This phone stops receiving pushes for the address (before revoking the token).
+    const pushConfig = this.gmailPush;
+    const fcmToken = this.fcmToken;
+    const account = removedAccount;
+    const unregister =
+      pushConfig && fcmToken && account && tokens?.accessToken
+        ? disableGmailPush(
+            { email: account.emailAddress, accessToken: tokens.accessToken },
+            fcmToken,
+            pushConfig,
+            this.fetchImpl,
+          )
+        : Promise.resolve();
+    this.gmailWatchedAt.delete(accountId);
+
     const token = tokens?.refreshToken ?? tokens?.accessToken;
-    if (token) void this.revokeGoogleToken(token);
+    if (token) void unregister.finally(() => this.revokeGoogleToken(token));
   }
 
   /** Best effort, at most a few seconds: offline must not block signing out. */

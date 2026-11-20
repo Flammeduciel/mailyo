@@ -34,7 +34,7 @@
         <h1>Politique de confidentialité</h1>
         <p>Application <strong>Wouah Mail</strong> (également publiée sous le nom MailYo) pour Android.</p>
         <div class="legal-meta">
-          <span>En vigueur au : <b>14 novembre 2026</b></span>
+          <span>En vigueur au : <b>20 novembre 2026</b></span>
           <span>Éditeur : <b>Flamme WASSANGOU</b></span>
           <span>Contact : <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a></span>
         </div>
@@ -86,9 +86,10 @@
         <ul>
           <li><strong>Compte Gmail</strong> : vous vous connectez avec le système de connexion officiel de Google (OAuth). L’application ne voit jamais votre mot de passe Google ; Google lui remet un jeton d’accès, limité aux autorisations que vous acceptez.</li>
           <li><strong>Autre messagerie (IMAP/SMTP)</strong> : vous saisissez votre adresse et votre mot de passe (ou mot de passe d’application) ; l’application les utilise pour se connecter directement aux serveurs de votre fournisseur.</li>
-          <li><strong>Réception instantanée</strong> : pour vous notifier dès l’arrivée d’un mail, l’application peut garder, depuis votre téléphone, une connexion ouverte avec votre messagerie (service Android signalé par une notification permanente). Cette connexion relie directement votre téléphone à votre fournisseur, sans intermédiaire.</li>
+          <li><strong>Réception instantanée (messageries IMAP)</strong> : l’application peut garder, depuis votre téléphone, une connexion ouverte avec votre messagerie (service Android signalé par une notification permanente). Cette connexion relie directement votre téléphone à votre fournisseur.</li>
+          <li><strong>Réception instantanée (Gmail)</strong> : Gmail prévient le <strong>serveur relais</strong> de l’éditeur qu’un nouveau mail est arrivé pour votre adresse, et le relais réveille votre téléphone par une notification push (Firebase Cloud Messaging). Le téléphone récupère ensuite le mail directement auprès de Google. Voir la section 8.</li>
         </ul>
-        <p>L’éditeur n’exploite <strong>aucun serveur qui reçoit, relaie ou stocke</strong> les mails, contacts ou identifiants des utilisateurs.</p>
+        <p>L’éditeur n’exploite <strong>aucun serveur qui reçoit, relaie ou stocke</strong> le contenu de vos mails, vos contacts ou vos identifiants. Le relais ne connaît que votre adresse Gmail et l’identifiant push de votre téléphone.</p>
 
         <h2 id="donnees">4. Données traitées par l’application</h2>
         <p>Selon les fonctions que vous utilisez, l’application traite, <strong>uniquement sur votre téléphone</strong> :</p>
@@ -111,10 +112,9 @@
         <table class="table">
           <thead><tr><th>Autorisation demandée</th><th>Utilisation par Wouah Mail</th></tr></thead>
           <tbody>
-            <tr><td>Gmail : lire, rédiger, envoyer et supprimer définitivement vos e-mails<br /><code>https://mail.google.com/</code></td><td>Afficher vos mails sous forme de conversations ; envoyer vos réponses et nouveaux messages ; marquer comme lu ou non lu, mettre en favori, archiver, signaler ou retirer du spam, mettre à la corbeille et restaurer, à votre demande. Cette autorisation est aussi nécessaire pour la réception instantanée (connexion IMAP de Gmail depuis votre téléphone). L’application ne supprime jamais un mail sans action de votre part.</td></tr>
+            <tr><td>Gmail : lire, rédiger, envoyer vos e-mails et gérer leurs libellés<br /><code>https://www.googleapis.com/auth/gmail.modify</code></td><td>Afficher vos mails sous forme de conversations ; envoyer vos réponses et nouveaux messages ; marquer comme lu ou non lu, mettre en favori, archiver, signaler ou retirer du spam, mettre à la corbeille et restaurer, à votre demande ; demander à Gmail de signaler les nouveaux mails de la boîte de réception (notifications push). Cette autorisation ne permet pas la suppression définitive d’un mail.</td></tr>
             <tr><td>Adresse e-mail<br /><code>https://www.googleapis.com/auth/userinfo.email</code></td><td>Connaître l’adresse du compte connecté.</td></tr>
             <tr><td>Contacts (lecture seule)<br /><code>https://www.googleapis.com/auth/contacts.readonly</code></td><td>Afficher le nom et la photo de vos contacts enregistrés ; suggérer des destinataires.</td></tr>
-            <tr><td>« Autres contacts » (lecture seule)<br /><code>https://www.googleapis.com/auth/contacts.other.readonly</code></td><td>Reconnaître les personnes avec qui vous avez déjà échangé, pour afficher leur nom et les proposer comme destinataires.</td></tr>
           </tbody>
         </table>
         <div class="callout">
@@ -150,19 +150,27 @@
         </ul>
 
         <h2 id="partage">8. Partage et sous-traitants</h2>
-        <p>L’éditeur ne partage vos données avec personne et n’a recours à <strong>aucun sous-traitant</strong> pour traiter les données de l’application. Les seuls échanges réseau de l’application ont lieu, depuis votre téléphone, avec :</p>
+        <p>L’éditeur ne vend ni ne partage vos données. Les seuls échanges réseau de l’application ont lieu, depuis votre téléphone, avec :</p>
         <ul>
           <li><strong>Google</strong> (Gmail, contacts, connexion au compte), si vous connectez Gmail ;</li>
           <li><strong>les serveurs de votre fournisseur de messagerie</strong> (IMAP/SMTP), si vous connectez une autre adresse ;</li>
           <li><strong>les sites des expéditeurs</strong>, uniquement quand vous le demandez : ouverture d’un lien, affichage des images d’un mail, page de désabonnement ;</li>
-          <li><strong>Google Play</strong>, pour l’installation et les mises à jour de l’application, selon les règles de Google.</li>
+          <li><strong>Google Play</strong>, pour l’installation et les mises à jour de l’application, selon les règles de Google ;</li>
+          <li><strong>le serveur relais de l’éditeur</strong> et <strong>Firebase Cloud Messaging</strong> (Google), pour la réception instantanée des mails Gmail, détaillée ci-dessous.</li>
         </ul>
-        <p>Si une fonction future devait nécessiter un serveur (par exemple un relais de notifications), elle serait facultative, décrite dans cette politique avant sa mise en service, et ne recevrait jamais le contenu de vos mails.</p>
+        <h3>Serveur relais (réception instantanée Gmail)</h3>
+        <ul>
+          <li><strong>Ce qu’il reçoit</strong> : de votre téléphone, votre adresse Gmail et l’identifiant push du téléphone (jeton Firebase). Pour prouver que l’adresse vous appartient, le téléphone envoie aussi son jeton d’accès Google, que le relais vérifie aussitôt auprès de Google puis oublie. De Google (Cloud Pub/Sub), uniquement l’adresse concernée et un numéro de version de la boîte, à chaque nouveau mail.</li>
+          <li><strong>Ce qu’il ne reçoit jamais</strong> : le contenu, l’objet, l’expéditeur ou les pièces jointes de vos mails, vos contacts, votre mot de passe.</li>
+          <li><strong>Ce qu’il envoie</strong> : un message push sans contenu (« nouveau mail pour cette adresse ») à votre téléphone, via Firebase Cloud Messaging. C’est le téléphone qui récupère ensuite le mail chez Google et affiche la notification.</li>
+          <li><strong>Conservation</strong> : l’adresse et l’identifiant push sont gardés tant que le compte est connecté sur le téléphone, et supprimés quand vous vous déconnectez, quand l’application est désinstallée (jeton refusé par Firebase) ou sur simple demande.</li>
+          <li><strong>Hébergement</strong> : le relais tourne sur le serveur de l’éditeur loué chez Contabo GmbH (Allemagne). Sous-traitants : Contabo (hébergement), Google (Cloud Pub/Sub et Firebase Cloud Messaging).</li>
+        </ul>
 
         <h2 id="site">9. Ce site web</h2>
         <p>Ce site (wouah-mail.flamme.work) présente l’application et ses documents légaux. Il est <strong>distinct de l’application</strong> : l’application ne lui envoie aucune donnée.</p>
         <ul>
-          <li><strong>Hébergement</strong> : un serveur privé virtuel loué chez <strong>Contabo GmbH</strong> (Allemagne). Ce serveur sert uniquement les pages de ce site ; il ne reçoit, ne stocke et ne traite <strong>aucun mail, contact ou identifiant</strong> des utilisateurs de l’application.</li>
+          <li><strong>Hébergement</strong> : un serveur privé virtuel loué chez <strong>Contabo GmbH</strong> (Allemagne). Ce serveur sert les pages de ce site et fait tourner le relais décrit en section 8 ; il ne reçoit, ne stocke et ne traite <strong>aucun contenu de mail, aucun contact ni mot de passe</strong> des utilisateurs de l’application.</li>
           <li><strong>Réseau</strong> : le trafic du site passe par <strong>Cloudflare</strong> (protection et accélération).</li>
           <li><strong>Journaux techniques</strong> : comme tout site web, le serveur et Cloudflare peuvent enregistrer temporairement l’adresse IP, la date, la page demandée et le navigateur, à des fins de sécurité et de bon fonctionnement. Ces journaux ne sont pas utilisés pour vous identifier ni pour de la publicité.</li>
           <li><strong>Aucun cookie</strong>, aucun formulaire, aucun outil de mesure d’audience ni publicité sur ce site.</li>

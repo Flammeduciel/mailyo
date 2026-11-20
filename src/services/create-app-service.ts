@@ -12,12 +12,18 @@ import { SecureImapCredentialStore } from '@/providers/imap/credentials';
 import { MailService } from '@/services/mail-service';
 import { getMailyoImap } from '../../modules/mailyo-imap';
 
+const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
+
 export function createAppMailService(db: Database): MailService {
   return new MailService({
     db,
     notifier: new Notifier(createExpoNotificationApi()),
     tokenStore: new SecureTokenStore(),
-    gmailClientId: (Constants.expoConfig?.extra?.gmailClientId as string | undefined) ?? '',
+    gmailClientId: (extra.gmailClientId as string | undefined) ?? '',
+    gmailPush: {
+      relayUrl: (extra.relayUrl as string | undefined) ?? '',
+      topicName: (extra.gmailPushTopic as string | undefined) ?? '',
+    },
     imapCredentials: new SecureImapCredentialStore(),
     imapNative: getMailyoImap,
   });

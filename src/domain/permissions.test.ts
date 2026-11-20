@@ -10,7 +10,17 @@ describe('describePermissions', () => {
       { label: 'Mails : lecture et envoi', granted: true },
       { label: 'Adresse e-mail', granted: true },
       { label: 'Contacts', granted: false },
-      { label: 'Autres contacts', granted: false },
+    ]);
+  });
+
+  it('labels the narrower gmail.modify access', () => {
+    expect(
+      describePermissions(
+        'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly',
+      ),
+    ).toEqual([
+      { label: 'Mails : lecture et envoi', granted: true },
+      { label: 'Contacts', granted: true },
     ]);
   });
 
@@ -26,9 +36,6 @@ describe('describePermissions', () => {
   });
 
   it('handles an unknown scope string', () => {
-    expect(describePermissions(null)).toEqual([
-      { label: 'Contacts', granted: false },
-      { label: 'Autres contacts', granted: false },
-    ]);
+    expect(describePermissions(null)).toEqual([{ label: 'Contacts', granted: false }]);
   });
 });

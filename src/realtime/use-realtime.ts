@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { ImapIdleTransport } from '@/realtime/idle-transport';
+import { prepareGmailPush, setRunningAppPushHandler } from '@/realtime/push-task';
 import { RelayTransport } from '@/realtime/relay-transport';
 import type { RealtimeTransport } from '@/realtime/transport';
 import type { MailService } from '@/services/mail-service';
@@ -27,6 +28,14 @@ const relay = new RelayTransport();
 
 export function realtimeTransports(): { idle: RealtimeTransport; relay: RealtimeTransport } {
   return { idle, relay };
+}
+
+/** Gmail addresses currently delivered instantly through the relay (for Settings). */
+let gmailPushAddresses: string[] = [];
+let fcmTokenPromise: Promise<string | null> | null = null;
+
+export function gmailPushStatus(): { addresses: string[] } {
+  return { addresses: gmailPushAddresses };
 }
 
 export function useRealtime(
@@ -47,7 +56,16 @@ export function useRealtime(
   );
 
   const applyRealtime = useCallback(async () => {
-    if (!service || !idle.isAvailable()) return;
+    if (!service) return;
+    // Instant Gmail: Gmail push -> relay -> FCM (renewed daily, new accounts at once).
+    if (service.isGmailPushConfigured()) {
+      fcmTokenPromise ??= prepareGmailPush();
+      const fcmToken = await fcmTokenPromise;
+      if (fcmToken) {
+        gmailPushAddresses = await service.refreshGmailPush(fcmToken).catch(() => []);
+      }
+    }
+    if (!idle.isAvailable()) return;
     try {
       const config = await service.getPushConfig();
       const json = JSON.stringify(config);
@@ -90,9 +108,12 @@ export function useRealtime(
     enter(AppState.currentState);
     const subscription = AppState.addEventListener('change', enter);
     const unsubscribe = idle.onNewMail(() => void syncOnce(service));
+    // A Gmail push while the app runs: sync through this service.
+    setRunningAppPushHandler(() => syncOnce(service));
     return () => {
       subscription.remove();
       unsubscribe();
+      setRunningAppPushHandler(null);
       if (timer) clearInterval(timer);
     };
   }, [service, syncOnce]);

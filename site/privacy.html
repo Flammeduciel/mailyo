@@ -34,7 +34,7 @@
         <h1>Privacy Policy</h1>
         <p>The <strong>Wouah Mail</strong> app for Android (also published as MailYo).</p>
         <div class="legal-meta">
-          <span>Effective date: <b>November 14, 2026</b></span>
+          <span>Effective date: <b>November 20, 2026</b></span>
           <span>Developer: <b>Flamme WASSANGOU</b></span>
           <span>Contact: <a href="mailto:flammewassangou@gmail.com">flammewassangou@gmail.com</a></span>
         </div>
@@ -86,9 +86,10 @@
         <ul>
           <li><strong>Gmail account</strong>: you sign in with Google’s official sign-in (OAuth). The app never sees your Google password; Google gives it an access token limited to the permissions you approve.</li>
           <li><strong>Other email (IMAP/SMTP)</strong>: you enter your address and password (or app password); the app uses them to connect directly to your provider’s servers.</li>
-          <li><strong>Instant delivery</strong>: to notify you as soon as an email arrives, the app may keep a connection open from your phone to your email provider (an Android foreground service shown by a persistent notification). This connection links your phone directly to your provider, with no intermediary.</li>
+          <li><strong>Instant delivery (IMAP email)</strong>: the app may keep a connection open from your phone to your email provider (an Android foreground service shown by a persistent notification). This connection links your phone directly to your provider.</li>
+          <li><strong>Instant delivery (Gmail)</strong>: Gmail tells the developer’s <strong>relay server</strong> that a new email arrived for your address, and the relay wakes your phone with a push message (Firebase Cloud Messaging). The phone then fetches the email directly from Google. See section 8.</li>
         </ul>
-        <p>The developer operates <strong>no server that receives, relays or stores</strong> users’ email, contacts or credentials.</p>
+        <p>The developer operates <strong>no server that receives, relays or stores</strong> the content of your email, your contacts or your credentials. The relay only knows your Gmail address and your phone’s push identifier.</p>
 
         <h2 id="data">4. Data processed by the app</h2>
         <p>Depending on the features you use, the app processes, <strong>only on your phone</strong>:</p>
@@ -111,10 +112,9 @@
         <table class="table">
           <thead><tr><th>Requested permission</th><th>How Wouah Mail uses it</th></tr></thead>
           <tbody>
-            <tr><td>Gmail: read, compose, send and permanently delete your email<br /><code>https://mail.google.com/</code></td><td>Show your email as conversations; send your replies and new messages; mark as read or unread, star, archive, report or remove from spam, move to trash and restore, at your request. This permission is also required for instant delivery (Gmail IMAP connection from your phone). The app never deletes an email without an action from you.</td></tr>
+            <tr><td>Gmail: read, compose and send your email and manage its labels<br /><code>https://www.googleapis.com/auth/gmail.modify</code></td><td>Show your email as conversations; send your replies and new messages; mark as read or unread, star, archive, report or remove from spam, move to trash and restore, at your request; ask Gmail to signal new inbox email (push notifications). This permission does not allow permanent deletion of email.</td></tr>
             <tr><td>Email address<br /><code>https://www.googleapis.com/auth/userinfo.email</code></td><td>Know the address of the connected account.</td></tr>
             <tr><td>Contacts (read-only)<br /><code>https://www.googleapis.com/auth/contacts.readonly</code></td><td>Show the name and photo of your saved contacts; suggest recipients.</td></tr>
-            <tr><td>“Other contacts” (read-only)<br /><code>https://www.googleapis.com/auth/contacts.other.readonly</code></td><td>Recognise people you have already emailed, to show their name and suggest them as recipients.</td></tr>
           </tbody>
         </table>
         <div class="callout">
@@ -150,19 +150,27 @@
         </ul>
 
         <h2 id="sharing">8. Sharing and processors</h2>
-        <p>The developer does not share your data with anyone and uses <strong>no processor</strong> to handle the app’s data. The app’s only network exchanges take place, from your phone, with:</p>
+        <p>The developer neither sells nor shares your data. The app’s only network exchanges take place, from your phone, with:</p>
         <ul>
           <li><strong>Google</strong> (Gmail, contacts, account sign-in), if you connect Gmail;</li>
           <li><strong>your email provider’s servers</strong> (IMAP/SMTP), if you connect another address;</li>
           <li><strong>senders’ websites</strong>, only when you ask: opening a link, loading the images of an email, an unsubscribe page;</li>
-          <li><strong>Google Play</strong>, for installing and updating the app, under Google’s rules.</li>
+          <li><strong>Google Play</strong>, for installing and updating the app, under Google’s rules;</li>
+          <li><strong>the developer’s relay server</strong> and <strong>Firebase Cloud Messaging</strong> (Google), for instant Gmail delivery, detailed below.</li>
         </ul>
-        <p>If a future feature ever required a server (for example a notification relay), it would be optional, described in this policy before it goes live, and would never receive the content of your email.</p>
+        <h3>Relay server (instant Gmail delivery)</h3>
+        <ul>
+          <li><strong>What it receives</strong>: from your phone, your Gmail address and the phone’s push identifier (Firebase token). To prove the address is yours, the phone also sends its Google access token, which the relay checks with Google right away and does not keep. From Google (Cloud Pub/Sub), only the address concerned and a mailbox history number, for each new email.</li>
+          <li><strong>What it never receives</strong>: the content, subject, sender or attachments of your email, your contacts, your password.</li>
+          <li><strong>What it sends</strong>: a content-free push message (“new email for this address”) to your phone, through Firebase Cloud Messaging. The phone then fetches the email from Google and shows the notification.</li>
+          <li><strong>Retention</strong>: the address and push identifier are kept while the account is connected on the phone, and deleted when you sign out, when the app is uninstalled (token rejected by Firebase), or on request.</li>
+          <li><strong>Hosting</strong>: the relay runs on the developer’s server rented from Contabo GmbH (Germany). Processors: Contabo (hosting), Google (Cloud Pub/Sub and Firebase Cloud Messaging).</li>
+        </ul>
 
         <h2 id="website">9. This website</h2>
         <p>This website (wouah-mail.flamme.work) presents the app and its legal documents. It is <strong>separate from the app</strong>: the app sends it no data.</p>
         <ul>
-          <li><strong>Hosting</strong>: a virtual private server rented from <strong>Contabo GmbH</strong> (Germany). This server only serves the pages of this website; it does not receive, store or process <strong>any email, contact or credential</strong> of app users.</li>
+          <li><strong>Hosting</strong>: a virtual private server rented from <strong>Contabo GmbH</strong> (Germany). This server serves the pages of this website and runs the relay described in section 8; it does not receive, store or process <strong>any email content, contact or password</strong> of app users.</li>
           <li><strong>Network</strong>: website traffic goes through <strong>Cloudflare</strong> (protection and performance).</li>
           <li><strong>Technical logs</strong>: like any website, the server and Cloudflare may temporarily record the IP address, date, requested page and browser, for security and reliability. These logs are not used to identify you or for advertising.</li>
           <li><strong>No cookies</strong>, no forms, no analytics and no advertising on this website.</li>
