@@ -63,6 +63,13 @@ class MailPushService : Service() {
     /** Set by the JS module: (accountId, newCount) -> event to JavaScript. */
     @Volatile var onNewMail: ((String, Int) -> Unit)? = null
 
+    /** Same id as notifyMail: the mail was read in the app, its notification goes. */
+    fun dismissMail(context: Context, accountId: String, uid: Long) {
+      runCatching {
+        context.getSystemService(NotificationManager::class.java).cancel((accountId + ":" + uid).hashCode())
+      }
+    }
+
     fun start(context: Context) {
       ContextCompat.startForegroundService(context, Intent(context, MailPushService::class.java))
     }

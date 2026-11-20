@@ -103,6 +103,8 @@ export interface MailyoImapNative {
   startPush(configJson: string): boolean;
   stopPush(): boolean;
   setAppForeground(foreground: boolean): boolean;
+  /** Removes the service's notification for this mail (read in the app). */
+  dismissMail(accountId: string, uid: number): boolean;
   pushStatus(): { running: boolean; accounts: string[]; batteryUnrestricted: boolean };
   openBatterySettings(): boolean;
   addListener(

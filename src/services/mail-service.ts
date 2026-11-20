@@ -1230,6 +1230,7 @@ export class MailService {
       }
     }
     await recomputeThreadAggregates(this.db, threadId);
+    if (isRead) await this.notifier?.dismissThread(threadId, messages);
   }
 
   async toggleStar(messageId: string, isStarred: boolean): Promise<void> {
@@ -1756,6 +1757,7 @@ export class MailService {
       await this.notifier.present(
         decision,
         `/open-mail?thread=${encodeURIComponent(message.threadId)}`,
+        message.threadId,
       );
     }
   }

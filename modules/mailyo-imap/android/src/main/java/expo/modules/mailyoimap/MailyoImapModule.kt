@@ -104,6 +104,12 @@ class MailyoImapModule : Module() {
       true
     }
 
+    /** The mail was read in the app: its notification leaves the tray. */
+    Function("dismissMail") { accountId: String, uid: Double ->
+      MailPushService.dismissMail(requireContext(), accountId, uid.toLong())
+      true
+    }
+
     Function("pushStatus") {
       val context = requireContext()
       mapOf(
