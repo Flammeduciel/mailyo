@@ -116,6 +116,16 @@ describe('MailService', () => {
     expect((await service.listMailbox('sent')).map((t) => t.normalizedSubject)).toContain('devis');
   });
 
+  it('deletes a conversation without leaving it under archived', async () => {
+    const { service } = await bootstrap();
+    const [first] = await service.listConversations();
+    await service.deleteThread(first.id);
+    expect((await service.listConversations()).find((t) => t.id === first.id)).toBeUndefined();
+    expect(
+      (await service.listConversations({ archivedOnly: true })).find((t) => t.id === first.id),
+    ).toBeUndefined();
+  });
+
   it('archives a thread out of the conversation list', async () => {
     const { service } = await bootstrap();
     const [first] = await service.listConversations();

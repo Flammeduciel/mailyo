@@ -1,7 +1,7 @@
 /**
  * « Corbeille »: mail deleted from Wouah Mail (or elsewhere) is still in the
- * provider's trash for about 30 days. Read live from the server, one tap
- * puts it back in its conversation.
+ * provider's trash for about 30 days. Read live from the server and grouped
+ * back into conversations; one tap restores the whole conversation.
  */
 
 import { MaterialIcons } from '@expo/vector-icons';
@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { TrashedMail } from '@/services/mail-service';
+import type { TrashedConversation } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
 import { AppBar, AppText, Avatar, EmptyState, Radius, Spacing, useAppTheme } from '@/ui';
 
@@ -24,19 +24,19 @@ function formatDate(ms: number): string {
   });
 }
 
-const keyOf = (item: TrashedMail) => `${item.accountId}:${item.remote.remoteUid}`;
+const keyOf = (item: TrashedConversation) => item.key;
 
 export default function TrashScreen() {
   const colors = useAppTheme();
   const { service, refresh, invalidate } = useApp();
-  const [items, setItems] = useState<TrashedMail[] | null>(null);
+  const [items, setItems] = useState<TrashedConversation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [restored, setRestored] = useState(0);
 
   const fetchTrash = useCallback(
     () =>
-      service.listTrash().then(setItems, (cause: unknown) => {
+      service.listTrashConversations().then(setItems, (cause: unknown) => {
         setError(cause instanceof Error ? cause.message : String(cause));
         setItems([]);
       }),
@@ -54,11 +54,11 @@ export default function TrashScreen() {
   }, [fetchTrash]);
 
   const restore = useCallback(
-    async (item: TrashedMail) => {
+    async (item: TrashedConversation) => {
       const key = keyOf(item);
       setBusy(key);
       try {
-        await service.restoreFromTrash(item);
+        await service.restoreTrashConversation(item);
         setItems((current) => current?.filter((other) => keyOf(other) !== key) ?? null);
         setRestored((count) => count + 1);
         invalidate();
@@ -82,7 +82,11 @@ export default function TrashScreen() {
     >
       <AppBar
         title="Corbeille"
-        subtitle={items && items.length > 0 ? `${items.length} mail(s) supprimé(s)` : undefined}
+        subtitle={
+          items && items.length > 0
+            ? `${items.length} conversation${items.length > 1 ? 's' : ''} supprimée${items.length > 1 ? 's' : ''}`
+            : undefined
+        }
         onBack={() => router.back()}
         actions={[{ icon: 'refresh', label: 'Actualiser', onPress: load }]}
       />
@@ -90,7 +94,7 @@ export default function TrashScreen() {
         <MaterialIcons name="info-outline" size={18} color={colors.textSecondary} />
         <AppText variant="caption" color="textSecondary" style={styles.noticeText}>
           {restored > 0
-            ? `${restored} mail(s) restauré(s) : ils sont de retour dans leurs conversations.`
+            ? `${restored} conversation${restored > 1 ? 's' : ''} restaurée${restored > 1 ? 's' : ''} : de retour dans la liste.`
             : 'Les mails supprimés restent environ 30 jours dans la corbeille de votre messagerie, puis sont effacés.'}
         </AppText>
       </View>
@@ -117,27 +121,29 @@ export default function TrashScreen() {
           }
           renderItem={({ item }) => {
             const key = keyOf(item);
-            const preview = item.remote.bodyText.replace(/\s+/g, ' ').trim();
+            const count = item.items.length;
             return (
               <View style={styles.row} testID={`trash-${key}`}>
                 <Avatar
-                  name={item.senderDisplayName}
+                  name={item.displayName}
                   size={46}
-                  imageUri={service.getContactPhoto(item.remote.senderAddress)}
+                  imageUri={service.getContactPhoto(item.senderAddress)}
+                  badge={count > 1 ? count : undefined}
                 />
                 <View style={styles.text}>
                   <View style={styles.line}>
                     <AppText weight="semibold" numberOfLines={1} style={styles.name}>
-                      {item.senderDisplayName}
+                      {item.displayName}
                     </AppText>
                     <AppText variant="caption" color="textSecondary">
-                      {formatDate(item.remote.receivedAt)}
+                      {formatDate(item.receivedAt)}
                     </AppText>
                   </View>
-                  <AppText numberOfLines={1}>{item.remote.subject || 'Sans objet'}</AppText>
+                  <AppText numberOfLines={1}>{item.subject || 'Sans objet'}</AppText>
                   <AppText variant="caption" color="textSecondary" numberOfLines={1}>
                     {multipleAccounts ? `${item.accountAddress} · ` : ''}
-                    {preview}
+                    {count > 1 ? `${count} messages · ` : ''}
+                    {item.preview}
                   </AppText>
                 </View>
                 <Pressable

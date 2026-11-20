@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
 import { AppText } from './AppText';
-import { AvatarTints } from './theme';
+import { AvatarTints, useAppTheme } from './theme';
 import { useResolvedScheme } from './theme-preference';
 
 export interface AvatarProps {
@@ -11,6 +11,10 @@ export interface AvatarProps {
   size?: number;
   /** Photo from Google: the person's own, or the letter avatar Google generates. */
   imageUri?: string;
+  /** Small counter on the top-right edge (e.g. number of subjects). */
+  badge?: number;
+  /** Colour of the ring around the badge (the background behind the avatar). */
+  badgeRing?: string;
 }
 
 /** Up to two initials: "Claire Fontaine" → "CF", "bureau@x.fr" → "B". */
@@ -40,7 +44,42 @@ export function avatarTintIndex(name: string): number {
 }
 
 /** The Google photo when there is one, otherwise initials on a soft tint. */
-export function Avatar({ name, size = 40, imageUri }: AvatarProps) {
+export function Avatar({ badge, badgeRing, ...props }: AvatarProps) {
+  const colors = useAppTheme();
+  if (!badge || badge < 2) return <AvatarFace {...props} />;
+  const size = props.size ?? 40;
+  const diameter = Math.max(18, Math.round(size * 0.38));
+  return (
+    <View style={{ width: size, height: size }}>
+      <AvatarFace {...props} />
+      <View
+        testID="avatar-badge"
+        accessibilityLabel={`${badge} sujets`}
+        style={[
+          styles.badge,
+          {
+            minWidth: diameter,
+            height: diameter,
+            borderRadius: diameter / 2,
+            top: -diameter * 0.18,
+            right: -diameter * 0.22,
+            backgroundColor: colors.primary,
+            borderColor: badgeRing ?? colors.background,
+          },
+        ]}
+      >
+        <AppText
+          weight="bold"
+          style={{ color: colors.onPrimary, fontSize: diameter * 0.55, lineHeight: diameter * 0.7 }}
+        >
+          {badge > 99 ? '99+' : badge}
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
+function AvatarFace({ name, size = 40, imageUri }: Omit<AvatarProps, 'badge' | 'badgeRing'>) {
   const scheme = useResolvedScheme();
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const shape = { width: size, height: size, borderRadius: size / 2 };
@@ -81,6 +120,13 @@ export function Avatar({ name, size = 40, imageUri }: AvatarProps) {
 }
 
 const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatar: {
     alignItems: 'center',
     justifyContent: 'center',

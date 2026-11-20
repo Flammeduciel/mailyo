@@ -1,23 +1,24 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { attachmentKind } from '@/domain/attachments';
+import { excerptAround } from '@/domain/highlight';
 import type { Message } from '@/domain/models';
 import type { FileSearchHit } from '@/services/mail-service';
 import { useApp } from '@/state/app-context';
 import { useAttachmentActions } from '@/state/use-attachment-actions';
 import {
-  AppText,
   AttachmentList,
   Avatar,
   Divider,
   EmptyState,
   FilterChips,
-  Header,
+  HighlightText,
+  IconButton,
   Screen,
   Spacing,
-  TextField,
   useAppTheme,
 } from '@/ui';
 
@@ -86,15 +87,33 @@ export default function SearchScreen() {
 
   return (
     <Screen>
-      <Header title="Recherche" onBack={() => router.back()} />
-      <View style={styles.field}>
-        <TextField
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Message, expéditeur, nom de fichier…"
-          autoCapitalize="none"
-          testID="search-input"
-        />
+      {/* The field is the header and gets the keyboard at once (no second tap). */}
+      <View style={styles.header}>
+        <IconButton icon="arrow-back" accessibilityLabel="Retour" onPress={() => router.back()} />
+        <View style={[styles.pill, { backgroundColor: theme.surfaceAlt }]}>
+          <MaterialIcons name="search" size={20} color={theme.textMuted} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Rechercher"
+            placeholderTextColor={theme.textMuted}
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            style={[styles.input, { color: theme.text }]}
+            testID="search-input"
+          />
+          {query.length > 0 ? (
+            <IconButton
+              icon="close"
+              accessibilityLabel="Effacer"
+              onPress={() => setQuery('')}
+              size={18}
+              color={theme.textMuted}
+            />
+          ) : null}
+        </View>
       </View>
 
       <FilterChips
@@ -122,9 +141,12 @@ export default function SearchScreen() {
                 progress={actions.progress}
                 pdfPreview={actions.pdfPreview}
               />
-              <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                {item.senderName} · {new Date(item.receivedAt).toLocaleDateString('fr-FR')}
-              </AppText>
+              <HighlightText
+                text={`${item.attachment.filename} · ${item.senderName} · ${new Date(item.receivedAt).toLocaleDateString('fr-FR')}`}
+                query={trimmed}
+                numberOfLines={1}
+                style={[styles.small, { color: theme.textMuted }]}
+              />
             </View>
           )}
           ListEmptyComponent={emptyState}
@@ -150,15 +172,26 @@ export default function SearchScreen() {
                 imageUri={service.getContactPhoto(item.senderAddress)}
               />
               <View style={styles.content}>
-                <AppText variant="body" weight="semibold" numberOfLines={1}>
-                  {item.subject || 'Sans objet'}
-                </AppText>
-                <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                  {item.senderName || item.senderAddress}
-                </AppText>
-                <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                  {item.bodyText}
-                </AppText>
+                <HighlightText
+                  text={item.subject || 'Sans objet'}
+                  query={trimmed}
+                  numberOfLines={1}
+                  style={[styles.subject, { color: theme.text }]}
+                />
+                <HighlightText
+                  text={
+                    service.displayName(item.senderAddress, item.senderName) || item.senderAddress
+                  }
+                  query={trimmed}
+                  numberOfLines={1}
+                  style={[styles.small, { color: theme.textSecondary }]}
+                />
+                <HighlightText
+                  text={excerptAround(item.bodyText, trimmed)}
+                  query={trimmed}
+                  numberOfLines={2}
+                  style={[styles.small, { color: theme.textMuted }]}
+                />
               </View>
             </Pressable>
           )}
@@ -170,9 +203,37 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  field: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  pill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    height: 46,
+    borderRadius: 999,
+    paddingLeft: Spacing.md,
+    paddingRight: Spacing.xs,
+    marginRight: Spacing.sm,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  subject: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  small: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   grow: {
     flexGrow: 1,
