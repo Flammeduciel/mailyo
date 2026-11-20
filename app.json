@@ -91,6 +91,8 @@
     },
     "extra": {
       "gmailClientId": "602522346982-r2e1jie43htj7kmer1k0fpqmosavhj1s.apps.googleusercontent.com",
+      "relayUrl": "https://wouah-relay.flamme.work",
+      "gmailPushTopic": "projects/mailyo-514316/topics/gmail-push",
       "router": {},
       "eas": {
         "projectId": "26b7f90b-6436-4d9b-b8dc-f59276490e5a"

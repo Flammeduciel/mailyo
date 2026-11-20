@@ -13,11 +13,15 @@ import { AppText, Avatar, Button, Header, Screen, ServiceLogo, Spacing, useAppTh
 /** Configured through `expo.extra.gmailClientId`; empty when the build has none. */
 const GMAIL_CLIENT_ID = (Constants.expoConfig?.extra?.gmailClientId as string | undefined) ?? '';
 
+/**
+ * Least privilege, matching the Google Cloud consent configuration exactly:
+ * gmail.modify covers reading, sending, labels, trash and restore (no IMAP,
+ * no permanent deletion); instant delivery goes through Gmail push + the relay.
+ */
 const GMAIL_SCOPES = [
-  'https://mail.google.com/',
+  'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/contacts.readonly',
-  'https://www.googleapis.com/auth/contacts.other.readonly',
 ];
 
 export default function LoginScreen() {

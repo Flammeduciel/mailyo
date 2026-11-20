@@ -386,7 +386,7 @@ describe('buildPushConfig', () => {
     createdAt: 0,
   };
 
-  it('watches Gmail over IMAP with the Google sign-in (XOAUTH2)', async () => {
+  it('leaves Gmail to the push relay (gmail.modify has no IMAP access)', async () => {
     const config = await buildPushConfig({
       accounts: [gmail, { ...gmail, id: 'demo', provider: 'demo', authType: 'password' }],
       settings: DEFAULT_SETTINGS,
@@ -394,20 +394,7 @@ describe('buildPushConfig', () => {
       loadTokens: async () => ({ accessToken: 'at', refreshToken: 'rt', expiresAt: 99 }),
       gmailClientId: 'client',
     });
-    expect(config.accounts).toEqual([
-      {
-        id: 'g1',
-        email: 'moi@gmail.com',
-        host: 'imap.gmail.com',
-        port: 993,
-        security: 'ssl',
-        username: 'moi@gmail.com',
-        oauthAccessToken: 'at',
-        oauthRefreshToken: 'rt',
-        oauthClientId: 'client',
-        oauthExpiresAt: 99,
-      },
-    ]);
+    expect(config.accounts).toEqual([]);
     expect(config.quietStart).toBe(-1);
   });
 

@@ -10,11 +10,13 @@ import type { AppSettings } from '@/domain/settings';
 import type { ImapAccountConfig } from '@/providers/imap/credentials';
 import type { OAuthTokens } from '@/providers/types';
 
-/** Accounts the real-time service can watch: password IMAP and Gmail (IMAP + Google sign-in). */
+/**
+ * Accounts the IMAP IDLE service watches: password IMAP only. Gmail is
+ * signed in with gmail.modify (no IMAP access) and arrives through Gmail push
+ * and the relay instead.
+ */
 export function isRealtimeCapable(account: Account): boolean {
-  return (
-    account.provider === 'imap' || (account.provider === 'gmail' && account.authType === 'oauth')
-  );
+  return account.provider === 'imap';
 }
 
 export interface BuildPushConfigInput {
