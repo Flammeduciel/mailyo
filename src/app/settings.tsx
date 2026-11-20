@@ -138,12 +138,42 @@ export default function SettingsScreen() {
   const colors = useAppTheme();
   const { service, biometricsAvailable, setTheme, theme, invalidate, applyRealtime } = useApp();
   const { idle: idleTransport } = realtimeTransports();
-  const [gmailPush, setGmailPush] = useState<{ addresses: string[] }>({ addresses: [] });
+  const [gmailPush, setGmailPush] = useState<{
+    addresses: string[];
+    fcmToken: boolean;
+    error: string | null;
+  }>({ addresses: [], fcmToken: false, error: null });
   useFocusEffect(
     useCallback(() => {
-      setGmailPush(gmailPushStatus());
-    }, []),
+      setGmailPush({ ...gmailPushStatus(), ...service.gmailPushState() });
+    }, [service]),
   );
+  const testInstantGmail = useCallback(() => {
+    showAlert(
+      'Tester Gmail instantané',
+      'Le relais va envoyer un signal à ce téléphone dans 15 secondes. Fermez l’application maintenant (bouton Accueil) : une notification « Test réussi » doit apparaître.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Lancer le test',
+          onPress: () => {
+            service
+              .testGmailPush(15)
+              .then(() => ToastAndroid.show('Test lancé : fermez l’app', ToastAndroid.SHORT))
+              .catch((cause: unknown) =>
+                showAlert(
+                  'Test impossible',
+                  cause instanceof Error ? cause.message : String(cause),
+                  undefined,
+                  { icon: 'error-outline' },
+                ),
+              );
+          },
+        },
+      ],
+      { icon: 'notifications-active' },
+    );
+  }, [service]);
 
   const { data, reload } = useServiceQuery<SettingsData>(async (mailService) => {
     const [accounts, rules] = await Promise.all([
@@ -411,11 +441,21 @@ export default function SettingsScreen() {
             tone="blue"
             label="Gmail instantané"
             description={
-              gmailPush.addresses.length > 0
-                ? `Push Gmail actif · ${gmailPush.addresses.join(', ')}`
-                : 'Push Gmail via le serveur relais, sans connexion permanente'
+              gmailPush.error
+                ? `Problème : ${gmailPush.error}`
+                : gmailPush.addresses.length > 0
+                  ? `Actif · ${gmailPush.addresses.join(', ')} · touchez pour tester`
+                  : gmailPush.fcmToken
+                    ? 'En cours d’activation…'
+                    : 'Push Gmail via le serveur relais, sans connexion permanente'
             }
-            detail={gmailPush.addresses.length > 0 ? 'Actif' : 'En attente'}
+            detail={
+              gmailPush.error ? 'Erreur' : gmailPush.addresses.length > 0 ? 'Actif' : 'En attente'
+            }
+            detailTone={
+              gmailPush.error ? 'danger' : gmailPush.addresses.length > 0 ? 'success' : undefined
+            }
+            onPress={testInstantGmail}
             testID="settings-relay"
           />
         </SettingsGroup>

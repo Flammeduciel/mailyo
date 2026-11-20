@@ -63,6 +63,8 @@ export function useRealtime(
       const fcmToken = await fcmTokenPromise;
       if (fcmToken) {
         gmailPushAddresses = await service.refreshGmailPush(fcmToken).catch(() => []);
+      } else {
+        service.reportGmailPushError('Jeton push Firebase indisponible (Google Play Services ?)');
       }
     }
     if (!idle.isAvailable()) return;

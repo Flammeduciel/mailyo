@@ -10,6 +10,7 @@ describe('describePermissions', () => {
       { label: 'Mails : lecture et envoi', granted: true },
       { label: 'Adresse e-mail', granted: true },
       { label: 'Contacts', granted: false },
+      { label: 'Autres contacts', granted: false },
     ]);
   });
 
@@ -21,6 +22,7 @@ describe('describePermissions', () => {
     ).toEqual([
       { label: 'Mails : lecture et envoi', granted: true },
       { label: 'Contacts', granted: true },
+      { label: 'Autres contacts', granted: false },
     ]);
   });
 
@@ -36,6 +38,9 @@ describe('describePermissions', () => {
   });
 
   it('handles an unknown scope string', () => {
-    expect(describePermissions(null)).toEqual([{ label: 'Contacts', granted: false }]);
+    expect(describePermissions(null)).toEqual([
+      { label: 'Contacts', granted: false },
+      { label: 'Autres contacts', granted: false },
+    ]);
   });
 });

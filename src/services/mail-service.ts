@@ -100,6 +100,7 @@ import { findSentEcho, SENT_ECHO_WINDOW_MS } from '@/domain/sent-echo';
 import {
   disableGmailPush,
   enableGmailPush,
+  testGmailPush,
   GMAIL_WATCH_RENEW_MS,
   isGmailPushConfigured,
   type GmailPushConfig,
@@ -265,6 +266,8 @@ export class MailService {
   private fcmToken: string | null = null;
   /** When `users.watch` last succeeded, per account. */
   private readonly gmailWatchedAt = new Map<string, number>();
+  /** Last problem setting up instant Gmail (shown in Settings), null when fine. */
+  private gmailPushError: string | null = null;
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly now: () => number;
   private readonly fetchLimit: number;
@@ -378,6 +381,41 @@ export class MailService {
     return this.gmailPush !== null;
   }
 
+  /** Where instant Gmail stands, for Settings. */
+  gmailPushState(): { fcmToken: boolean; error: string | null } {
+    return { fcmToken: this.fcmToken !== null, error: this.gmailPushError };
+  }
+
+  reportGmailPushError(message: string | null): void {
+    this.gmailPushError = message;
+  }
+
+  /** Ask the relay to push to this phone in `delaySeconds` (Settings › Tester). */
+  async testGmailPush(delaySeconds = 15): Promise<void> {
+    const config = this.gmailPush;
+    if (!config) throw new Error('Relais non configuré dans cette version.');
+    if (!this.fcmToken) throw new Error('Jeton push Firebase indisponible sur ce téléphone.');
+    if (!this.tokenStore || !this.gmailClientId) throw new Error('Aucun compte Gmail.');
+    const account = (await listAccounts(this.db)).find(
+      (a) => a.provider === 'gmail' && a.authType === 'oauth',
+    );
+    if (!account) throw new Error('Aucun compte Gmail connecté.');
+    const accessToken = await createGmailTokenProvider({
+      accountId: account.id,
+      clientId: this.gmailClientId,
+      tokenStore: this.tokenStore,
+      now: this.now,
+      fetchImpl: this.fetchImpl,
+    })();
+    await testGmailPush(
+      { email: account.emailAddress, accessToken },
+      this.fcmToken,
+      config,
+      delaySeconds,
+      this.fetchImpl,
+    );
+  }
+
   /**
    * Instant Gmail: ask Gmail to push inbox changes to the relay and register
    * this phone for each Gmail account. Renewed daily (Gmail's watch lasts 7
@@ -413,7 +451,10 @@ export class MailService {
         );
         this.gmailWatchedAt.set(account.id, this.now());
         covered.push(account.emailAddress);
+        this.gmailPushError = null;
       } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        this.gmailPushError = `${account.emailAddress} : ${message}`;
         console.warn(`[MailService] instant Gmail failed for ${account.emailAddress}`, cause);
       }
     }

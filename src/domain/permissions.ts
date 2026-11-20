@@ -21,6 +21,7 @@ const KNOWN_SCOPES: { scopes: string[]; label: string }[] = [
 /** Scopes the app asks for whose absence the user should see. */
 const EXPECTED_GMAIL: { scope: string; label: string }[] = [
   { scope: 'https://www.googleapis.com/auth/contacts.readonly', label: 'Contacts' },
+  { scope: 'https://www.googleapis.com/auth/contacts.other.readonly', label: 'Autres contacts' },
 ];
 
 /** Granted permissions first, then the expected ones that are missing. */
